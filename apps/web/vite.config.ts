@@ -11,6 +11,10 @@ const pkg = (name: string): string =>
  * packages without a watch-and-rebuild step.
  */
 export default defineConfig({
+  // GitHub Pages serves the site from /<repo>/, so the asset base must change
+  // there. Everywhere else (dev, local preview, a plain static host) it is "/".
+  // The Pages workflow sets VITE_BASE; nothing else needs to know.
+  base: process.env.VITE_BASE ?? '/',
   plugins: [react()],
   resolve: {
     alias: {
