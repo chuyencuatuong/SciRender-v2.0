@@ -1,0 +1,19 @@
+# Phụ thuộc và kết quả build
+node_modules/
+dist/
+.vite/
+coverage/
+
+# Lockfile của npm — dự án dùng pnpm, pnpm-lock.yaml mới là bản chính thức
+package-lock.json
+
+# Đầu ra tạm
+scripts/screenshot.png
+Claude outputs/
+*.log
+
+# Cục bộ / hệ điều hành
+.env
+.env.local
+.DS_Store
+Thumbs.db
