@@ -1,5 +1,8 @@
 # SciRender 2.0
 
+[![CI](https://github.com/chuyencuatuong/SciRender-v2.0/actions/workflows/ci.yml/badge.svg)](https://github.com/chuyencuatuong/SciRender-v2.0/actions/workflows/ci.yml)
+[![Deploy](https://github.com/chuyencuatuong/SciRender-v2.0/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/chuyencuatuong/SciRender-v2.0/actions/workflows/deploy-pages.yml)
+
 **Scientific Document Intelligence Studio** — *Write science once. Render it professionally everywhere.*
 
 SciRender không phải trình soạn thảo AI, cũng không phải bản sao của Word. Nó là một
@@ -33,10 +36,31 @@ pnpm smoke       # 56 kiểm tra pipeline thuần (không cần trình duyệt)
 Kiểm tra tầng cần DOM (phân trang, orphan/widow, KaTeX, Mermaid):
 
 ```bash
-pnpm add -Dw playwright && pnpm exec playwright install chromium
-pnpm build && pnpm preview          # cửa sổ 1
-pnpm browser-check                  # cửa sổ 2 — 17 kiểm tra
+pnpm exec playwright install chromium   # playwright đã nằm trong devDependencies
+pnpm build && pnpm preview              # cửa sổ 1
+pnpm browser-check                      # cửa sổ 2 — 17 kiểm tra
 ```
+
+---
+
+## CI và triển khai
+
+Hai workflow trong `.github/workflows/`:
+
+| Workflow | Chạy khi | Làm gì |
+|----------|----------|--------|
+| `ci.yml` | push lên `main`, mọi pull request, hoặc bấm tay | Job **verify**: `typecheck` → `smoke` → `build`, tải `apps/web/dist` lên artifact. Job **browser**: cài Chromium, build, dựng preview rồi chạy `browser-check`, tải ảnh chụp trang lên artifact. Hai job chạy song song. |
+| `deploy-pages.yml` | push lên `main`, hoặc bấm tay | Build với `VITE_BASE=/<tên-repo>/` rồi đẩy lên GitHub Pages. |
+
+**Trước khi `deploy-pages.yml` chạy được lần đầu**, vào
+**Settings → Pages → Build and deployment → Source** và chọn **GitHub Actions**.
+Nếu để nguyên "Deploy from a branch" thì workflow sẽ fail ở bước `configure-pages`.
+
+`base` của Vite lấy từ biến môi trường `VITE_BASE` (mặc định `/`), nên chỉ workflow Pages
+mới đổi đường dẫn asset — `pnpm dev`, `pnpm preview` và host tĩnh thường vẫn chạy ở `/`.
+
+CI dùng `pnpm install --frozen-lockfile`: sửa `package.json` mà quên commit
+`pnpm-lock.yaml` thì CI sẽ fail ngay ở bước cài, cố ý như vậy.
 
 ---
 
