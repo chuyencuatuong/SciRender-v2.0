@@ -1,0 +1,19 @@
+{
+  "name": "@scirender/parser",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Scientific Markdown -> Document AST parser.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@scirender/ast": "workspace:*",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "4.0.9"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "scirender",
+  "version": "2.0.0",
+  "private": true,
+  "description": "SciRender — Scientific Document Intelligence Studio. Write science once. Render it professionally everywhere.",
+  "type": "module",
+  "packageManager": "pnpm@10.34.5",
+  "scripts": {
+    "preinstall": "node scripts/require-pnpm.mjs",
+    "dev": "pnpm --filter @scirender/web dev",
+    "build": "pnpm --filter @scirender/web build",
+    "preview": "pnpm --filter @scirender/web preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "pnpm -r exec node -e \"const fs=require('fs');for(const p of ['node_modules','dist'])fs.rmSync(p,{recursive:true,force:true})\" && node -e \"require('fs').rmSync('node_modules',{recursive:true,force:true})\"",
+    "smoke": "node scripts/run-smoke.mjs",
+    "browser-check": "node scripts/browser-check.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.0",
+    "typescript": "5.6.3"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}

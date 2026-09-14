@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": false,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "declaration": false,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@scirender/ast": ["packages/ast/src/index.ts"],
+      "@scirender/parser": ["packages/parser/src/index.ts"],
+      "@scirender/validator": ["packages/validator/src/index.ts"],
+      "@scirender/intelligence": ["packages/intelligence/src/index.ts"],
+      "@scirender/template-engine": ["packages/template-engine/src/index.ts"],
+      "@scirender/layout-engine": ["packages/layout-engine/src/index.ts"],
+      "@scirender/renderer-html": ["packages/renderer-html/src/index.ts"],
+      "@scirender/renderer-pdf": ["packages/renderer-pdf/src/index.ts"],
+      "@scirender/equation-engine": ["packages/equation-engine/src/index.ts"],
+      "@scirender/figure-engine": ["packages/figure-engine/src/index.ts"],
+      "@scirender/table-engine": ["packages/table-engine/src/index.ts"],
+      "@scirender/storage": ["packages/storage/src/index.ts"],
+      "@scirender/telemetry": ["packages/telemetry/src/index.ts"],
+      "~/*": ["apps/web/src/*"]
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@scirender/telemetry",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Opt-in research/telemetry layer, disabled by default (P7 — Research by Consent).",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {}
+}

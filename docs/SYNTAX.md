@@ -1,0 +1,227 @@
+# Scientific Markdown — đặc tả cú pháp
+
+Phương ngữ Markdown SciRender dùng. Mọi thứ không nằm trong tài liệu này thì parser
+không hiểu, và khi không hiểu nó **báo lỗi** chứ không đoán (P6).
+
+---
+
+## 1. Front matter
+
+Khối YAML giữa hai dòng `---` ở đầu tệp.
+
+```yaml
+---
+title: Tiêu đề bài báo
+subtitle: Phụ đề tùy chọn
+authors:
+  - name: Trần Nhật Tường
+    affiliation: Khoa Kỹ thuật Y sinh, HCMUT
+    email: a@b.edu.vn
+    orcid: 0000-0000-0000-0000
+    corresponding: true
+  - name: Nguyễn Văn A          # dạng rút gọn: - Nguyễn Văn A
+date: 2026
+language: vi
+template: scientific-standard    # ghi đè lựa chọn template ở giao diện
+keywords: [huyết áp, PPG, ECG]   # hoặc "a, b, c"
+abstract: |
+  Nhiều dòng, giữ nguyên xuống dòng.
+bibliography:
+  - key: smith2020               # bắt buộc — dùng để trích dẫn
+    authors: Smith J., Lee K.
+    year: 2020
+    title: Tiêu đề bài báo
+    source: Nature               # hoặc journal / publisher
+    volume: "12"
+    pages: 101-115
+    doi: 10.1000/xyz
+    url: https://example.com
+---
+```
+
+Khóa không nằm trong danh sách trên **không bị bỏ đi** — chúng vào `meta.extra` và đi
+theo tài liệu (P1).
+
+Nếu không có `title:`, SciRender lấy đề mục cấp 1 đầu tiên làm tiêu đề.
+
+---
+
+## 2. Khối
+
+### Đề mục
+
+```markdown
+# Cấp 1
+## Cấp 2 {#sec:phuong-phap}
+### Cấp 3 {-}          ← {-} = không đánh số
+```
+
+### Đoạn văn
+
+Các dòng liền nhau là một đoạn. Một dòng trống mở đoạn mới.
+Hai dấu cách cuối dòng tạo ngắt dòng cứng.
+
+### Công thức khối
+
+```markdown
+$$
+E = mc^2
+$$ {#eq:nang-luong}
+```
+
+Dạng một dòng cũng được: `$$ a = b $$ {#eq:x}`.
+
+Nhãn có thể đặt ở dòng mở hoặc dòng đóng. `{-}` để không đánh số.
+Việc đánh số hay không do template quyết định (`numbering.equations`:
+`all` | `labelled` | `none`).
+
+### Hình
+
+```markdown
+![Chú thích hình](asset:ten-anh){#fig:so-do width=80%}
+```
+
+Nguồn ảnh chấp nhận:
+
+| Dạng | Ý nghĩa |
+|------|---------|
+| `asset:ten` | Ảnh trong IndexedDB, tải lên ở tab **Tài nguyên** |
+| `https://…` | URL từ xa (cần mạng lúc xem) |
+| `data:image/…` | Ảnh nhúng base64 |
+
+Chú thích lấy từ `alt`. Muốn chú thích dài hơn, thêm dòng `: …` ngay dưới:
+
+```markdown
+![alt ngắn](asset:x)
+
+: Chú thích đầy đủ có thể chứa *định dạng* {#fig:x}
+```
+
+Thuộc tính hỗ trợ: `width`, `height` (số trần hiểu là px).
+
+### Bảng
+
+```markdown
+| Thuộc tính | Giá trị | Ghi chú |
+|:-----------|--------:|:-------:|
+| Số đối tượng | 84 | 46 nam |
+
+: Chú thích bảng {#tbl:du-lieu}
+```
+
+Dòng phân cách quyết định căn cột: `:---` trái, `---:` phải, `:---:` giữa, `---` mặc định.
+Dòng lệch số ô sinh cảnh báo `SR-P020` — bảng vẫn render nhưng lỗi được báo.
+
+### Sơ đồ Mermaid
+
+````markdown
+```mermaid
+flowchart LR
+  A[Đầu vào] --> B[Xử lý]
+```
+
+: Chú thích sơ đồ {#dia:pipeline}
+````
+
+Mermaid được render thành SVG **trước khi phân trang**, nên sơ đồ chiếm đúng chiều cao
+thật lúc chia trang.
+
+### Khối mã
+
+````markdown
+```python
+x = 1
+```
+````
+
+Nội dung giữ nguyên tuyệt đối, không diễn giải (P1).
+
+### Danh sách
+
+```markdown
+- gạch đầu dòng
+  - lồng nhau (thụt 2 dấu cách)
+- mục hai
+
+1. đánh số
+2. mục hai
+```
+
+### Trích dẫn khối và khung ghi chú
+
+```markdown
+> Trích dẫn khối.
+
+::: note Tiêu đề khung
+Nội dung.
+:::
+```
+
+Biến thể có màu riêng: `note` (mặc định), `tip`, `warning`, `danger`.
+
+### Đường kẻ ngang
+
+```markdown
+---
+```
+
+---
+
+## 3. Nội dòng
+
+| Cú pháp | Kết quả |
+|---------|---------|
+| `**đậm**` | **đậm** |
+| `*nghiêng*` hoặc `_nghiêng_` | *nghiêng* |
+| `` `mã` `` | `mã` |
+| `$a^2+b^2$` | công thức nội dòng (KaTeX) |
+| `H~2~O` | chỉ số dưới |
+| `E^2^` | chỉ số trên |
+| `[chữ](https://…)` | liên kết |
+| `@eq:x` `@fig:x` `@tbl:x` `@sec:x` `@dia:x` | tham chiếu chéo |
+| `[@khoa]` `[@a; @b]` | trích dẫn |
+| `\*` `\$` `\[` … | thoát ký tự |
+
+Nhãn trong tham chiếu có thể chứa dấu chấm và gạch ngang ở giữa nhưng không kết thúc
+bằng chúng — nhờ vậy `@tbl:ketqua.` ở cuối câu vẫn giữ nguyên dấu chấm.
+
+---
+
+## 4. Nhãn và tham chiếu chéo
+
+Nhãn khai báo bằng `{#tien-to:ten}`, tiền tố phải khớp loại đối tượng:
+
+| Tiền tố | Dùng cho |
+|---------|----------|
+| `sec:` | đề mục |
+| `eq:` | công thức |
+| `fig:` | hình |
+| `tbl:` | bảng |
+| `dia:` | sơ đồ |
+
+Sai tiền tố → cảnh báo `SR-V010`. Trùng nhãn → lỗi `SR-V011`.
+Tham chiếu tới nhãn không tồn tại → lỗi `SR-V012`, và chỗ đó hiện gạch chân đỏ trên bản
+xem trước thay vì biến mất.
+
+Cách hiển thị tham chiếu do template quyết định: `@fig:x` ra "Hình 2.1", `@eq:x` ra "(2.1)".
+
+---
+
+## 5. Đánh số
+
+Do template điều khiển, không do nguồn:
+
+- `numbering.equationStyle` / `figures` / `tables` / `diagrams`: `section` (2.1, 2.2) hoặc
+  `continuous` (1, 2, 3).
+- `numbering.resetAtDepth`: cấp đề mục nào thì reset bộ đếm theo mục.
+- `headings.numberDepth`: đánh số đề mục tới cấp mấy (0 = không đánh số).
+
+Đổi template là đổi toàn bộ cách đánh số mà không phải sửa một ký tự nào trong nguồn.
+
+---
+
+## 6. Trích dẫn và tài liệu tham khảo
+
+Kiểu `numeric`: `[@smith2020]` hiện thành `[1]`, đánh số **theo thứ tự xuất hiện lần đầu**.
+Mục tham khảo chưa từng được trích dẫn vẫn được liệt kê ở cuối, kèm gợi ý `SR-V032`.
+Khóa trích dẫn không có trong `bibliography` là lỗi `SR-V014`.
