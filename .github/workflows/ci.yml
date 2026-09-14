@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck · Smoke · Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4       # đọc "packageManager" trong package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Smoke test (pipeline thuần, không cần trình duyệt)
+        run: pnpm smoke
+
+      - name: Build
+        run: pnpm build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+          retention-days: 7
+
+  browser:
+    name: Layout engine (Chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Cài Chromium cho Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - run: pnpm build
+
+      # Preview server và browser-check phải nằm cùng một step: tiến trình nền
+      # không được đảm bảo sống qua ranh giới step của GitHub Actions.
+      - name: Phân trang, orphan/widow, KaTeX, Mermaid
+        run: |
+          pnpm preview &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4173/ > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:4173/ > /dev/null || {
+            echo "::error::Preview server không khởi động được trong 30 giây"
+            exit 1
+          }
+          pnpm browser-check
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: preview-screenshot
+          path: scripts/screenshot.png
+          retention-days: 7
+          if-no-files-found: warn
