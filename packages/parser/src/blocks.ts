@@ -287,6 +287,7 @@ function readFence(
 
   if (lang === 'mermaid') {
     const cap = readCaptionLine(lines, next, st);
+    const dir = (cap?.spec.attrs.dir ?? '').toUpperCase();
     out.push({
       type: 'diagram',
       id: nid('diagram', pos, st),
@@ -296,19 +297,24 @@ function readFence(
       caption: cap?.caption ?? [],
       label: cap?.spec.label ?? null,
       number: null,
+      direction: ['TB', 'TD', 'BT', 'LR', 'RL'].includes(dir) ? dir : null,
     });
     if (cap) next = cap.next;
     return next;
   }
 
+  const codeCaption = readCaptionLine(lines, next, st);
   out.push({
     type: 'codeBlock',
     id: nid('codeBlock', pos, st),
     position: pos,
     lang: lang || null,
     value: buf.join('\n'),
+    caption: codeCaption?.caption ?? [],
+    label: codeCaption?.spec.label ?? null,
+    number: null,
   });
-  return next;
+  return codeCaption ? codeCaption.next : next;
 }
 
 function readCallout(

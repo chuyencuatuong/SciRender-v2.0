@@ -1,9 +1,18 @@
-import type { Author, BibEntry, Diagnostic, DocumentMeta } from '@scirender/ast';
+import type {
+  Author,
+  BibEntry,
+  CoverMember,
+  CoverMeta,
+  Diagnostic,
+  DocumentMeta,
+} from '@scirender/ast';
 import yaml from 'js-yaml';
 
 const KNOWN_KEYS = new Set([
   'title', 'subtitle', 'authors', 'author', 'abstract', 'keywords',
   'date', 'language', 'lang', 'template', 'bibliography', 'references',
+  'acknowledgement', 'acknowledgment', 'loicamon',
+  'abbreviations', 'vietat', 'cover',
 ]);
 
 export interface FrontMatterResult {
@@ -21,6 +30,7 @@ export function parseFrontMatter(src: string): FrontMatterResult {
   const meta: DocumentMeta = {
     title: '',
     authors: [],
+    abbreviations: [],
     keywords: [],
     language: 'vi',
     bibliography: [],
@@ -86,6 +96,12 @@ export function parseFrontMatter(src: string): FrontMatterResult {
   const template = str(obj.template);
   if (template) meta.templateId = template;
   meta.bibliography = normaliseBibliography(obj.bibliography ?? obj.references, diagnostics);
+
+  const ack = str(obj.acknowledgement) ?? str(obj.acknowledgment) ?? str(obj.loicamon);
+  if (ack) meta.acknowledgement = ack.trim();
+  meta.abbreviations = normaliseAbbreviations(obj.abbreviations ?? obj.vietat);
+  const cover = normaliseCover(obj.cover);
+  if (cover) meta.cover = cover;
 
   for (const [k, v] of Object.entries(obj)) {
     if (!KNOWN_KEYS.has(k)) meta.extra[k] = v; // P1: keep what we do not understand.
@@ -180,4 +196,72 @@ function normaliseBibliography(v: unknown, diagnostics: Diagnostic[]): BibEntry[
     out.push(e);
   });
   return out;
+}
+
+
+function normaliseAbbreviations(v: unknown): Array<{ term: string; meaning: string }> {
+  const out: Array<{ term: string; meaning: string }> = [];
+  if (Array.isArray(v)) {
+    for (const item of v) {
+      if (typeof item === 'string') {
+        const m = /^(\S+)\s+(.*)$/.exec(item.trim());
+        if (m) out.push({ term: m[1] as string, meaning: (m[2] ?? '').trim() });
+        continue;
+      }
+      if (item && typeof item === 'object') {
+        const o = item as Record<string, unknown>;
+        const term = str(o.term) ?? str(o.key) ?? str(o.abbr);
+        const meaning = str(o.meaning) ?? str(o.value) ?? str(o.full);
+        if (term) out.push({ term, meaning: meaning ?? '' });
+      }
+    }
+    return out;
+  }
+  if (v && typeof v === 'object') {
+    for (const [term, meaning] of Object.entries(v as Record<string, unknown>)) {
+      out.push({ term, meaning: str(meaning) ?? '' });
+    }
+  }
+  return out;
+}
+
+function normaliseCover(v: unknown): CoverMeta | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const o = v as Record<string, unknown>;
+  const members: CoverMember[] = [];
+  const rawMembers = o.members ?? o.thanhvien;
+  if (Array.isArray(rawMembers)) {
+    for (const item of rawMembers) {
+      if (typeof item === 'string') {
+        // "Nguyễn Văn A - 2011234" or "Nguyễn Văn A 2011234"
+        const m = /^(.*?)[\s\-–—]+(\d[\d.]*)\s*$/.exec(item.trim());
+        if (m) members.push({ name: (m[1] ?? '').trim(), studentId: m[2] as string });
+        else members.push({ name: item.trim() });
+        continue;
+      }
+      if (item && typeof item === 'object') {
+        const mo = item as Record<string, unknown>;
+        const name = str(mo.name) ?? str(mo.hoten);
+        if (!name) continue;
+        const id = str(mo.studentId) ?? str(mo.mssv) ?? str(mo.id);
+        members.push(id ? { name, studentId: id } : { name });
+      }
+    }
+  }
+  const cover: CoverMeta = { members };
+  const assign = (key: keyof CoverMeta, ...candidates: Array<string | undefined>): void => {
+    const found = candidates.find((c) => c !== undefined && c !== '');
+    if (found !== undefined) (cover as unknown as Record<string, unknown>)[key] = found;
+  };
+  assign('university', str(o.university), str(o.daihoc));
+  assign('school', str(o.school), str(o.truong));
+  assign('faculty', str(o.faculty), str(o.khoa));
+  assign('reportType', str(o.reportType), str(o.loaibaocao));
+  assign('course', str(o.course), str(o.monhoc));
+  assign('class', str(o.class), str(o.lop));
+  assign('group', str(o.group), str(o.nhom));
+  assign('advisor', str(o.advisor), str(o.gvhd));
+  assign('place', str(o.place), str(o.noi));
+  assign('logo', str(o.logo));
+  return cover;
 }

@@ -107,6 +107,7 @@ export function emptyDocument(title = ''): DocumentNode {
     meta: {
       title,
       authors: [],
+      abbreviations: [],
       keywords: [],
       language: 'vi',
       bibliography: [],

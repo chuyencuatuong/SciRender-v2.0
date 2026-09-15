@@ -1,19 +1,19 @@
 {
-  "id": "scientific-standard",
-  "name": "Scientific Standard (A4 · 13pt · 1.5)",
-  "version": "2.0.0",
-  "description": "Bố cục báo cáo khoa học chung: A4, lề 25/20/25/30mm, serif 13pt, giãn dòng 1.5, không bìa, không phần đầu.",
+  "id": "hcmut-btl",
+  "name": "HCMUT — Báo cáo Bài tập lớn",
+  "version": "1.0.0",
+  "description": "Đúng quy cách BTL Bách khoa TP.HCM: A4 lề 2,5/1,5/1,5/1,5cm, Times New Roman 13pt giãn 1.5, CHƯƠNG in hoa 14pt, chú thích canh giữa, bìa + phụ bìa, đánh số i/ii/iii cho phần đầu và 1/2/3 cho phần nội dung.",
   "page": {
     "size": "A4",
     "width": "210mm",
     "height": "297mm",
     "margin": {
-      "top": "25mm",
-      "right": "20mm",
-      "bottom": "25mm",
-      "left": "30mm"
+      "top": "15mm",
+      "right": "15mm",
+      "bottom": "15mm",
+      "left": "25mm"
     },
-    "footerFromBottom": "10mm",
+    "footerFromBottom": "5mm",
     "columns": 1,
     "columnGap": "8mm"
   },
@@ -24,8 +24,8 @@
     "bodySize": "13pt",
     "lineHeight": 1.5,
     "paragraphIndent": "0mm",
-    "spaceBefore": "0pt",
-    "spaceAfter": "8pt",
+    "spaceBefore": "10pt",
+    "spaceAfter": "0pt",
     "justify": true,
     "hyphenate": false
   },
@@ -34,27 +34,27 @@
     "numberDepth": 4,
     "levels": [
       {
-        "size": "1.55em",
+        "size": "14pt",
         "weight": 700,
         "italic": false,
         "uppercase": true,
-        "spaceBefore": "18pt",
-        "spaceAfter": "8pt",
-        "lineHeight": 1.25,
+        "spaceBefore": "24pt",
+        "spaceAfter": "24pt",
+        "lineHeight": 1,
         "align": "left",
         "indent": "0",
-        "numberFormat": "{n}.",
-        "numberGap": "0.6em",
-        "pageBreakBefore": false
+        "numberFormat": "CHƯƠNG {n}.",
+        "numberGap": "1.4em",
+        "pageBreakBefore": true
       },
       {
-        "size": "1.3em",
+        "size": "13pt",
         "weight": 700,
         "italic": false,
         "uppercase": false,
-        "spaceBefore": "14pt",
-        "spaceAfter": "6pt",
-        "lineHeight": 1.25,
+        "spaceBefore": "6pt",
+        "spaceAfter": "12pt",
+        "lineHeight": 1,
         "align": "left",
         "indent": "0",
         "numberFormat": "{n}.",
@@ -62,13 +62,13 @@
         "pageBreakBefore": false
       },
       {
-        "size": "1.14em",
+        "size": "13pt",
         "weight": 700,
-        "italic": false,
+        "italic": true,
         "uppercase": false,
-        "spaceBefore": "12pt",
-        "spaceAfter": "6pt",
-        "lineHeight": 1.25,
+        "spaceBefore": "6pt",
+        "spaceAfter": "12pt",
+        "lineHeight": 1,
         "align": "left",
         "indent": "0",
         "numberFormat": "{n}.",
@@ -76,13 +76,13 @@
         "pageBreakBefore": false
       },
       {
-        "size": "1.05em",
-        "weight": 700,
-        "italic": false,
+        "size": "13pt",
+        "weight": 400,
+        "italic": true,
         "uppercase": false,
-        "spaceBefore": "10pt",
-        "spaceAfter": "5pt",
-        "lineHeight": 1.25,
+        "spaceBefore": "6pt",
+        "spaceAfter": "12pt",
+        "lineHeight": 1,
         "align": "left",
         "indent": "0",
         "numberFormat": "{n}.",
@@ -90,9 +90,9 @@
         "pageBreakBefore": false
       },
       {
-        "size": "1em",
-        "weight": 700,
-        "italic": false,
+        "size": "13pt",
+        "weight": 400,
+        "italic": true,
         "uppercase": false,
         "spaceBefore": "6pt",
         "spaceAfter": "12pt",
@@ -104,9 +104,9 @@
         "pageBreakBefore": false
       },
       {
-        "size": "1em",
-        "weight": 700,
-        "italic": false,
+        "size": "13pt",
+        "weight": 400,
+        "italic": true,
         "uppercase": false,
         "spaceBefore": "6pt",
         "spaceAfter": "12pt",
@@ -132,33 +132,33 @@
     "figure": "Hình",
     "table": "Bảng",
     "equation": "Công thức",
-    "diagram": "Sơ đồ",
+    "diagram": "Hình",
     "listing": "Mã nguồn",
-    "abstract": "Tóm tắt",
-    "acknowledgement": "Lời cảm ơn",
-    "toc": "Mục lục",
-    "figureList": "Danh mục hình",
-    "tableList": "Danh mục bảng",
-    "abbreviationList": "Danh mục từ viết tắt",
+    "abstract": "TÓM TẮT BÀI BÁO CÁO",
+    "acknowledgement": "LỜI CẢM ƠN",
+    "toc": "MỤC LỤC",
+    "figureList": "DANH MỤC CÁC HÌNH ẢNH",
+    "tableList": "DANH MỤC BẢNG BIỂU",
+    "abbreviationList": "DANH MỤC CÁC TỪ VIẾT TẮT",
     "keywords": "Từ khóa",
-    "references": "Tài liệu tham khảo",
-    "appendix": "Phụ lục",
-    "page": "Trang",
+    "references": "TÀI LIỆU THAM KHẢO",
+    "appendix": "PHỤ LỤC",
+    "page": "",
     "refFigure": "Hình",
     "refTable": "Bảng",
     "refSection": "Mục",
     "refEquation": "",
-    "refDiagram": "Sơ đồ",
+    "refDiagram": "Hình",
     "refListing": "Mã nguồn"
   },
   "captions": {
     "figurePosition": "below",
     "tablePosition": "above",
     "listingPosition": "below",
-    "separator": ". ",
+    "separator": " ",
     "italic": false,
     "bold": false,
-    "fontSize": "0.88em",
+    "fontSize": "1em",
     "align": "center"
   },
   "layout": {
@@ -178,32 +178,42 @@
     "frontPageNumbers": "roman-lower"
   },
   "code": {
-    "fontSize": "0.82em",
-    "lineNumbers": false,
-    "wrap": false,
+    "fontSize": "10pt",
+    "lineNumbers": true,
+    "wrap": true,
     "border": true,
-    "background": true
+    "background": false
   },
   "diagrams": {
-    "defaultDirection": "LR",
+    "defaultDirection": "TB",
     "autoDirection": true,
-    "fontSize": "11pt",
-    "fontFamily": "sans",
+    "fontSize": "13pt",
+    "fontFamily": "body",
     "overflow": "fit",
-    "minScale": 0.7,
-    "nodeSpacing": 36,
-    "rankSpacing": 40,
+    "minScale": 0.75,
+    "nodeSpacing": 40,
+    "rankSpacing": 46,
     "curve": "basis",
-    "wrappingWidth": 28
+    "wrappingWidth": 26
   },
   "frontMatter": {
-    "enabled": false,
+    "enabled": true,
     "titleAlign": "center",
-    "titleSize": "1.3em",
+    "titleSize": "14pt",
     "titleUppercase": true,
     "leaders": true,
     "listLineHeight": 1.15,
     "sections": [
+      {
+        "kind": "abstract",
+        "enabled": true,
+        "minItems": 1
+      },
+      {
+        "kind": "acknowledgement",
+        "enabled": true,
+        "minItems": 1
+      },
       {
         "kind": "toc",
         "enabled": true,
@@ -227,22 +237,22 @@
     ]
   },
   "cover": {
-    "layout": "none",
-    "innerCover": false,
-    "logoHeight": "26mm"
+    "layout": "hcmut",
+    "innerCover": true,
+    "logoHeight": "28mm"
   },
   "citation": {
     "style": "numeric",
     "open": "[",
     "close": "]",
-    "references": "plain"
+    "references": "apa"
   },
   "colors": {
-    "text": "#111418",
-    "muted": "#5b6472",
-    "rule": "#c8cfd8",
-    "accent": "#0b2c7f",
-    "tableHeaderBg": "#eef2f7",
-    "codeBg": "#f5f7fa"
+    "text": "#000000",
+    "muted": "#333333",
+    "rule": "#000000",
+    "accent": "#000000",
+    "tableHeaderBg": "#ffffff",
+    "codeBg": "#f6f6f6"
   }
 }

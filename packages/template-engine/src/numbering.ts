@@ -20,6 +20,7 @@ const KIND_OF_TYPE: Record<string, RefKind> = {
   figure: 'fig',
   table: 'tbl',
   diagram: 'dia',
+  codeBlock: 'lst',
 };
 
 /**
@@ -41,6 +42,7 @@ export function assignNumbers(doc: DocumentNode, t: TemplateDescriptor): Numberi
   let fig = 0;
   let tbl = 0;
   let dia = 0;
+  let lst = 0;
   let sectionPrefix = '';
 
   const register = (
@@ -90,6 +92,7 @@ export function assignNumbers(doc: DocumentNode, t: TemplateDescriptor): Numberi
     if (t.numbering.figures === 'section') fig = 0;
     if (t.numbering.tables === 'section') tbl = 0;
     if (t.numbering.diagrams === 'section') dia = 0;
+    if (t.numbering.listings === 'section') lst = 0;
   };
 
   walk(doc, (node) => {
@@ -139,6 +142,17 @@ export function assignNumbers(doc: DocumentNode, t: TemplateDescriptor): Numberi
         dia += 1;
         node.number = format(dia, t.numbering.diagrams, sectionPrefix);
         register(node.label, 'dia', node.number, node);
+        break;
+      }
+      case 'codeBlock': {
+        // Only captioned listings are numbered; a bare snippet stays unnumbered.
+        if (node.caption.length || node.label) {
+          lst += 1;
+          node.number = format(lst, t.numbering.listings, sectionPrefix);
+          register(node.label, 'lst', node.number, node);
+        } else {
+          node.number = null;
+        }
         break;
       }
       case 'citation': {
@@ -216,6 +230,7 @@ export function refWord(kind: RefKind, t: TemplateDescriptor): string {
     case 'sec': return t.labels.refSection;
     case 'dia': return t.labels.refDiagram;
     case 'eq': return t.labels.refEquation;
+    case 'lst': return t.labels.refListing;
     default: return '';
   }
 }

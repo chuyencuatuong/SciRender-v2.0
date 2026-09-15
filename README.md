@@ -9,6 +9,11 @@ SciRender không phải trình soạn thảo AI, cũng không phải bản sao c
 **trình biên dịch tài liệu khoa học**: nội dung có cấu trúc đi qua một pipeline cố định
 và cho ra tài liệu chuẩn mực, nhất quán, sẵn sàng in.
 
+Template mặc định là **`hcmut-btl`** — dựng đúng quy cách Báo cáo Bài tập lớn của Trường
+Đại học Bách khoa TP.HCM: bìa, phụ bìa, tóm tắt, lời cảm ơn, mục lục, danh mục hình/bảng/
+từ viết tắt, đánh số i–ii–iii cho phần đầu và 1–2–3 cho phần nội dung. Xem
+[docs/TEMPLATE-BTL.md](docs/TEMPLATE-BTL.md) để đối chiếu từng điều khoản.
+
 Toàn bộ ứng dụng chạy trong trình duyệt. Không backend, không database, không API trả phí,
 không tài khoản. Mở bằng `file://` hay host tĩnh đều được.
 
@@ -30,7 +35,7 @@ pnpm dev               # http://localhost:5173
 pnpm build       # bundle tĩnh vào apps/web/dist
 pnpm preview     # phục vụ bản build tại http://localhost:4173
 pnpm typecheck   # tsc --noEmit cho toàn bộ workspace
-pnpm smoke       # 56 kiểm tra pipeline thuần (không cần trình duyệt)
+pnpm smoke       # 118 kiểm tra pipeline thuần (không cần trình duyệt)
 ```
 
 Kiểm tra tầng cần DOM (phân trang, orphan/widow, KaTeX, Mermaid):
@@ -102,8 +107,16 @@ Nguồn (Scientific Markdown)
 ```
 
 `compile()` trong `apps/web/src/lib/pipeline.ts` chạy toàn bộ phần thuần và đo thời gian
-từng chặng (hiện ở thanh trạng thái). Phân trang chạy riêng trong `usePagination` vì
-nó phải đo hộp dòng thật của trình duyệt.
+từng chặng (hiện ở thanh trạng thái). Phân trang, sơ đồ Mermaid và phần đầu chạy riêng
+trong `useRender` vì chúng cần DOM thật.
+
+**Không còn live render.** Gõ chữ không dựng lại trang; bấm **Dựng trang** hoặc
+<kbd>Ctrl</kbd>+<kbd>Enter</kbd> mới dựng. Lý do: phân trang phải đo hộp dòng thật của
+trình duyệt, chạy việc đó sau mỗi phím gõ là nguyên nhân giật lag. Thanh trạng thái báo
+"chưa dựng lại" khi bản xem trước đã cũ hơn nội dung trong editor.
+
+Mục lục cần một **điểm bất động**: nó hiển thị số trang, mà thêm nó vào lại làm đổi số
+trang phần đầu. `useRender` lặp tối đa ba lượt và dừng ngay khi các số thôi đổi.
 
 ---
 
@@ -136,8 +149,8 @@ Vite biên dịch chúng qua alias trong `vite.config.ts`, TypeScript qua `paths
 Khi cần publish riêng (hoặc khi thêm backend Typst ở Phase 3), mỗi package đã có ranh
 giới sẵn để thêm `tsup`.
 
-Kiểm chứng đã chạy trên cây kho này: `pnpm typecheck` sạch, `pnpm smoke` 56/56,
-`pnpm browser-check` 17/17, `pnpm build` thành công.
+Kiểm chứng đã chạy trên cây kho này: `pnpm typecheck` sạch, `pnpm smoke` 118/118,
+`pnpm browser-check` 45/45, `pnpm build` thành công.
 
 ---
 
@@ -196,7 +209,7 @@ Khung ghi chú.
 | `SR-V0xx` | Validator | `SR-V008` nhảy cấp đề mục, `SR-V012` nhãn không tồn tại, `SR-V021` lỗi LaTeX |
 | `SR-F0xx` | Tài nguyên | `SR-F002` không tìm thấy ảnh `asset:` |
 | `SR-T0xx` | Bảng | `SR-T002` bảng thiếu chú thích |
-| `SR-L0xx` | Bố cục | `SR-L001` khối cao hơn vùng nội dung trang |
+| `SR-L0xx` | Bố cục | `SR-L001` khối cao hơn vùng nội dung trang, `SR-L003` sơ đồ phải thu quá nhỏ mới vừa trang |
 
 Bấm vào một chẩn đoán sẽ nhảy con trỏ tới đúng dòng nguồn. Bấm vào bất kỳ khối nào trên
 trang xem trước cũng vậy.
@@ -210,6 +223,8 @@ Nói thẳng, để khỏi mất thời gian phát hiện lại:
 - **Bảng và hình không cắt được qua trang.** Khối nào cao hơn phần còn lại của trang sẽ
   đẩy nguyên khối sang trang sau, để lại khoảng trắng. Cắt bảng nhiều trang (kèm lặp
   dòng tiêu đề) là việc của Phase 2.
+- **Cột giữa vẫn là editor Markdown**, chưa phải canvas card kéo thả. Smart paste
+  (Ctrl+V nhận diện ảnh / bảng Excel / LaTeX) đi kèm canvas nên cũng chưa có.
 - **Bố cục 2 cột dùng `column-count` của CSS**, nên trong một trang thì cân cột do
   trình duyệt quyết định, không do layout engine. Kiểm soát chặt hơn cần Typst (Phase 3).
 - **Không có chú thích chân trang (footnote)** và không có mục lục tự động.
@@ -225,7 +240,8 @@ Nói thẳng, để khỏi mất thời gian phát hiện lại:
 
 ## Lộ trình
 
-- **Phase 2** — cắt bảng qua trang, footnote, mục lục, `author-year`, import `.docx`/`.bib`.
+- **Phase 2** — block canvas: mỗi khối là một card kéo thả đổi thứ tự hoặc chia hai cột,
+  smart paste theo loại nội dung, cắt bảng qua trang, footnote, import `.docx`/`.bib`.
 - **Phase 3** — backend Typst thay cho Paged Media để kiểm soát bố cục ở mức nhà in;
   `renderer-pdf` đã tách sẵn để thay thế mà không đụng tới AST hay template.
 

@@ -39,6 +39,45 @@ bibliography:
 ---
 ```
 
+### Khối `cover:` cho mẫu BTL
+
+```yaml
+cover:
+  university: Đại học Quốc gia TP. Hồ Chí Minh
+  school: Trường Đại học Bách khoa
+  faculty: Khoa Khoa học Ứng dụng
+  reportType: Báo cáo bài tập lớn
+  course: Môn Cơ sở Y khoa
+  class: L01
+  group: Nhóm 1
+  advisor: TS. Nguyễn Văn B      # in ra "GVHD: ..."
+  place: Tp. HCM
+  logo: asset:logo-bk            # logo Bách khoa có sẵn, không cần tải lên
+  members:
+    - name: Trần Nhật Tường
+      mssv: "2210001"
+    - name: Nguyễn Văn A
+      mssv: "2210002"
+```
+
+Dạng rút gọn cũng được: `members: ["Trần Nhật Tường - 2210001"]`.
+Mọi khóa đều có tên tiếng Việt thay thế: `truong`, `khoa`, `lop`, `nhom`, `gvhd`,
+`thanhvien`, `monhoc`.
+
+### Phần đầu
+
+```yaml
+acknowledgement: |
+  Nhóm xin trân trọng cảm ơn ...
+abbreviations:
+  - term: PPG
+    meaning: Photoplethysmography — quang thể tích ký
+  - term: ECG
+    meaning: Electrocardiography — điện tâm đồ
+```
+
+Danh mục từ viết tắt chỉ được in khi có từ 3 mục trở lên; danh mục hình và bảng cũng vậy.
+
 Khóa không nằm trong danh sách trên **không bị bỏ đi** — chúng vào `meta.extra` và đi
 theo tài liệu (P1).
 
@@ -120,11 +159,21 @@ flowchart LR
   A[Đầu vào] --> B[Xử lý]
 ```
 
-: Chú thích sơ đồ {#dia:pipeline}
+: Chú thích sơ đồ {#dia:pipeline dir=TB}
 ````
 
 Mermaid được render thành SVG **trước khi phân trang**, nên sơ đồ chiếm đúng chiều cao
-thật lúc chia trang.
+thật lúc chia trang. Ba việc app tự làm:
+
+- **Co vừa trang.** Sơ đồ được thu theo cả chiều ngang lẫn chiều dọc để lọt vùng nội
+  dung, thay vì tràn xuống dưới rồi bị cắt.
+- **Tự chọn chiều.** Nếu bạn không ghi `dir=`, app dựng thử cả chiều dọc lẫn chiều ngang
+  rồi giữ bản nào vừa trang ở tỉ lệ lớn hơn — sơ đồ nhiều nhánh không còn bị bóp nhỏ.
+- **Cảnh báo khi vẫn quá nhỏ.** Thu dưới ngưỡng `diagrams.minScale` thì báo `SR-L003`
+  kèm gợi ý tách bớt nhánh.
+
+Ghi `dir=TB` (dọc) hoặc `dir=LR` (ngang) trong dòng chú thích để ép chiều và tắt tự chọn.
+Cỡ chữ trong sơ đồ lấy đúng cỡ chữ văn bản, đổi được ở panel Template.
 
 ### Khối mã
 
@@ -132,9 +181,13 @@ thật lúc chia trang.
 ```python
 x = 1
 ```
+
+: Chú thích khối mã {#lst:ten}
 ````
 
-Nội dung giữ nguyên tuyệt đối, không diễn giải (P1).
+Nội dung giữ nguyên tuyệt đối, không diễn giải (P1). Khối mã có chú thích sẽ được đánh số
+thành **Mã nguồn 3.1** và tham chiếu được bằng `@lst:ten`. Số dòng, tự xuống dòng và cỡ
+chữ chỉnh ở panel Template — mẫu BTL đặt 10pt, đúng cỡ tối thiểu mà quy cách cho phép.
 
 ### Danh sách
 
@@ -178,7 +231,7 @@ Biến thể có màu riêng: `note` (mặc định), `tip`, `warning`, `danger`
 | `H~2~O` | chỉ số dưới |
 | `E^2^` | chỉ số trên |
 | `[chữ](https://…)` | liên kết |
-| `@eq:x` `@fig:x` `@tbl:x` `@sec:x` `@dia:x` | tham chiếu chéo |
+| `@eq:x` `@fig:x` `@tbl:x` `@sec:x` `@dia:x` `@lst:x` | tham chiếu chéo |
 | `[@khoa]` `[@a; @b]` | trích dẫn |
 | `\*` `\$` `\[` … | thoát ký tự |
 
@@ -194,6 +247,7 @@ Nhãn khai báo bằng `{#tien-to:ten}`, tiền tố phải khớp loại đối
 | Tiền tố | Dùng cho |
 |---------|----------|
 | `sec:` | đề mục |
+| `lst:` | khối mã có chú thích |
 | `eq:` | công thức |
 | `fig:` | hình |
 | `tbl:` | bảng |

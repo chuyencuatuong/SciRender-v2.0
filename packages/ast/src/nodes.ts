@@ -163,6 +163,10 @@ export interface CodeBlockNode extends NodeBase {
   type: 'codeBlock';
   lang: string | null;
   value: string;
+  /** A captioned listing is numbered like a figure ("Mã nguồn 2.1"). */
+  caption: InlineNode[];
+  label: string | null;
+  number: string | null;
 }
 
 export interface DiagramNode extends NodeBase {
@@ -173,6 +177,8 @@ export interface DiagramNode extends NodeBase {
   caption: InlineNode[];
   label: string | null;
   number: string | null;
+  /** `dir=TB|LR|BT|RL` from the caption attributes; null = use the template default. */
+  direction: string | null;
 }
 
 export interface ListItemNode extends NodeBase {
@@ -249,21 +255,51 @@ export interface BibEntry {
   url?: string;
 }
 
+/** One member of the group, as printed on the HCMUT inner cover page. */
+export interface CoverMember {
+  name: string;
+  studentId?: string;
+}
+
+/**
+ * Everything the HCMUT "Báo cáo bài tập lớn" cover pages need.
+ * Ignored by templates that render no cover.
+ */
+export interface CoverMeta {
+  university?: string; // ĐẠI HỌC QUỐC GIA TP. HỒ CHÍ MINH
+  school?: string; // TRƯỜNG ĐẠI HỌC BÁCH KHOA
+  faculty?: string; // KHOA KHOA HỌC ỨNG DỤNG
+  reportType?: string; // BÁO CÁO BÀI TẬP LỚN
+  course?: string; // môn học
+  class?: string; // L01
+  group?: string; // Nhóm 1
+  advisor?: string; // GVHD
+  members: CoverMember[];
+  place?: string; // Tp. HCM
+  /** Logo source, same resolution rules as a figure (`asset:` / https: / data:). */
+  logo?: string;
+}
+
 export interface DocumentMeta {
   title: string;
   subtitle?: string;
   authors: Author[];
   abstract?: string;
+  /** Lời cảm ơn — front-matter section in the BTL structure. */
+  acknowledgement?: string;
+  /** Danh mục các từ viết tắt: term -> meaning, order preserved. */
+  abbreviations: Array<{ term: string; meaning: string }>;
   keywords: string[];
   date?: string;
   language: string; // BCP-47-ish; drives caption words when the template defers
   templateId?: string;
   bibliography: BibEntry[];
+  cover?: CoverMeta;
   /** Any front-matter key the schema does not know. Kept verbatim (P1). */
   extra: Record<string, unknown>;
 }
 
-export type RefKind = 'eq' | 'fig' | 'tbl' | 'sec' | 'dia';
+export type RefKind = 'eq' | 'fig' | 'tbl' | 'sec' | 'dia' | 'lst';
 
 export interface ResolvedRef {
   kind: RefKind;

@@ -1,6 +1,17 @@
 import { compileCss, compilePrintCss } from './css.js';
-import { BUILTIN_TEMPLATES, findTemplate, IEEE_LIKE, SCIENTIFIC_STANDARD } from './templates.js';
-import type { ResolvedTemplate, TemplateDescriptor, TemplateOverrides } from './types.js';
+import {
+  BUILTIN_TEMPLATES,
+  findTemplate,
+  HCMUT_BTL,
+  IEEE_LIKE,
+  SCIENTIFIC_STANDARD,
+} from './templates.js';
+import type {
+  PageNumberStyle,
+  ResolvedTemplate,
+  TemplateDescriptor,
+  TemplateOverrides,
+} from './types.js';
 import { round, toPx } from './units.js';
 
 /**
@@ -73,11 +84,36 @@ export {
   compilePrintCss,
   BUILTIN_TEMPLATES,
   findTemplate,
+  HCMUT_BTL,
   SCIENTIFIC_STANDARD,
   IEEE_LIKE,
   toPx,
   round,
 };
+
+const ROMAN: Array<[number, string]> = [
+  [1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'],
+  [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'],
+  [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i'],
+];
+
+/**
+ * Page numbers as the format demands them: the BTL front matter runs i, ii,
+ * iii… while the body restarts at 1. Deterministic and allocation-light.
+ */
+export function formatPageNumber(n: number, style: PageNumberStyle): string {
+  if (style === 'none' || n <= 0) return '';
+  if (style === 'arabic') return String(n);
+  let rest = Math.floor(n);
+  let out = '';
+  for (const [value, numeral] of ROMAN) {
+    while (rest >= value) {
+      out += numeral;
+      rest -= value;
+    }
+  }
+  return style === 'roman-upper' ? out.toUpperCase() : out;
+}
 export * from './types.js';
 export { assignNumbers, refWord } from './numbering.js';
 export type { NumberingResult } from './numbering.js';

@@ -1,0 +1,263 @@
+import type { BlockNode, InlineNode, TableCell } from '@scirender/ast';
+import { renderMath } from '@scirender/equation-engine';
+import { figureStyle, resolveFigureSrc, type AssetMap } from '@scirender/figure-engine';
+import { alignStyle, normaliseTable } from '@scirender/table-engine';
+import { refWord, type TemplateDescriptor } from '@scirender/template-engine';
+import { escapeAttr, escapeHtml, safeUrl } from './escape.js';
+
+export interface CoreOptions {
+  template: TemplateDescriptor;
+  assets: AssetMap;
+}
+
+export function attrsOf(node: BlockNode): string {
+  return ` data-sr-id="${escapeAttr(node.id)}" data-sr-line="${node.position.start.line}" data-sr-type="${node.type}"`;
+}
+
+/* ----------------------------------------------------------------- inline */
+
+export function inline(nodes: InlineNode[], t: TemplateDescriptor): string {
+  return nodes.map((n) => inlineOne(n, t)).join('');
+}
+
+function inlineOne(node: InlineNode, t: TemplateDescriptor): string {
+  switch (node.type) {
+    case 'text':
+      return escapeHtml(node.value);
+    case 'strong':
+      return `<strong>${inline(node.children, t)}</strong>`;
+    case 'emphasis':
+      return `<em>${inline(node.children, t)}</em>`;
+    case 'superscript':
+      return `<sup>${inline(node.children, t)}</sup>`;
+    case 'subscript':
+      return `<sub>${inline(node.children, t)}</sub>`;
+    case 'inlineCode':
+      return `<code>${escapeHtml(node.value)}</code>`;
+    case 'inlineMath':
+      return renderMath(node.value, false).html;
+    case 'link': {
+      const url = safeUrl(node.url);
+      const text = inline(node.children, t);
+      if (!url) return text;
+      return `<a href="${escapeAttr(url)}"${
+        node.title ? ` title="${escapeAttr(node.title)}"` : ''
+      } rel="noreferrer noopener">${text}</a>`;
+    }
+    case 'crossRef': {
+      if (!node.resolved) {
+        return `<span class="sr-unresolved" title="Không tìm thấy nhãn">@${escapeHtml(node.label)}</span>`;
+      }
+      const word = refWord(node.resolved.kind, t);
+      const num =
+        node.resolved.kind === 'eq' ? `(${node.resolved.number})` : node.resolved.number;
+      return `<span class="sr-crossref" data-sr-ref="${escapeAttr(node.label)}">${
+        word ? `${escapeHtml(word)}&nbsp;` : ''
+      }${escapeHtml(num)}</span>`;
+    }
+    case 'citation': {
+      const rendered = node.keys.map((key, i) => {
+        const n = node.numbers[i];
+        if (n == null) {
+          return `<span class="sr-unresolved" title="Không có trong danh mục tham khảo">${escapeHtml(key)}</span>`;
+        }
+        return String(n);
+      });
+      const { open, close } = t.citation;
+      return `<span class="sr-citation">${escapeHtml(open)}${rendered.join(', ')}${escapeHtml(
+        close,
+      )}</span>`;
+    }
+    case 'break':
+      return '<br>';
+    default:
+      return '';
+  }
+}
+
+/* --------------------------------------------------------------- captions */
+
+export function captionHtml(
+  word: string,
+  number: string | null,
+  text: string,
+  t: TemplateDescriptor,
+  above: boolean,
+): string {
+  if (!text && !number) return '';
+  const label = number
+    ? `<span class="sr-caption-label">${escapeHtml(word)} ${escapeHtml(number)}${escapeHtml(
+        t.captions.separator,
+      )}</span>`
+    : '';
+  const cls = above ? 'sr-caption sr-caption-above' : 'sr-caption';
+  return `<figcaption class="${cls}">${label}${text}</figcaption>`;
+}
+
+/* ----------------------------------------------------------------- blocks */
+
+const DIRECTION_RE = /^(\s*)(flowchart|graph)([ \t]+)(TB|TD|BT|RL|LR)\b/;
+
+/**
+ * Applies the template's default direction to a Mermaid source that does not
+ * pin one, or a per-diagram `dir=` attribute that overrides it.
+ *
+ * P1: the AST keeps the author's original text. Only the copy handed to Mermaid
+ * is rewritten, exactly like `table-engine` pads ragged rows for rendering only.
+ */
+export function applyDiagramDirection(source: string, direction: string): string {
+  const m = DIRECTION_RE.exec(source);
+  if (!m) return source;
+  return source.replace(DIRECTION_RE, `$1$2$3${direction}`);
+}
+
+export function renderBlock(
+  node: BlockNode,
+  t: TemplateDescriptor,
+  assets: AssetMap,
+  afterHeading = false,
+): string {
+  switch (node.type) {
+    case 'heading': {
+      const style = t.headings.levels[node.depth - 1] ?? t.headings.levels[0];
+      const numberText =
+        node.number && style && style.numberFormat
+          ? style.numberFormat.replace('{n}', node.number)
+          : '';
+      const num = numberText
+        ? `<span class="sr-heading-number">${escapeHtml(numberText)}</span>`
+        : '';
+      const brk = style?.pageBreakBefore ? ' data-sr-break="page"' : '';
+      return `<h${node.depth}${attrsOf(node)}${brk}>${num}${inline(node.children, t)}</h${node.depth}>`;
+    }
+    case 'paragraph': {
+      const cls = afterHeading ? ' class="sr-first-paragraph"' : '';
+      return `<p${cls}${attrsOf(node)}>${inline(node.children, t)}</p>`;
+    }
+    case 'equation': {
+      const math = renderMath(node.value, true);
+      const number = node.number
+        ? `<span class="sr-equation-number">(${escapeHtml(node.number)})</span>`
+        : '<span class="sr-equation-number"></span>';
+      return `<div class="sr-equation"${attrsOf(node)}><div class="sr-equation-body">${math.html}</div>${number}</div>`;
+    }
+    case 'figure': {
+      const resolved = resolveFigureSrc(node.src, assets);
+      const style = figureStyle(node.attrs);
+      const src = safeUrl(resolved.url);
+      const img = src
+        ? `<img src="${escapeAttr(src)}" alt="${escapeAttr(node.alt)}"${
+            style ? ` style="${escapeAttr(style)}"` : ''
+          }>`
+        : `<div class="sr-unknown">Thiếu tài nguyên hình: ${escapeHtml(node.src)}</div>`;
+      const cap = captionHtml(
+        t.labels.figure,
+        node.number,
+        node.caption.length ? inline(node.caption, t) : escapeHtml(node.alt),
+        t,
+        false,
+      );
+      const body = t.captions.figurePosition === 'above' ? `${cap}${img}` : `${img}${cap}`;
+      return `<figure${attrsOf(node)}>${body}</figure>`;
+    }
+    case 'table': {
+      const norm = normaliseTable(node);
+      const head = `<thead><tr>${norm.header
+        .map((c, i) => cellHtml('th', c, norm.align[i] ?? 'default', t))
+        .join('')}</tr></thead>`;
+      const body = `<tbody>${norm.rows
+        .map(
+          (r) =>
+            `<tr>${r.map((c, i) => cellHtml('td', c, norm.align[i] ?? 'default', t)).join('')}</tr>`,
+        )
+        .join('')}</tbody>`;
+      const cap = captionHtml(
+        t.labels.table,
+        node.number,
+        inline(node.caption, t),
+        t,
+        t.captions.tablePosition === 'above',
+      );
+      const table = `<table>${head}${body}</table>`;
+      const inner = t.captions.tablePosition === 'above' ? `${cap}${table}` : `${table}${cap}`;
+      return `<div class="sr-table-wrap"${attrsOf(node)}>${inner}</div>`;
+    }
+    case 'codeBlock': {
+      const lines = node.value.split('\n');
+      const codeHtml = `<pre><code${
+        node.lang ? ` class="language-${escapeAttr(node.lang)}"` : ''
+      }>${escapeHtml(node.value)}</code></pre>`;
+      const withGutter = t.code.lineNumbers
+        ? `<div class="sr-code-lines"><div class="sr-code-gutter">${lines
+            .map((_, i) => i + 1)
+            .join('\n')}</div>${codeHtml}</div>`
+        : codeHtml;
+      const cap = captionHtml(
+        t.labels.listing,
+        node.number,
+        inline(node.caption, t),
+        t,
+        t.captions.listingPosition === 'above',
+      );
+      const inner =
+        t.captions.listingPosition === 'above' ? `${cap}${withGutter}` : `${withGutter}${cap}`;
+      return `<div class="sr-code"${attrsOf(node)}>${inner}</div>`;
+    }
+    case 'diagram': {
+      const direction = node.direction ?? t.diagrams.defaultDirection;
+      const source = applyDiagramDirection(node.value, direction);
+      // Marked auto when the author did not pin a direction: the renderer may
+      // then try the perpendicular layout and keep whichever fits better.
+      const auto = !node.direction && t.diagrams.autoDirection ? ' data-sr-mermaid-auto="1"' : '';
+      const cap = node.caption.length
+        ? captionHtml(t.labels.diagram, node.number, inline(node.caption, t), t, false)
+        : '';
+      return `<div class="sr-diagram"${attrsOf(node)}><div class="sr-mermaid"${auto} data-sr-mermaid="${escapeAttr(
+        source,
+      )}"></div>${cap}</div>`;
+    }
+    case 'list': {
+      const tag = node.ordered ? 'ol' : 'ul';
+      const start = node.ordered && node.start !== 1 ? ` start="${node.start}"` : '';
+      const items = node.items
+        .map(
+          (it) =>
+            `<li data-sr-id="${escapeAttr(it.id)}" data-sr-line="${it.position.start.line}">${it.children
+              .map((c) => renderBlock(c, t, assets))
+              .join('')}</li>`,
+        )
+        .join('');
+      return `<${tag}${start}${attrsOf(node)}>${items}</${tag}>`;
+    }
+    case 'blockquote':
+      return `<blockquote${attrsOf(node)}>${node.children
+        .map((c) => renderBlock(c, t, assets))
+        .join('')}</blockquote>`;
+    case 'callout': {
+      const title = node.title
+        ? `<div class="sr-callout-title">${escapeHtml(node.title)}</div>`
+        : '';
+      return `<div class="sr-callout sr-callout-${escapeAttr(node.variant)}"${attrsOf(
+        node,
+      )}>${title}${node.children.map((c) => renderBlock(c, t, assets)).join('')}</div>`;
+    }
+    case 'thematicBreak':
+      return `<hr${attrsOf(node)}>`;
+    case 'unknownBlock':
+      return `<div class="sr-unknown"${attrsOf(node)}>${escapeHtml(node.reason)}\n${escapeHtml(
+        node.raw,
+      )}</div>`;
+    default:
+      return '';
+  }
+}
+
+function cellHtml(
+  tag: 'th' | 'td',
+  cell: TableCell,
+  align: Parameters<typeof alignStyle>[0],
+  t: TemplateDescriptor,
+): string {
+  const style = alignStyle(align);
+  return `<${tag}${style ? ` style="${escapeAttr(style)}"` : ''}>${inline(cell.children, t)}</${tag}>`;
+}

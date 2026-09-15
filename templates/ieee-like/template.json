@@ -1,74 +1,46 @@
 {
-  "id": "scientific-standard",
-  "name": "Scientific Standard (A4 · 13pt · 1.5)",
+  "id": "ieee-like",
+  "name": "IEEE-like (A4 · 2 cột · 10pt)",
   "version": "2.0.0",
-  "description": "Bố cục báo cáo khoa học chung: A4, lề 25/20/25/30mm, serif 13pt, giãn dòng 1.5, không bìa, không phần đầu.",
+  "description": "Bố cục hai cột kiểu hội nghị: A4, lề 19mm, chữ 10pt, giãn dòng 1.15, đánh số công thức liên tục.",
   "page": {
     "size": "A4",
     "width": "210mm",
     "height": "297mm",
     "margin": {
-      "top": "25mm",
-      "right": "20mm",
-      "bottom": "25mm",
-      "left": "30mm"
+      "top": "19mm",
+      "right": "16mm",
+      "bottom": "19mm",
+      "left": "16mm"
     },
     "footerFromBottom": "10mm",
-    "columns": 1,
-    "columnGap": "8mm"
+    "columns": 2,
+    "columnGap": "6mm"
   },
   "typography": {
     "bodyFont": "\"Times New Roman\", \"Liberation Serif\", \"Nimbus Roman\", \"Tinos\", Times, serif",
     "headingFont": "\"Times New Roman\", \"Liberation Serif\", \"Nimbus Roman\", \"Tinos\", Times, serif",
     "monoFont": "\"JetBrains Mono\", \"Cascadia Mono\", \"Liberation Mono\", Consolas, \"Courier New\", monospace",
-    "bodySize": "13pt",
-    "lineHeight": 1.5,
-    "paragraphIndent": "0mm",
+    "bodySize": "10pt",
+    "lineHeight": 1.15,
+    "paragraphIndent": "3.5mm",
     "spaceBefore": "0pt",
-    "spaceAfter": "8pt",
+    "spaceAfter": "0pt",
     "justify": true,
     "hyphenate": false
   },
   "headings": {
     "numbering": "decimal",
-    "numberDepth": 4,
+    "numberDepth": 3,
     "levels": [
       {
-        "size": "1.55em",
+        "size": "1.25em",
         "weight": 700,
         "italic": false,
         "uppercase": true,
-        "spaceBefore": "18pt",
-        "spaceAfter": "8pt",
-        "lineHeight": 1.25,
-        "align": "left",
-        "indent": "0",
-        "numberFormat": "{n}.",
-        "numberGap": "0.6em",
-        "pageBreakBefore": false
-      },
-      {
-        "size": "1.3em",
-        "weight": 700,
-        "italic": false,
-        "uppercase": false,
-        "spaceBefore": "14pt",
-        "spaceAfter": "6pt",
-        "lineHeight": 1.25,
-        "align": "left",
-        "indent": "0",
-        "numberFormat": "{n}.",
-        "numberGap": "0.6em",
-        "pageBreakBefore": false
-      },
-      {
-        "size": "1.14em",
-        "weight": 700,
-        "italic": false,
-        "uppercase": false,
         "spaceBefore": "12pt",
         "spaceAfter": "6pt",
-        "lineHeight": 1.25,
+        "lineHeight": 1.2,
         "align": "left",
         "indent": "0",
         "numberFormat": "{n}.",
@@ -76,13 +48,41 @@
         "pageBreakBefore": false
       },
       {
-        "size": "1.05em",
+        "size": "1.12em",
         "weight": 700,
         "italic": false,
         "uppercase": false,
         "spaceBefore": "10pt",
-        "spaceAfter": "5pt",
-        "lineHeight": 1.25,
+        "spaceAfter": "4pt",
+        "lineHeight": 1.2,
+        "align": "left",
+        "indent": "0",
+        "numberFormat": "{n}.",
+        "numberGap": "0.6em",
+        "pageBreakBefore": false
+      },
+      {
+        "size": "1.04em",
+        "weight": 700,
+        "italic": false,
+        "uppercase": false,
+        "spaceBefore": "8pt",
+        "spaceAfter": "4pt",
+        "lineHeight": 1.2,
+        "align": "left",
+        "indent": "0",
+        "numberFormat": "{n}.",
+        "numberGap": "0.6em",
+        "pageBreakBefore": false
+      },
+      {
+        "size": "1em",
+        "weight": 700,
+        "italic": false,
+        "uppercase": false,
+        "spaceBefore": "8pt",
+        "spaceAfter": "4pt",
+        "lineHeight": 1.2,
         "align": "left",
         "indent": "0",
         "numberFormat": "{n}.",
@@ -121,11 +121,11 @@
   },
   "numbering": {
     "equations": "all",
-    "equationStyle": "section",
-    "figures": "section",
-    "tables": "section",
-    "diagrams": "section",
-    "listings": "section",
+    "equationStyle": "continuous",
+    "figures": "continuous",
+    "tables": "continuous",
+    "diagrams": "continuous",
+    "listings": "continuous",
     "resetAtDepth": 1
   },
   "labels": {
@@ -158,8 +158,8 @@
     "separator": ". ",
     "italic": false,
     "bold": false,
-    "fontSize": "0.88em",
-    "align": "center"
+    "fontSize": "0.85em",
+    "align": "left"
   },
   "layout": {
     "orphans": 2,
@@ -187,14 +187,14 @@
   "diagrams": {
     "defaultDirection": "LR",
     "autoDirection": true,
-    "fontSize": "11pt",
+    "fontSize": "9pt",
     "fontFamily": "sans",
     "overflow": "fit",
     "minScale": 0.7,
     "nodeSpacing": 36,
     "rankSpacing": 40,
     "curve": "basis",
-    "wrappingWidth": 28
+    "wrappingWidth": 20
   },
   "frontMatter": {
     "enabled": false,

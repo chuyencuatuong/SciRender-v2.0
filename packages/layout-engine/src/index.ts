@@ -103,6 +103,13 @@ export function paginate(
     }
 
     const block = queue.shift() as Element;
+
+    // An explicit break (a chapter heading, a front-matter section title) starts
+    // a fresh page unless the current one is still empty.
+    if (block.getAttribute('data-sr-break') === 'page' && page.children.length > 0) {
+      commitPage();
+    }
+
     page.appendChild(block);
 
     if (!overflows(page, options)) {

@@ -44,13 +44,16 @@ export function validate(doc: DocumentNode, options: ValidateOptions = {}): Diag
       position: docPos,
     });
   }
-  if (!doc.meta.authors.length) {
+  // A cover-page format (the HCMUT BTL among them) carries its authors in the
+  // member list, not in `authors:` — either one satisfies the rule.
+  const hasAuthors = doc.meta.authors.length > 0 || (doc.meta.cover?.members.length ?? 0) > 0;
+  if (!hasAuthors) {
     out.push({
       code: 'SR-V002',
       severity: 'warning',
       stage: 'validator',
       message: 'Tài liệu chưa khai báo tác giả.',
-      hint: 'Thêm mục "authors:" vào front matter.',
+      hint: 'Thêm mục "authors:" vào front matter, hoặc "cover.members" nếu dùng mẫu có trang bìa.',
       position: docPos,
     });
   }
