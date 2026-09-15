@@ -57,6 +57,11 @@ Mỗi CHƯƠNG bắt đầu trên một trang mới (`pageBreakBefore: true`), �
 Khối mã có chú thích được đánh số thành **Mã nguồn 3.1** — không nằm trong quy cách gốc
 nhưng theo cùng nguyên tắc, và tắt được bằng cách bỏ dòng chú thích.
 
+Khối mã được **tô màu cú pháp** khi bạn ghi tên ngôn ngữ sau ba dấu nháy. Quy cách của
+khoa viết cho bản in trắng đen nên không nói gì về màu; bảng màu ở đây chọn sao cho mỗi
+loại token ra một mức xám khác nhau khi in. Tắt ở panel **Template → Khối mã → Tô màu cú
+pháp** nếu thầy hướng dẫn yêu cầu mã thuần đen.
+
 ## Cấu trúc tài liệu
 
 Thứ tự 9 phần trong điều 1.1 được dựng tự động:

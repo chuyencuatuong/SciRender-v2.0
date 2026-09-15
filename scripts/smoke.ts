@@ -22,6 +22,7 @@ import {
   formatPageNumber,
   HCMUT_BTL,
   resolveTemplate,
+  type TemplateDescriptor,
 } from '../packages/template-engine/src/index.js';
 import { validate } from '../packages/validator/src/index.js';
 import { SAMPLE_DOCUMENT } from '../apps/web/src/lib/sample.js';
@@ -45,9 +46,14 @@ function section(name: string): void {
 
 const ASSETS = { 'logo-bk': 'data:image/png;base64,iVBORw0KGgo=' };
 
-function compile(source: string, templateId = 'hcmut-btl') {
+function compile(
+  source: string,
+  templateId = 'hcmut-btl',
+  mutate?: (d: TemplateDescriptor) => TemplateDescriptor,
+) {
   const parsed = parse(source);
-  const template = resolveTemplate(findTemplate(parsed.document.meta.templateId ?? templateId));
+  const base = findTemplate(parsed.document.meta.templateId ?? templateId);
+  const template = resolveTemplate(mutate ? mutate(base) : base);
   const numbering = assignNumbers(parsed.document, template.descriptor);
   const diagnostics = [
     ...parsed.diagnostics,
@@ -337,6 +343,63 @@ check(
   'nội dung khối mã giữ nguyên từng ký tự',
   codeNode?.type === 'codeBlock' && codeNode.value === 'x = {"a": 1 & 2}  # < > &',
   codeNode?.type === 'codeBlock' ? JSON.stringify(codeNode.value) : 'missing',
+);
+
+/* ------------------------------------------------------ syntax highlighting */
+
+section('Tô màu cú pháp');
+
+const PY_SRC = [
+  'def ptt(peak, foot):',
+  '    # Khoảng truyền sóng, tính bằng ms',
+  '    dt = peak - foot',
+  '    if dt <= 0:',
+  "        raise ValueError('dt phải dương')",
+  '    return 1000 * dt',
+].join('\n');
+
+const hlDoc = compile(['```python', PY_SRC, '```', '', ': Tính PTT {#lst:ptt}'].join('\n'));
+const codeInner = /<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/.exec(hlDoc.rendered.html)?.[1] ?? '';
+
+check('khối mã python được tô màu', codeInner.includes('sr-hl-keyword'), codeInner.slice(0, 80));
+check(
+  'chuỗi và chú thích được tô màu',
+  codeInner.includes('sr-hl-string') && codeInner.includes('sr-hl-comment'),
+);
+
+// P1 — colouring adds markup and nothing else.
+const strippedCode = codeInner
+  .replace(/<[^>]*>/g, '')
+  .replace(/&lt;/g, '<')
+  .replace(/&gt;/g, '>')
+  .replace(/&quot;/g, '"')
+  .replace(/&#x27;/g, "'")
+  .replace(/&#39;/g, "'")
+  .replace(/&amp;/g, '&');
+check(
+  'tô màu không đổi một ký tự nào của mã',
+  strippedCode === PY_SRC,
+  JSON.stringify(strippedCode.slice(0, 60)),
+);
+
+check(
+  'ngôn ngữ lạ thì để nguyên, không đoán',
+  !compile('```khong-co-ngon-ngu-nay\nx = 1\n```').rendered.html.includes('sr-hl-'),
+);
+check(
+  'khối mã không ghi ngôn ngữ thì không tô',
+  !compile('```\nx = 1\n```').rendered.html.includes('sr-hl-'),
+);
+check(
+  'tắt tô màu trong template thì mã trở lại đen trắng',
+  !compile('```python\nx = 1\n```', 'hcmut-btl', (d) => ({
+    ...d,
+    code: { ...d.code, highlight: false },
+  })).rendered.html.includes('sr-hl-'),
+);
+check(
+  'matlab cũng được tô màu',
+  compile('```matlab\nfor i = 1:10\n  disp(i);\nend\n```').rendered.html.includes('sr-hl-keyword'),
 );
 
 /* -------------------------------------------------------------- edge cases */

@@ -138,6 +138,8 @@ export interface CodeSpec {
   wrap: boolean;
   border: boolean;
   background: boolean;
+  /** Colour the tokens of a fenced block whose language is recognised. */
+  highlight: boolean;
 }
 
 export type DiagramDirection = 'LR' | 'TB' | 'RL' | 'BT';
@@ -160,7 +162,7 @@ export interface DiagramSpec {
   nodeSpacing: number;
   rankSpacing: number;
   curve: 'basis' | 'linear' | 'cardinal';
-  /** Wrap node labels longer than this many characters. */
+  /** Wrap node labels wider than this many CSS pixels (mermaid measures in px, not characters). */
   wrappingWidth: number;
 }
 

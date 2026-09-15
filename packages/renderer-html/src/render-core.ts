@@ -3,6 +3,7 @@ import { renderMath } from '@scirender/equation-engine';
 import { figureStyle, resolveFigureSrc, type AssetMap } from '@scirender/figure-engine';
 import { alignStyle, normaliseTable } from '@scirender/table-engine';
 import { refWord, type TemplateDescriptor } from '@scirender/template-engine';
+import { highlightCode } from './highlight.js';
 import { escapeAttr, escapeHtml, safeUrl } from './escape.js';
 
 export interface CoreOptions {
@@ -184,9 +185,18 @@ export function renderBlock(
     }
     case 'codeBlock': {
       const lines = node.value.split('\n');
-      const codeHtml = `<pre><code${
-        node.lang ? ` class="language-${escapeAttr(node.lang)}"` : ''
-      }>${escapeHtml(node.value)}</code></pre>`;
+      const hl = t.code.highlight
+        ? highlightCode(node.value, node.lang)
+        : { html: escapeHtml(node.value), language: null };
+      const codeClass = [
+        node.lang ? `language-${escapeAttr(node.lang)}` : '',
+        hl.language ? 'sr-hl' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const codeHtml = `<pre><code${codeClass ? ` class="${codeClass}"` : ''}>${
+        hl.html
+      }</code></pre>`;
       const withGutter = t.code.lineNumbers
         ? `<div class="sr-code-lines"><div class="sr-code-gutter">${lines
             .map((_, i) => i + 1)

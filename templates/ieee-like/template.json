@@ -182,7 +182,8 @@
     "lineNumbers": false,
     "wrap": false,
     "border": true,
-    "background": true
+    "background": true,
+    "highlight": true
   },
   "diagrams": {
     "defaultDirection": "LR",
@@ -194,7 +195,7 @@
     "nodeSpacing": 36,
     "rankSpacing": 40,
     "curve": "basis",
-    "wrappingWidth": 20
+    "wrappingWidth": 150
   },
   "frontMatter": {
     "enabled": false,

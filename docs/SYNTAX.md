@@ -189,6 +189,20 @@ Nội dung giữ nguyên tuyệt đối, không diễn giải (P1). Khối mã c
 thành **Mã nguồn 3.1** và tham chiếu được bằng `@lst:ten`. Số dòng, tự xuống dòng và cỡ
 chữ chỉnh ở panel Template — mẫu BTL đặt 10pt, đúng cỡ tối thiểu mà quy cách cho phép.
 
+**Tô màu cú pháp.** Ghi tên ngôn ngữ ngay sau ba dấu nháy là khối mã được tô màu trong bản
+xem trước và bản in. Ngôn ngữ nhận diện được:
+
+`python` `matlab` `c` `cpp` `arduino` `java` `csharp` `javascript` `typescript` `bash`
+`sql` `json` `yaml` `xml`/`html` `r` `verilog` `latex` — kèm các tên gọi tắt quen thuộc
+(`py`, `js`, `ts`, `c++`, `sh`, `m`, `yml`, `ino`…).
+
+Ngôn ngữ không nằm trong danh sách thì khối mã để nguyên đen trắng — app **không đoán**
+ngôn ngữ (P6). Việc tô màu chỉ thêm thẻ bao, không đổi một ký tự nào của mã; nếu phép tô
+làm lệch dù một ký tự, kết quả bị bỏ và mã hiện ở dạng thuần (P1).
+
+Bảng màu chọn sao cho khi in trắng đen mỗi loại token ra một mức xám khác nhau. Muốn tắt
+hẳn: panel **Template → Khối mã → Tô màu cú pháp**.
+
 ### Danh sách
 
 ```markdown

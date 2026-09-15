@@ -260,6 +260,18 @@ check('Mermaid ra SVG', (await page.locator('.sr-page .sr-mermaid svg').count())
 check('bảng render được', (await page.locator('.sr-page table').count()) >= 3);
 check('số công thức hiển thị', (await page.locator('.sr-page .sr-equation-number').count()) >= 3);
 check('khối mã có số dòng', (await page.locator('.sr-page .sr-code-gutter').count()) >= 1);
+
+const codeColour = await page.evaluate(() => {
+  const kw = document.querySelector('.sr-page pre code.sr-hl .sr-hl-keyword');
+  if (!kw) return null;
+  const plain = getComputedStyle(kw.closest('pre')).color;
+  return { keyword: getComputedStyle(kw).color, plain };
+});
+check(
+  'khối mã được tô màu cú pháp',
+  !!codeColour && codeColour.keyword !== codeColour.plain,
+  JSON.stringify(codeColour),
+);
 check('không có tham chiếu hỏng', (await page.locator('.sr-page .sr-unresolved').count()) === 0);
 check('không có lỗi LaTeX', (await page.locator('.sr-page .sr-math-error').count()) === 0);
 
@@ -274,6 +286,55 @@ const diagramFont = await page.evaluate(() => {
   return el ? getComputedStyle(el).fontFamily : '';
 });
 check('chữ trong sơ đồ cùng font với văn bản', diagramFont.includes('Times New Roman'), diagramFont);
+
+// Regression: applyFittedSize used to strip width/height from EVERY element in
+// the SVG, not just the root <svg>, which collapsed every node box and label to
+// 0x0 and left nothing on the page but the arrows.
+const diagramNodes = await page.evaluate(() => {
+  const svg = document.querySelector('.sr-page .sr-mermaid svg');
+  if (!svg) return null;
+  return Array.from(svg.querySelectorAll('.node')).map((n) => {
+    const box = n.getBBox();
+    return {
+      w: Math.round(box.width),
+      h: Math.round(box.height),
+      label: n.textContent.trim(),
+    };
+  });
+});
+check(
+  'sơ đồ có khung và nhãn, không chỉ còn mũi tên',
+  Array.isArray(diagramNodes) &&
+    diagramNodes.length >= 3 &&
+    diagramNodes.every((n) => n.w > 20 && n.h > 20 && n.label.length > 0),
+  JSON.stringify(diagramNodes?.slice(0, 3)),
+);
+
+// Regression: mermaid measures wrappingWidth in PIXELS. Setting it to a
+// character count (26) wrapped every label one word per line, so the boxes came
+// out tall and narrow.
+const widest = (diagramNodes ?? []).reduce(
+  (best, n) => (n.label.length > (best?.label.length ?? 0) ? n : best),
+  null,
+);
+check(
+  'nhãn sơ đồ không bị xuống dòng từng chữ',
+  !!widest && widest.w > widest.h,
+  widest ? `${widest.label}: ${widest.w}x${widest.h}` : 'không có nhãn',
+);
+
+// Regression: the template stylesheet used to be installed by an effect that
+// ran only AFTER the first render, so the first pagination of a session
+// measured every block at the browser default of 16px.
+const bodySize = await page.evaluate(() => {
+  const el = document.querySelector('.sr-page-body p');
+  return el ? Number.parseFloat(getComputedStyle(el).fontSize) : 0;
+});
+check(
+  'lần dựng đầu tiên đo bằng cỡ chữ của template',
+  Math.abs(bodySize - (13 * 96) / 72) < 0.6,
+  `${bodySize}px`,
+);
 
 /* ----------------------------------------------------------- render on demand */
 

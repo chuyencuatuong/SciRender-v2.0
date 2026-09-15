@@ -236,6 +236,42 @@ ${headingRules}
 }
 .sr-doc code{font-family:var(--sr-mono-font);font-size:.9em;}
 .sr-doc pre code{font-size:1em;}
+${
+  code.highlight
+    ? `
+/* Token colours. Chosen so the block still reads when the report is printed in
+   black and white: each class lands on a clearly different grey. */
+.sr-doc pre code.sr-hl .sr-hl-comment,
+.sr-doc pre code.sr-hl .sr-hl-quote{color:#5b6472;font-style:italic;}
+.sr-doc pre code.sr-hl .sr-hl-keyword,
+.sr-doc pre code.sr-hl .sr-hl-selector-tag,
+.sr-doc pre code.sr-hl .sr-hl-literal,
+.sr-doc pre code.sr-hl .sr-hl-doctag{color:#0b2c7f;font-weight:600;}
+.sr-doc pre code.sr-hl .sr-hl-string,
+.sr-doc pre code.sr-hl .sr-hl-regexp,
+.sr-doc pre code.sr-hl .sr-hl-addition{color:#a3161a;}
+.sr-doc pre code.sr-hl .sr-hl-number,
+.sr-doc pre code.sr-hl .sr-hl-symbol,
+.sr-doc pre code.sr-hl .sr-hl-bullet{color:#0a6b4a;}
+.sr-doc pre code.sr-hl .sr-hl-title,
+.sr-doc pre code.sr-hl .sr-hl-title.function_,
+.sr-doc pre code.sr-hl .sr-hl-section{color:#5b2d8e;font-weight:600;}
+.sr-doc pre code.sr-hl .sr-hl-built_in,
+.sr-doc pre code.sr-hl .sr-hl-type,
+.sr-doc pre code.sr-hl .sr-hl-class .sr-hl-title{color:#0f6b73;}
+.sr-doc pre code.sr-hl .sr-hl-attr,
+.sr-doc pre code.sr-hl .sr-hl-attribute,
+.sr-doc pre code.sr-hl .sr-hl-property,
+.sr-doc pre code.sr-hl .sr-hl-variable,
+.sr-doc pre code.sr-hl .sr-hl-params{color:#7a4a00;}
+.sr-doc pre code.sr-hl .sr-hl-meta,
+.sr-doc pre code.sr-hl .sr-hl-meta .sr-hl-keyword{color:#7a3fa8;}
+.sr-doc pre code.sr-hl .sr-hl-deletion{color:#a3161a;text-decoration:line-through;}
+.sr-doc pre code.sr-hl .sr-hl-emphasis{font-style:italic;}
+.sr-doc pre code.sr-hl .sr-hl-strong{font-weight:700;}
+`
+    : ''
+}
 .sr-doc .sr-code-lang{
   font-family:var(--sr-body-font);font-size:.85em;color:var(--sr-muted);
   text-align:left;text-indent:0;margin:0 0 3pt;

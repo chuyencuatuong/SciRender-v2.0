@@ -138,6 +138,7 @@ export const HCMUT_BTL: TemplateDescriptor = {
     wrap: true,
     border: true,
     background: false,
+    highlight: true,
   },
   diagrams: {
     defaultDirection: 'TB',
@@ -149,7 +150,7 @@ export const HCMUT_BTL: TemplateDescriptor = {
     nodeSpacing: 40,
     rankSpacing: 46,
     curve: 'basis',
-    wrappingWidth: 26,
+    wrappingWidth: 200,
   },
   frontMatter: {
     enabled: true,
@@ -279,7 +280,7 @@ export const SCIENTIFIC_STANDARD: TemplateDescriptor = {
     bodyPageNumbers: 'arabic',
     frontPageNumbers: 'roman-lower',
   },
-  code: { fontSize: '0.82em', lineNumbers: false, wrap: false, border: true, background: true },
+  code: { fontSize: '0.82em', lineNumbers: false, wrap: false, border: true, background: true, highlight: true },
   diagrams: {
     defaultDirection: 'LR',
     autoDirection: true,
@@ -290,7 +291,7 @@ export const SCIENTIFIC_STANDARD: TemplateDescriptor = {
     nodeSpacing: 36,
     rankSpacing: 40,
     curve: 'basis',
-    wrappingWidth: 28,
+    wrappingWidth: 200,
   },
   frontMatter: {
     enabled: false,
@@ -361,7 +362,7 @@ export const IEEE_LIKE: TemplateDescriptor = {
     listings: 'continuous',
   },
   captions: { ...SCIENTIFIC_STANDARD.captions, fontSize: '0.85em', align: 'left' },
-  diagrams: { ...SCIENTIFIC_STANDARD.diagrams, fontSize: '9pt', wrappingWidth: 20 },
+  diagrams: { ...SCIENTIFIC_STANDARD.diagrams, fontSize: '9pt', wrappingWidth: 150 },
 };
 
 export const BUILTIN_TEMPLATES: TemplateDescriptor[] = [

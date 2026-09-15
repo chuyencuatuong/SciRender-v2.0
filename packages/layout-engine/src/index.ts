@@ -55,7 +55,7 @@ export function optionsFromTemplate(t: ResolvedTemplate): PaginateOptions {
  * `host` must be attached to the document; it is emptied and reused.
  */
 export function paginate(
-  blocks: string[],
+  blocks: readonly string[] | readonly Element[],
   options: PaginateOptions,
   host: HTMLElement,
 ): PaginateResult {
@@ -73,10 +73,18 @@ export function paginate(
   host.setAttribute('aria-hidden', 'true');
 
   // The queue holds live elements; splitting pushes the remainder back on front.
+  // Callers may hand over elements that are already in the document and whose
+  // images have finished loading — measuring those is what makes the result
+  // reproducible, because a fresh <img> built from a string reports height 0
+  // until it has decoded.
   const queue: Element[] = [];
-  const staging = document.createElement('div');
-  staging.innerHTML = blocks.join('');
-  for (const child of Array.from(staging.children)) queue.push(child);
+  if (blocks.length > 0 && typeof blocks[0] === 'string') {
+    const staging = document.createElement('div');
+    staging.innerHTML = (blocks as readonly string[]).join('');
+    for (const child of Array.from(staging.children)) queue.push(child);
+  } else {
+    for (const el of blocks as readonly Element[]) queue.push(el);
+  }
 
   const pages: string[] = [];
   let page = newPage(host, options);
