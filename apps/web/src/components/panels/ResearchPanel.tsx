@@ -28,7 +28,7 @@ export function ResearchPanel(): JSX.Element {
           <label className="mt-3 flex cursor-pointer items-center gap-2 rounded border border-ink-200 px-2 py-2">
             <input
               type="checkbox"
-              className="h-4 w-4 accent-sci-600"
+              className="h-4 w-4 accent-deep-600"
               checked={prefs.telemetryOptIn}
               onChange={(e) => {
                 setPref('telemetryOptIn', e.target.checked);

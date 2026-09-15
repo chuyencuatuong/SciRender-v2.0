@@ -10,11 +10,11 @@ const GRADE_TONE: Record<string, string> = {
   A: 'text-emerald-600',
   B: 'text-sky-600',
   C: 'text-amber-600',
-  D: 'text-red-600',
+  D: 'text-flag-500',
 };
 
 const PRIORITY_TONE: Record<string, string> = {
-  high: 'bg-red-50 text-red-700',
+  high: 'bg-flag-50 text-flag-600',
   medium: 'bg-amber-50 text-amber-700',
   low: 'bg-sky-50 text-sky-700',
 };
@@ -47,7 +47,7 @@ export function HealthPanel({ result }: Props): JSX.Element {
           <div className="mt-1 text-[11px] uppercase tracking-wider text-ink-400">trên 100 điểm</div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink-100">
             <motion.div
-              className="h-full rounded-full bg-sci-500"
+              className="h-full rounded-full bg-deep-600"
               initial={false}
               animate={{ width: `${health.score}%` }}
               transition={{ type: 'spring', stiffness: 160, damping: 22 }}
@@ -75,7 +75,7 @@ export function HealthPanel({ result }: Props): JSX.Element {
                       ? 'bg-emerald-500'
                       : d.score / d.max >= 0.5
                         ? 'bg-amber-500'
-                        : 'bg-red-500'
+                        : 'bg-flag-500'
                   }`}
                   initial={false}
                   animate={{ width: `${(d.score / d.max) * 100}%` }}

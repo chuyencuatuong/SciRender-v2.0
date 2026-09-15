@@ -46,7 +46,7 @@ export function AssetsPanel(): JSX.Element {
           }}
           className={`flex w-full flex-col items-center gap-1 rounded-lg border-2 border-dashed px-3 py-5 text-[12px] transition ${
             dragOver
-              ? 'border-sci-500 bg-sci-500/5 text-sci-600'
+              ? 'border-sky-500 bg-sky-500/5 text-deep-600'
               : 'border-ink-200 text-ink-400 hover:border-ink-300 hover:text-ink-600'
           }`}
         >
@@ -95,14 +95,14 @@ export function AssetsPanel(): JSX.Element {
                 </div>
               </div>
               <button
-                className="rounded p-1.5 text-ink-400 transition hover:bg-ink-100 hover:text-sci-600"
+                className="rounded p-1.5 text-ink-400 transition hover:bg-ink-100 hover:text-deep-600"
                 title="Chép đoạn chèn hình"
                 onClick={() => void copyRef(a.name)}
               >
                 <Copy size={14} />
               </button>
               <button
-                className="rounded p-1.5 text-ink-400 transition hover:bg-red-50 hover:text-red-600"
+                className="rounded p-1.5 text-ink-400 transition hover:bg-flag-50 hover:text-flag-500"
                 title="Xóa"
                 onClick={() => void removeAsset(a.id)}
               >

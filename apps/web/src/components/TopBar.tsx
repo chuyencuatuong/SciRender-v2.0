@@ -4,6 +4,7 @@ import {
   FileDown,
   FilePlus2,
   Loader2,
+  Play,
   Printer,
   Save,
   TriangleAlert,
@@ -12,16 +13,14 @@ import {
 import { exportStandaloneHtml, printDocument } from '@scirender/renderer-pdf';
 import { importBundle, exportBundle } from '@scirender/storage';
 import { track } from '@scirender/telemetry';
-import type { CompileResult } from '~/lib/pipeline';
-import type { PaginationState } from '~/hooks/usePagination';
+import type { RenderState } from '~/hooks/useRender';
 import { useStore } from '~/state/store';
 
 interface Props {
-  result: CompileResult | null;
-  pagination: PaginationState;
+  render: RenderState;
 }
 
-export function TopBar({ result, pagination }: Props): JSX.Element {
+export function TopBar({ render }: Props): JSX.Element {
   const title = useStore((s) => s.title);
   const dirty = useStore((s) => s.dirty);
   const savedAt = useStore((s) => s.savedAt);
@@ -30,20 +29,24 @@ export function TopBar({ result, pagination }: Props): JSX.Element {
   const docId = useStore((s) => s.docId);
   const refreshLibrary = useStore((s) => s.refreshLibrary);
   const openDocument = useStore((s) => s.openDocument);
+  const requestRender = useStore((s) => s.render);
+  const source = useStore((s) => s.source);
+  const renderedSource = useStore((s) => s.renderedSource);
   const [busy, setBusy] = useState(false);
 
+  const stale = source !== renderedSource;
+  const result = render.result;
   const errors = result?.diagnostics.filter((d) => d.severity === 'error').length ?? 0;
   const warnings = result?.diagnostics.filter((d) => d.severity === 'warning').length ?? 0;
 
-  const footers = pagination.pages.map(
-    (_, i) => `${result?.template.descriptor.labels.page ?? 'Trang'} ${i + 1}/${pagination.pages.length}`,
-  );
+  const pageHtml = render.pages.map((p) => p.html);
+  const footers = render.pages.map((p) => p.footer);
 
   const onPrint = (): void => {
-    if (!result || !pagination.pages.length) return;
-    track('export.print', { pages: pagination.pages.length });
+    if (!result || !render.pages.length) return;
+    track('export.print', { pages: render.pages.length });
     printDocument({
-      pages: pagination.pages,
+      pages: pageHtml,
       template: result.template,
       footers,
       documentTitle: result.document.meta.title || title,
@@ -52,17 +55,16 @@ export function TopBar({ result, pagination }: Props): JSX.Element {
 
   const onExportHtml = (): void => {
     if (!result) return;
-    const katexCss = readKatexCss();
     const html = exportStandaloneHtml({
-      pages: pagination.pages.length ? pagination.pages : result.blocks,
+      pages: pageHtml.length ? pageHtml : result.blocks,
       template: result.template,
       footers,
       documentTitle: result.document.meta.title || title,
-      katexCss,
+      katexCss: readKatexCss(),
       lang: result.document.meta.language,
     });
     download(`${slug(title)}.html`, new Blob([html], { type: 'text/html;charset=utf-8' }));
-    track('export.html', { pages: pagination.pages.length, bytes: html.length });
+    track('export.html', { pages: render.pages.length, bytes: html.length });
   };
 
   const onExportBundle = async (): Promise<void> => {
@@ -97,7 +99,7 @@ export function TopBar({ result, pagination }: Props): JSX.Element {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-ink-200 bg-white px-3">
       <div className="flex items-center gap-2 pr-2">
-        <div className="grid h-7 w-7 place-items-center rounded-md bg-sci-600 text-[13px] font-bold text-white">
+        <div className="grid h-7 w-7 place-items-center rounded-md bg-deep-600 text-[13px] font-bold text-white">
           S
         </div>
         <div className="leading-tight">
@@ -118,18 +120,34 @@ export function TopBar({ result, pagination }: Props): JSX.Element {
       </div>
 
       <div className="flex items-center gap-2">
-        {errors > 0 ? (
-          <span className="sr-chip bg-red-50 text-red-700">
-            <TriangleAlert size={12} /> {errors} lỗi
-          </span>
-        ) : (
-          <span className="sr-chip bg-emerald-50 text-emerald-700">
-            <CheckCircle2 size={12} /> Không lỗi
-          </span>
-        )}
+        {result ? (
+          errors > 0 ? (
+            <span className="sr-chip bg-flag-50 text-flag-600">
+              <TriangleAlert size={12} /> {errors} lỗi
+            </span>
+          ) : (
+            <span className="sr-chip bg-emerald-50 text-emerald-700">
+              <CheckCircle2 size={12} /> Không lỗi
+            </span>
+          )
+        ) : null}
         {warnings > 0 ? (
           <span className="sr-chip bg-amber-50 text-amber-700">{warnings} cảnh báo</span>
         ) : null}
+
+        <button
+          className={stale ? 'sr-btn-render' : 'sr-btn'}
+          onClick={requestRender}
+          disabled={render.running}
+          title="Dựng lại trang (Ctrl + Enter)"
+        >
+          {render.running ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Play size={14} />
+          )}
+          Dựng trang
+        </button>
 
         <div className="mx-1 h-6 w-px bg-ink-200" />
 
@@ -163,7 +181,7 @@ export function TopBar({ result, pagination }: Props): JSX.Element {
         <button
           className="sr-btn-primary"
           onClick={onPrint}
-          disabled={!pagination.pages.length}
+          disabled={!render.pages.length}
           title="Mở hộp thoại in của trình duyệt — chọn 'Save as PDF'"
         >
           <Printer size={14} /> In / PDF

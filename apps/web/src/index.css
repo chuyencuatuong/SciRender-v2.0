@@ -2,14 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Bảng màu: Deep Blue (chính) · Sky Blue (phụ) · Red (cảnh báo) · White (nền).
+ * Xanh đậm và xanh trời lấy từ logo Bách khoa nên giao diện và trang bìa cùng
+ * một hệ màu. Đỏ chỉ dùng cho lỗi và hành động xoá — không dùng để trang trí.
+ */
 :root {
   color-scheme: light;
-  --sr-ui-bg: #f3f5f8;
+  --sr-deep: #0b2c7f;
+  --sr-deep-700: #092467;
+  --sr-sky: #1a8fe3;
+  --sr-red: #d62828;
+  --sr-ui-bg: #f2f5fa;
   --sr-ui-panel: #ffffff;
-  --sr-ui-border: #dfe4ec;
-  --sr-ui-text: #1e232d;
-  --sr-ui-muted: #64708a;
-  --sr-ui-canvas: #5b6270;
+  --sr-ui-border: #dde3ec;
+  --sr-ui-text: #1b2230;
+  --sr-ui-muted: #6b7a93;
+  --sr-ui-canvas: #44506a;
 }
 
 html,
@@ -42,13 +51,13 @@ body {
   height: 10px;
 }
 .sr-scroll::-webkit-scrollbar-thumb {
-  background: #c4ccd8;
+  background: #bcc6d6;
   border-radius: 6px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 .sr-scroll::-webkit-scrollbar-thumb:hover {
-  background: #a8b3c4;
+  background: #8e9cb3;
   background-clip: content-box;
 }
 .sr-scroll::-webkit-scrollbar-track {
@@ -60,13 +69,18 @@ body {
   background: var(--sr-ui-canvas);
 }
 .sr-page-shell {
-  box-shadow: 0 2px 6px rgba(15, 20, 30, 0.18), 0 10px 32px rgba(15, 20, 30, 0.24);
-  border-radius: 2px;
+  box-shadow: 0 2px 6px rgba(9, 20, 45, 0.22), 0 10px 32px rgba(9, 20, 45, 0.26);
 }
 .sr-page-marker {
   font-size: 11px;
   letter-spacing: 0.04em;
-  color: #cfd5df;
+  color: #c3cddd;
+}
+.sr-page-kind {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #93a3bd;
 }
 
 /* ------------------------------------------------------------- CodeMirror */
@@ -83,36 +97,23 @@ body {
   outline: none;
 }
 .cm-gutters {
-  background: #fafbfd !important;
+  background: #f7f9fc !important;
   border-right: 1px solid var(--sr-ui-border) !important;
-  color: #a4adbd !important;
+  color: #9aa7bd !important;
 }
 .cm-activeLine {
-  background: #f2f6fd !important;
+  background: #eef4fd !important;
 }
 .cm-activeLineGutter {
-  background: #e8eefb !important;
-  color: #45536b !important;
-}
-.cm-line .tok-heading {
-  font-weight: 700;
-  color: #1b4f9c;
-}
-.cm-line .tok-math {
-  color: #0f766e;
-}
-.cm-line .tok-attr {
-  color: #b45309;
-}
-.cm-line .tok-ref {
-  color: #7c3aed;
+  background: #e0ebfa !important;
+  color: #3d4c66 !important;
 }
 .cm-diag-error {
-  text-decoration: underline wavy #dc2626;
+  text-decoration: underline wavy var(--sr-red);
   text-underline-offset: 3px;
 }
 .cm-diag-warning {
-  text-decoration: underline wavy #d97706;
+  text-decoration: underline wavy #b45309;
   text-underline-offset: 3px;
 }
 
@@ -121,16 +122,19 @@ body {
   @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium;
 }
 .sr-btn {
-  @apply inline-flex items-center gap-1.5 rounded-md border border-ink-200 bg-white px-2.5 py-1.5 text-[12.5px] font-medium text-ink-700 transition hover:border-ink-300 hover:bg-ink-50 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center gap-1.5 rounded-md border border-ink-200 bg-white px-2.5 py-1.5 text-[12.5px] font-medium text-ink-700 transition hover:border-deep-300 hover:bg-deep-50 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
 }
 .sr-btn-primary {
-  @apply inline-flex items-center gap-1.5 rounded-md border border-sci-600 bg-sci-600 px-2.5 py-1.5 text-[12.5px] font-medium text-white transition hover:bg-sci-500 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center gap-1.5 rounded-md border border-deep-600 bg-deep-600 px-2.5 py-1.5 text-[12.5px] font-medium text-white transition hover:bg-deep-500 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
+}
+.sr-btn-render {
+  @apply inline-flex items-center gap-1.5 rounded-md border border-sky-600 bg-sky-500 px-3 py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-sky-600 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
 }
 .sr-rail-btn {
   @apply relative flex h-10 w-10 items-center justify-center rounded-lg text-ink-500 transition hover:bg-ink-100 hover:text-ink-800;
 }
 .sr-rail-btn-active {
-  @apply bg-sci-600/10 text-sci-600 hover:bg-sci-600/15 hover:text-sci-600;
+  @apply bg-deep-600/10 text-deep-600 hover:bg-deep-600/15 hover:text-deep-600;
 }
 .sr-panel-title {
   @apply flex items-center justify-between border-b border-ink-200 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500;
@@ -139,5 +143,5 @@ body {
   @apply mb-1 block text-[11px] font-medium uppercase tracking-wide text-ink-500;
 }
 .sr-input {
-  @apply w-full rounded-md border border-ink-200 bg-white px-2 py-1.5 text-[12.5px] text-ink-800 outline-none transition focus:border-sci-500 focus:ring-2 focus:ring-sci-500/20;
+  @apply w-full rounded-md border border-ink-200 bg-white px-2 py-1.5 text-[12.5px] text-ink-800 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20;
 }

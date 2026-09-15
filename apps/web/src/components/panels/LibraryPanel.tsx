@@ -40,12 +40,12 @@ export function LibraryPanel(): JSX.Element {
             <div
               key={d.id}
               className={`group flex items-start gap-2 border-b border-ink-100 px-3 py-2 transition ${
-                d.id === docId ? 'bg-sci-600/5' : 'hover:bg-ink-50'
+                d.id === docId ? 'bg-deep-600/5' : 'hover:bg-ink-50'
               }`}
             >
               <FileText
                 size={14}
-                className={`mt-0.5 shrink-0 ${d.id === docId ? 'text-sci-600' : 'text-ink-300'}`}
+                className={`mt-0.5 shrink-0 ${d.id === docId ? 'text-deep-600' : 'text-ink-300'}`}
               />
               <button
                 className="min-w-0 flex-1 text-left"
@@ -57,7 +57,7 @@ export function LibraryPanel(): JSX.Element {
                 </div>
               </button>
               <button
-                className="rounded p-1 text-ink-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                className="rounded p-1 text-ink-300 opacity-0 transition hover:bg-flag-50 hover:text-flag-500 group-hover:opacity-100"
                 title="Xóa tài liệu"
                 onClick={() => {
                   if (window.confirm(`Xóa "${d.title}"? Thao tác này không hoàn tác được.`)) {

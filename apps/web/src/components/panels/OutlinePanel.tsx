@@ -1,13 +1,11 @@
 import { useMemo } from 'react';
 import { Hash } from 'lucide-react';
 import { plainText, walk } from '@scirender/ast';
-import type { PaginationState } from '~/hooks/usePagination';
-import type { CompileResult } from '~/lib/pipeline';
+import type { RenderState } from '~/hooks/useRender';
 import { useStore } from '~/state/store';
 
 interface Props {
-  result: CompileResult | null;
-  pagination: PaginationState;
+  render: RenderState;
 }
 
 interface OutlineItem {
@@ -18,7 +16,8 @@ interface OutlineItem {
   line: number;
 }
 
-export function OutlinePanel({ result, pagination }: Props): JSX.Element {
+export function OutlinePanel({ render }: Props): JSX.Element {
+  const result = render.result;
   const requestGotoLine = useStore((s) => s.requestGotoLine);
 
   const items = useMemo<OutlineItem[]>(() => {
@@ -65,18 +64,18 @@ export function OutlinePanel({ result, pagination }: Props): JSX.Element {
               className="group flex w-full items-start gap-2 px-3 py-1.5 text-left transition hover:bg-ink-50"
               style={{ paddingLeft: `${10 + (item.depth - 1) * 12}px` }}
             >
-              <Hash size={12} className="mt-1 shrink-0 text-ink-300 group-hover:text-sci-500" />
+              <Hash size={12} className="mt-1 shrink-0 text-ink-300 group-hover:text-sky-500" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[12.5px] text-ink-700 group-hover:text-ink-900">
                   {item.number ? (
-                    <span className="mr-1 font-medium text-sci-600">{item.number}</span>
+                    <span className="mr-1 font-medium text-deep-600">{item.number}</span>
                   ) : null}
                   {item.text}
                 </span>
               </span>
-              {pagination.pageOfNode[item.id] ? (
+              {render.pageOfNode[item.id] ? (
                 <span className="mt-0.5 shrink-0 text-[10px] text-ink-400">
-                  tr.{pagination.pageOfNode[item.id]}
+                  tr.{render.pageOfNode[item.id]}
                 </span>
               ) : null}
             </button>

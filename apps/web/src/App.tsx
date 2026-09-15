@@ -5,9 +5,7 @@ import { SidePanel } from '~/components/SidePanel';
 import { EditorPane } from '~/components/EditorPane';
 import { PreviewPane } from '~/components/PreviewPane';
 import { StatusBar } from '~/components/StatusBar';
-import { useCompiled } from '~/hooks/useCompiled';
-import { usePagination } from '~/hooks/usePagination';
-import { useRenderedBlocks } from '~/hooks/useRenderedBlocks';
+import { useRender } from '~/hooks/useRender';
 import { useStore } from '~/state/store';
 
 export function App(): JSX.Element {
@@ -16,10 +14,9 @@ export function App(): JSX.Element {
   const prefs = useStore((s) => s.prefs);
   const setPref = useStore((s) => s.setPref);
   const storageError = useStore((s) => s.storageError);
+  const requestRender = useStore((s) => s.render);
 
-  const { result, error, stale } = useCompiled();
-  const blocks = useRenderedBlocks(result?.blocks ?? [], result?.signature ?? '');
-  const pagination = usePagination(blocks, result?.template ?? null, Boolean(result));
+  const render = useRender();
 
   const splitRef = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -28,18 +25,30 @@ export function App(): JSX.Element {
     void init();
   }, [init]);
 
-  // Inject the compiled template stylesheet once per template change so the
-  // measuring host and the visible pages are styled identically.
+  // The template stylesheet drives both the visible pages and the offscreen
+  // measuring host, so both must see exactly the same rules.
   useEffect(() => {
-    if (!result) return;
+    if (!render.result) return;
     let style = document.getElementById('sr-template-css') as HTMLStyleElement | null;
     if (!style) {
       style = document.createElement('style');
       style.id = 'sr-template-css';
       document.head.appendChild(style);
     }
-    style.textContent = result.template.css;
-  }, [result?.template.css]);
+    style.textContent = render.result.template.css;
+  }, [render.result?.template.css]);
+
+  // Ctrl/Cmd+Enter renders from anywhere in the app.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        requestRender();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [requestRender]);
 
   useEffect(() => {
     if (!dragging) return;
@@ -73,7 +82,7 @@ export function App(): JSX.Element {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <TopBar result={result} pagination={pagination} />
+      <TopBar render={render} />
 
       {storageError ? (
         <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-[12.5px] text-amber-900">
@@ -83,14 +92,14 @@ export function App(): JSX.Element {
 
       <div className="flex min-h-0 flex-1">
         <SideRail />
-        <SidePanel result={result} pagination={pagination} />
+        <SidePanel render={render} />
 
         <div ref={splitRef} className="flex min-w-0 flex-1">
           <div
             className="flex min-w-0 flex-col border-r border-ink-200 bg-white"
             style={{ width: `${prefs.editorWidth}%` }}
           >
-            <EditorPane result={result} />
+            <EditorPane render={render} />
           </div>
 
           <div
@@ -99,17 +108,17 @@ export function App(): JSX.Element {
             aria-label="Kéo để đổi tỉ lệ trình soạn thảo và bản xem trước"
             onMouseDown={() => setDragging(true)}
             className={`w-1 shrink-0 cursor-col-resize transition ${
-              dragging ? 'bg-sci-500' : 'bg-transparent hover:bg-sci-400/60'
+              dragging ? 'bg-sky-500' : 'bg-transparent hover:bg-sky-400/60'
             }`}
           />
 
           <div className="flex min-w-0 flex-1 flex-col">
-            <PreviewPane result={result} pagination={pagination} compileError={error} stale={stale} />
+            <PreviewPane render={render} />
           </div>
         </div>
       </div>
 
-      <StatusBar result={result} pagination={pagination} stale={stale} />
+      <StatusBar render={render} />
     </div>
   );
 }

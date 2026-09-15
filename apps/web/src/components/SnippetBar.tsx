@@ -91,7 +91,7 @@ function Btn({
       title={title}
       aria-label={title}
       onClick={onClick}
-      className="grid h-7 min-w-[28px] place-items-center rounded px-1 text-ink-500 transition hover:bg-white hover:text-sci-600"
+      className="grid h-7 min-w-[28px] place-items-center rounded px-1 text-ink-500 transition hover:bg-white hover:text-deep-600"
     >
       {children}
     </button>

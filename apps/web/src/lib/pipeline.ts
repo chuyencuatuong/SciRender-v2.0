@@ -1,8 +1,16 @@
 import type { Diagnostic, DocumentNode } from '@scirender/ast';
 import { sortDiagnostics } from '@scirender/ast';
+import type { AssetMap } from '@scirender/figure-engine';
 import { analyse, type HealthReport } from '@scirender/intelligence';
 import { parse } from '@scirender/parser';
-import { render } from '@scirender/renderer-html';
+import {
+  collectFigures,
+  collectOutline,
+  collectTables,
+  render,
+  type ListEntry,
+  type OutlineEntry,
+} from '@scirender/renderer-html';
 import {
   assignNumbers,
   findTemplate,
@@ -11,7 +19,6 @@ import {
   type TemplateOverrides,
 } from '@scirender/template-engine';
 import { validate } from '@scirender/validator';
-import type { AssetMap } from '@scirender/figure-engine';
 
 export interface CompileInput {
   source: string;
@@ -30,9 +37,15 @@ export interface CompileResult {
   template: ResolvedTemplate;
   diagnostics: Diagnostic[];
   health: HealthReport;
+  /** Full-page cover blocks, already final — never paginated. */
+  coverPages: string[];
+  /** Body blocks, ready for the layout engine. */
   blocks: string[];
+  outline: OutlineEntry[];
+  figures: ListEntry[];
+  tables: ListEntry[];
   timings: StageTiming[];
-  /** Input hash — identical inputs produce an identical hash and an identical result (P2). */
+  /** Input hash — identical inputs produce an identical hash and result (P2). */
   signature: string;
 }
 
@@ -43,8 +56,11 @@ const now = (): number => (typeof performance !== 'undefined' ? performance.now(
  *
  * Content -> Parser -> AST -> Template -> Numbering -> Validation ->
  * Intelligence -> Renderer. Each stage consumes the stage before it and nothing
- * else (P4). Pagination is deliberately NOT part of this function: it needs a
- * live DOM and runs in the preview (see usePagination).
+ * else (P4).
+ *
+ * Neither pagination nor the front matter is produced here: both need a live
+ * DOM (the table of contents needs page numbers, which only pagination knows).
+ * See `useRender`.
  */
 export function compile(input: CompileInput): CompileResult {
   const timings: StageTiming[] = [];
@@ -64,9 +80,13 @@ export function compile(input: CompileInput): CompileResult {
   });
 
   const numbering = step('numbering', () => assignNumbers(document, template.descriptor));
-
   const validation = step('validator', () =>
-    validate(document, { assets: input.assets }),
+    validate(document, {
+      assets: input.assets,
+      // Formats built around a cover page list their keywords on the cover or
+      // not at all, so the reminder would be noise there.
+      requireKeywords: template.descriptor.cover.layout === 'none',
+    }),
   );
 
   const diagnostics = sortDiagnostics([
@@ -86,7 +106,17 @@ export function compile(input: CompileInput): CompileResult {
     template,
     diagnostics: dedupe(diagnostics),
     health,
+    coverPages: rendered.coverPages,
     blocks: rendered.blocks,
+    outline: rendered.outline.length
+      ? rendered.outline
+      : collectOutline(document, template.descriptor),
+    figures: rendered.figures.length
+      ? rendered.figures
+      : collectFigures(document, template.descriptor),
+    tables: rendered.tables.length
+      ? rendered.tables
+      : collectTables(document, template.descriptor),
     timings,
     signature: signatureOf(input),
   };
@@ -105,15 +135,13 @@ function dedupe(list: Diagnostic[]): Diagnostic[] {
   return out;
 }
 
-function signatureOf(input: CompileInput): string {
-  const payload =
-    input.source +
-    '' +
-    input.templateId +
-    '' +
-    JSON.stringify(input.overrides) +
-    '' +
-    Object.keys(input.assets).sort().join(',');
+export function signatureOf(input: CompileInput): string {
+  const payload = [
+    input.source,
+    input.templateId,
+    JSON.stringify(input.overrides),
+    Object.keys(input.assets).sort().join(','),
+  ].join('\u0000');
   let h = 0x811c9dc5;
   for (let i = 0; i < payload.length; i++) {
     h ^= payload.charCodeAt(i);

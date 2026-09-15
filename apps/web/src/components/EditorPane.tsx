@@ -4,12 +4,12 @@ import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
 import { markdown } from '@codemirror/lang-markdown';
 import { basicSetup } from 'codemirror';
 import type { Diagnostic } from '@scirender/ast';
-import type { CompileResult } from '~/lib/pipeline';
+import type { RenderState } from '~/hooks/useRender';
 import { useStore } from '~/state/store';
 import { SnippetBar } from './SnippetBar';
 
 interface Props {
-  result: CompileResult | null;
+  render: RenderState;
 }
 
 const setDiagnostics = StateEffect.define<Array<{ line: number; severity: string }>>();
@@ -41,7 +41,8 @@ const THEME = EditorView.theme({
   '.cm-cursor': { borderLeftColor: '#1b4f9c', borderLeftWidth: '2px' },
 });
 
-export function EditorPane({ result }: Props): JSX.Element {
+export function EditorPane({ render }: Props): JSX.Element {
+  const result = render.result;
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 

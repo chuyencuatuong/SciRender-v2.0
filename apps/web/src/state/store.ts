@@ -19,6 +19,7 @@ import {
 } from '@scirender/storage';
 import { initTelemetry, setEnabled as setTelemetryEnabled, track } from '@scirender/telemetry';
 import type { TemplateOverrides } from '@scirender/template-engine';
+import { BUILTIN_ASSETS } from '~/lib/builtin-assets';
 import { SAMPLE_DOCUMENT, EMPTY_DOCUMENT } from '~/lib/sample';
 
 export type PanelId = 'outline' | 'diagnostics' | 'health' | 'assets' | 'template' | 'library' | 'research';
@@ -27,7 +28,12 @@ export interface AppState {
   ready: boolean;
   docId: string;
   title: string;
+  /** What the editor holds right now. */
   source: string;
+  /** What the preview was last built from. Live render was removed on purpose. */
+  renderedSource: string;
+  /** Bumped on every explicit render request. */
+  renderNonce: number;
   templateId: string;
   overrides: TemplateOverrides;
   assets: StoredAsset[];
@@ -43,6 +49,8 @@ export interface AppState {
 
   init: () => Promise<void>;
   setSource: (source: string) => void;
+  /** Commit the editor content to the preview. */
+  render: () => void;
   setPanel: (panel: PanelId) => void;
   setTemplateId: (id: string) => void;
   setOverrides: (patch: TemplateOverrides) => void;
@@ -77,10 +85,12 @@ export const useStore = create<AppState>((set, get) => ({
   docId: '',
   title: 'Tài liệu chưa đặt tên',
   source: '',
-  templateId: 'scientific-standard',
+  renderedSource: '',
+  renderNonce: 0,
+  templateId: 'hcmut-btl',
   overrides: {},
   assets: [],
-  assetMap: {},
+  assetMap: { ...BUILTIN_ASSETS },
   library: [],
   prefs: { ...DEFAULT_PREFERENCES },
   panel: 'diagnostics',
@@ -113,6 +123,8 @@ export const useStore = create<AppState>((set, get) => ({
           `Chi tiết: ${(err as Error).message}`,
         docId: newId('doc'),
         source: SAMPLE_DOCUMENT,
+        renderedSource: SAMPLE_DOCUMENT,
+        renderNonce: 1,
         title: titleFromSource(SAMPLE_DOCUMENT),
       });
     }
@@ -127,13 +139,18 @@ export const useStore = create<AppState>((set, get) => ({
     }, 900);
   },
 
+  render() {
+    set((s) => ({ renderedSource: s.source, renderNonce: s.renderNonce + 1 }));
+    track('render.request', { bytes: get().source.length });
+  },
+
   setPanel(panel) {
     set({ panel });
     track('panel.open', { panel });
   },
 
   setTemplateId(templateId) {
-    set({ templateId, dirty: true });
+    set((s) => ({ templateId, dirty: true, renderNonce: s.renderNonce + 1 }));
     track('template.change', { templateId });
     void get().save();
   },
@@ -147,12 +164,12 @@ export const useStore = create<AppState>((set, get) => ({
           ? { ...(current as object), ...(value as object) }
           : value;
     }
-    set({ overrides: merged, dirty: true });
+    set((s) => ({ overrides: merged, dirty: true, renderNonce: s.renderNonce + 1 }));
     void get().save();
   },
 
   resetOverrides() {
-    set({ overrides: {}, dirty: true });
+    set((s) => ({ overrides: {}, dirty: true, renderNonce: s.renderNonce + 1 }));
     void get().save();
   },
 
@@ -190,17 +207,19 @@ export const useStore = create<AppState>((set, get) => ({
     const source = withSample ? SAMPLE_DOCUMENT : EMPTY_DOCUMENT;
     revokeAssets?.();
     revokeAssets = null;
-    set({
+    set((s) => ({
       docId: id,
       source,
+      renderedSource: source,
+      renderNonce: s.renderNonce + 1,
       title: titleFromSource(source),
-      templateId: 'scientific-standard',
+      templateId: 'hcmut-btl',
       overrides: {},
       assets: [],
-      assetMap: {},
+      assetMap: { ...BUILTIN_ASSETS },
       dirty: true,
       savedAt: null,
-    });
+    }));
     get().setPref('lastDocumentId', id);
     await get().save();
     track('document.create', { sample: withSample });
@@ -212,18 +231,21 @@ export const useStore = create<AppState>((set, get) => ({
     const assets = await listAssets(id);
     revokeAssets?.();
     const { map, revoke } = toAssetMap(assets);
+    const merged = { ...BUILTIN_ASSETS, ...map };
     revokeAssets = revoke;
-    set({
+    set((s) => ({
       docId: doc.id,
       title: doc.title,
       source: doc.source,
+      renderedSource: doc.source,
+      renderNonce: s.renderNonce + 1,
       templateId: doc.templateId,
       overrides: (doc.overrides ?? {}) as TemplateOverrides,
       assets,
-      assetMap: map,
+      assetMap: merged,
       dirty: false,
       savedAt: doc.updatedAt,
-    });
+    }));
     get().setPref('lastDocumentId', doc.id);
     track('document.open', { assets: assets.length, bytes: doc.source.length });
   },
@@ -261,8 +283,9 @@ export const useStore = create<AppState>((set, get) => ({
     const assets = await listAssets(docId);
     revokeAssets?.();
     const { map, revoke } = toAssetMap(assets);
+    const merged = { ...BUILTIN_ASSETS, ...map };
     revokeAssets = revoke;
-    set({ assets, assetMap: map });
+    set({ assets, assetMap: merged });
   },
 
   async removeAsset(id) {
@@ -270,8 +293,9 @@ export const useStore = create<AppState>((set, get) => ({
     const assets = await listAssets(get().docId);
     revokeAssets?.();
     const { map, revoke } = toAssetMap(assets);
+    const merged = { ...BUILTIN_ASSETS, ...map };
     revokeAssets = revoke;
-    set({ assets, assetMap: map });
+    set({ assets, assetMap: merged });
   },
 
   requestGotoLine(line) {

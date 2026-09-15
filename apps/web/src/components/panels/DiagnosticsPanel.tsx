@@ -1,13 +1,11 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, AlertTriangle, Info, LayoutPanelTop } from 'lucide-react';
 import type { Diagnostic, Severity } from '@scirender/ast';
-import type { PaginationState } from '~/hooks/usePagination';
-import type { CompileResult } from '~/lib/pipeline';
+import type { RenderState } from '~/hooks/useRender';
 import { useStore } from '~/state/store';
 
 interface Props {
-  result: CompileResult | null;
-  pagination: PaginationState;
+  render: RenderState;
 }
 
 const ICONS: Record<Severity, typeof AlertCircle> = {
@@ -17,7 +15,7 @@ const ICONS: Record<Severity, typeof AlertCircle> = {
 };
 
 const TONE: Record<Severity, string> = {
-  error: 'text-red-600',
+  error: 'text-flag-500',
   warning: 'text-amber-600',
   info: 'text-sky-600',
 };
@@ -28,7 +26,8 @@ const LABEL: Record<Severity, string> = {
   info: 'Gợi ý',
 };
 
-export function DiagnosticsPanel({ result, pagination }: Props): JSX.Element {
+export function DiagnosticsPanel({ render }: Props): JSX.Element {
+  const result = render.result;
   const requestGotoLine = useStore((s) => s.requestGotoLine);
   const [filter, setFilter] = useState<Severity | 'all'>('all');
 
@@ -52,18 +51,18 @@ export function DiagnosticsPanel({ result, pagination }: Props): JSX.Element {
 
       <div className="flex gap-1 border-b border-ink-200 px-2 py-1.5">
         <FilterChip active={filter === 'all'} onClick={() => setFilter('all')} label="Tất cả" count={diagnostics.length} tone="text-ink-600" />
-        <FilterChip active={filter === 'error'} onClick={() => setFilter('error')} label="Lỗi" count={counts.error} tone="text-red-600" />
+        <FilterChip active={filter === 'error'} onClick={() => setFilter('error')} label="Lỗi" count={counts.error} tone="text-flag-500" />
         <FilterChip active={filter === 'warning'} onClick={() => setFilter('warning')} label="Cảnh báo" count={counts.warning} tone="text-amber-600" />
         <FilterChip active={filter === 'info'} onClick={() => setFilter('info')} label="Gợi ý" count={counts.info} tone="text-sky-600" />
       </div>
 
       <div className="sr-scroll min-h-0 flex-1 overflow-y-auto">
-        {pagination.warnings.length > 0 ? (
+        {render.warnings.length > 0 ? (
           <div className="border-b border-ink-200 bg-ink-50 px-3 py-2">
             <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
               <LayoutPanelTop size={12} /> Bố cục
             </div>
-            {pagination.warnings.map((w, i) => (
+            {render.warnings.map((w, i) => (
               <button
                 key={`${w.code}-${i}`}
                 onClick={() => w.line && requestGotoLine(w.line)}
