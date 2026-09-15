@@ -89,6 +89,19 @@ export interface CitationNode extends NodeBase {
   keys: string[];
   /** Filled by the numbering pass: bibliography index per key, 1-based. */
   numbers: (number | null)[];
+  /**
+   * Filled by the numbering pass for author-year styles: the short form shown
+   * in the text, e.g. `Nguyễn và cs., 2020`. Null when the key is unknown.
+   */
+  shortForms: (string | null)[];
+}
+
+/** `[^1]` in running text. The definition lives in `DocumentNode.footnotes`. */
+export interface FootnoteRefNode extends NodeBase {
+  type: 'footnoteRef';
+  label: string;
+  /** Filled by the numbering pass, 1-based, in order of first reference. */
+  number: number | null;
 }
 
 export interface LineBreakNode extends NodeBase {
@@ -106,6 +119,7 @@ export type InlineNode =
   | LinkNode
   | CrossRefNode
   | CitationNode
+  | FootnoteRefNode
   | LineBreakNode;
 
 /* ------------------------------------------------------------------- block */
@@ -206,6 +220,13 @@ export interface CalloutNode extends NodeBase {
   children: BlockNode[];
 }
 
+/** A row of blocks laid side by side: `::: cols … ||| … :::`. */
+export interface ColumnsNode extends NodeBase {
+  type: 'columns';
+  /** One entry per column; two in practice, but the shape allows more. */
+  columns: BlockNode[][];
+}
+
 export interface ThematicBreakNode extends NodeBase {
   type: 'thematicBreak';
 }
@@ -228,6 +249,7 @@ export type BlockNode =
   | ListNode
   | BlockquoteNode
   | CalloutNode
+  | ColumnsNode
   | ThematicBreakNode
   | UnknownBlockNode;
 
@@ -322,5 +344,16 @@ export interface DocumentNode {
   labels: Record<string, LabelRecord>;
   /** Citation keys in order of first appearance. Drives numeric bibliography. */
   citationOrder: string[];
+  /** `[^label]: …` definitions, in source order. */
+  footnotes: FootnoteDefinition[];
+  position: Position;
+}
+
+export interface FootnoteDefinition {
+  id: string;
+  label: string;
+  children: InlineNode[];
+  /** Filled by the numbering pass; null when nothing references it. */
+  number: number | null;
   position: Position;
 }

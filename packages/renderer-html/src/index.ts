@@ -32,6 +32,11 @@ export interface RenderResult {
   outline: OutlineEntry[];
   figures: ListEntry[];
   tables: ListEntry[];
+  /**
+   * Footnote number -> the HTML of that note. The layout engine pulls each one
+   * to the bottom of whichever page its reference lands on.
+   */
+  footnotes: Record<string, string>;
   /** Body blocks concatenated — convenient for a non-paginated preview. */
   html: string;
 }
@@ -77,8 +82,24 @@ export function render(doc: DocumentNode, options: RenderOptions): RenderResult 
     outline: collectOutline(doc, t),
     figures: collectFigures(doc, t),
     tables: collectTables(doc, t),
+    footnotes: renderFootnotes(doc, t),
     html: blocks.join('\n'),
   };
+}
+
+/* -------------------------------------------------------------- footnotes */
+
+function renderFootnotes(doc: DocumentNode, t: TemplateDescriptor): Record<string, string> {
+  if (!t.footnotes.enabled) return {};
+  const out: Record<string, string> = {};
+  for (const def of doc.footnotes) {
+    if (def.number == null) continue;
+    out[String(def.number)] =
+      `<li class="sr-footnote" data-sr-fn-def="${def.number}" data-sr-id="${escapeAttr(def.id)}">` +
+      `<span class="sr-footnote-mark">${def.number}</span>` +
+      `<span class="sr-footnote-body">${inline(def.children, t)}</span></li>`;
+  }
+  return out;
 }
 
 /* ----------------------------------------------------------- title block */
@@ -86,7 +107,11 @@ export function render(doc: DocumentNode, options: RenderOptions): RenderResult 
 function renderTitleBlock(doc: DocumentNode, t: TemplateDescriptor): string {
   const m = doc.meta;
   if (!m.title && !m.authors.length && !m.abstract) return '';
-  const parts: string[] = ['<header class="sr-titleblock" data-sr-id="title-block" data-sr-type="titleBlock">'];
+  // In a multi-column layout the title, abstract and keywords span the page.
+  const span = t.page.columns > 1 ? ' data-sr-span="page"' : '';
+  const parts: string[] = [
+    `<header class="sr-titleblock" data-sr-id="title-block" data-sr-type="titleBlock"${span}>`,
+  ];
   if (m.title) parts.push(`<div class="sr-title">${escapeHtml(m.title)}</div>`);
   if (m.subtitle) parts.push(`<div class="sr-subtitle">${escapeHtml(m.subtitle)}</div>`);
 
@@ -138,10 +163,21 @@ function renderTitleBlock(doc: DocumentNode, t: TemplateDescriptor): string {
 
 function renderReferences(doc: DocumentNode, t: TemplateDescriptor): string[] {
   const byKey = new Map(doc.meta.bibliography.map((b) => [b.key, b]));
-  const ordered = [
-    ...doc.citationOrder,
-    ...doc.meta.bibliography.map((b) => b.key).filter((k) => !doc.citationOrder.includes(k)),
-  ];
+  const authorYearStyle = t.citation.style === 'author-year';
+  const ordered = authorYearStyle
+    ? // Author-year lists are alphabetical, not in order of first citation.
+      [...doc.meta.bibliography]
+        .sort((a, b) =>
+          `${a.authors ?? ''}|${a.year ?? ''}`.localeCompare(
+            `${b.authors ?? ''}|${b.year ?? ''}`,
+            'vi',
+          ),
+        )
+        .map((b) => b.key)
+    : [
+        ...doc.citationOrder,
+        ...doc.meta.bibliography.map((b) => b.key).filter((k) => !doc.citationOrder.includes(k)),
+      ];
   const items = ordered
     .map((key, i) => {
       const e = byKey.get(key);
@@ -168,9 +204,10 @@ function renderReferences(doc: DocumentNode, t: TemplateDescriptor): string[] {
         const u = safeUrl(e.url);
         if (u) bits.push(`<a href="${escapeAttr(u)}" rel="noreferrer noopener">${escapeHtml(u)}</a>`);
       }
-      return `<li class="sr-reference-item"><span>[${i + 1}]</span><span>${bits.join(
-        '. ',
-      )}.</span></li>`;
+      const marker = authorYearStyle ? '' : `<span>[${i + 1}]</span>`;
+      return `<li class="sr-reference-item${
+        authorYearStyle ? ' sr-reference-hanging' : ''
+      }">${marker}<span>${bits.join('. ')}.</span></li>`;
     })
     .filter(Boolean);
 

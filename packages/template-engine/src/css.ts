@@ -18,6 +18,7 @@ export function compileCss(t: TemplateDescriptor): string {
   const c = t.captions;
   const col = t.colors;
   const code = t.code;
+  const fn = t.footnotes;
   const fm = t.frontMatter;
   const bodyPx = toPx(ty.bodySize, 17.333);
   const linePx = bodyPx * ty.lineHeight;
@@ -74,10 +75,19 @@ export function compileCss(t: TemplateDescriptor): string {
   padding:var(--sr-margin-top) var(--sr-margin-right) var(--sr-margin-bottom) var(--sr-margin-left);
   overflow:hidden;
 }
-.sr-page-body{height:100%;overflow:hidden;${
-    p.columns > 1 ? `column-count:${p.columns};column-gap:${p.columnGap};` : ''
-  }}
-.sr-page-cover .sr-page-body{column-count:1;}
+/* Columns are produced by the layout engine, not by CSS column-count: the
+   engine fills one column at a time so a break can be measured and controlled.
+   The page body only lays the finished columns out side by side. */
+.sr-page-body{height:100%;overflow:hidden;position:relative;}
+.sr-columns{
+  display:grid;
+  grid-template-columns:repeat(var(--sr-columns,${p.columns}),1fr);
+  gap:0 ${p.columnGap};
+  height:100%;
+}
+.sr-column{position:relative;overflow:hidden;}
+.sr-span{width:100%;display:flow-root;}
+.sr-page-body:has(> .sr-span) .sr-columns{height:auto;}
 .sr-page-footer{
   position:absolute;left:var(--sr-margin-left);right:var(--sr-margin-right);
   bottom:var(--sr-footer-bottom);
@@ -168,7 +178,17 @@ ${headingRules}
 
 /* ---------------------------------------------------------------- figures */
 .sr-doc figure{margin:12pt 0;text-align:center;break-inside:avoid;page-break-inside:avoid;}
-.sr-doc figure img{max-width:100%;height:auto;display:block;margin:0 auto;}
+/* A figure is never cut in half — so an oversized one is capped at the text
+   block instead, leaving room for its caption. Without this an image taller
+   than the page simply ran off the bottom. */
+.sr-doc figure img{
+  max-width:100%;
+  max-height:calc(var(--sr-page-height) - var(--sr-margin-top) - var(--sr-margin-bottom) - 5.5em);
+  height:auto;width:auto;display:block;margin:0 auto;object-fit:contain;
+}
+.sr-doc .sr-diagram svg{
+  max-height:calc(var(--sr-page-height) - var(--sr-margin-top) - var(--sr-margin-bottom) - 5.5em);
+}
 .sr-doc figcaption,.sr-doc .sr-caption{
   font-family:var(--sr-body-font);
   font-size:var(--sr-caption-size);
@@ -289,13 +309,48 @@ ${
 .sr-doc .sr-callout-title{font-weight:700;margin:0 0 .3em;}
 .sr-doc hr{border:0;border-top:1px solid var(--sr-rule);margin:12pt 0;}
 
+/* ------------------------------------------------- side-by-side block row */
+.sr-doc .sr-colrow{
+  display:grid;grid-template-columns:repeat(var(--sr-colrow,2),1fr);
+  gap:0 ${p.columnGap};margin:10pt 0;text-indent:0;
+  break-inside:avoid;page-break-inside:avoid;
+}
+.sr-doc .sr-colrow .sr-col > :first-child{margin-top:0;}
+.sr-doc .sr-colrow .sr-col > :last-child{margin-bottom:0;}
+
 /* -------------------------------------------------- references & crossrefs */
 .sr-doc .sr-reference-list{list-style:none;padding-left:0;margin:0;}
 .sr-doc .sr-reference-item{
   display:grid;grid-template-columns:2.6em 1fr;gap:.2em;margin:0 0 6pt;
   text-align:justify;text-indent:0;
 }
+/* Author-year lists carry no numeric marker, so they use a hanging indent. */
+.sr-doc .sr-reference-item.sr-reference-hanging{
+  display:block;padding-left:2em;text-indent:-2em;
+}
 .sr-doc .sr-citation,.sr-doc .sr-crossref{color:var(--sr-accent);white-space:nowrap;}
+
+/* ------------------------------------------------------------- footnotes */
+/* Printed at the foot of whichever page (or column) references them. The
+   layout engine measures this list in normal flow; here it is pinned to the
+   bottom. Same content and width, so measurement and print agree. */
+.sr-doc .sr-footnotes{
+  list-style:none;margin:${fn.gap} 0 0;padding:0;
+  font-family:var(--sr-body-font);
+  font-size:${fn.fontSize};
+  line-height:${fn.lineHeight};
+  text-align:left;text-indent:0;
+  ${fn.separator ? `border-top:0.5pt solid var(--sr-rule);padding-top:${fn.gap};` : ''}
+  ${fn.separator ? `max-width:100%;` : ''}
+}
+.sr-doc .sr-footnote{
+  display:grid;grid-template-columns:1.6em 1fr;gap:0 .2em;margin:0 0 .25em;
+}
+.sr-doc .sr-footnote-mark{font-size:.85em;vertical-align:super;line-height:1;}
+.sr-doc .sr-footnote-body p{margin:0;text-indent:0;}
+.sr-doc .sr-footnote-ref{font-size:.75em;line-height:0;vertical-align:super;}
+.sr-page-body > .sr-footnotes,
+.sr-column > .sr-footnotes{position:absolute;left:0;right:0;bottom:0;margin-bottom:0;}
 .sr-doc .sr-unresolved{
   color:#9b1c1c;background:#fdecec;border-bottom:1px dashed #d66;padding:0 .15em;
 }

@@ -48,6 +48,17 @@ function childrenOf(node: AnyNode): AnyNode[] {
     for (const cell of node.header) out.push(...cell.children);
     for (const row of node.rows) for (const cell of row) out.push(...cell.children);
   }
+  // A two-column row keeps its blocks in `columns`, not `children`; without
+  // this every citation, cross-reference and figure inside such a row would be
+  // invisible to numbering, validation and the figure/table lists.
+  if (node.type === 'columns') {
+    for (const column of node.columns) out.push(...column);
+  }
+  // Footnote definitions hang off the document, not off a block, but their
+  // text is still part of the document: citations in them must be numbered.
+  if (node.type === 'document') {
+    for (const note of node.footnotes) out.push(...note.children);
+  }
   return out;
 }
 
@@ -91,6 +102,7 @@ export function isBlock(node: AnyNode): node is BlockNode {
     node.type === 'list' ||
     node.type === 'blockquote' ||
     node.type === 'callout' ||
+    node.type === 'columns' ||
     node.type === 'thematicBreak' ||
     node.type === 'unknownBlock'
   );
@@ -116,6 +128,7 @@ export function emptyDocument(title = ''): DocumentNode {
     children: [],
     labels: {},
     citationOrder: [],
+    footnotes: [],
     position: emptyPosition(),
   };
 }

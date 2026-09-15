@@ -47,7 +47,7 @@ await page.waitForSelector('.sr-page', { timeout: 25000 });
 await page.waitForTimeout(3500);
 
 console.log('\nApp shell');
-check('editor mounted', (await page.locator('.cm-editor').count()) === 1);
+check('canvas mounted', (await page.locator('[data-card-index]').count()) > 0);
 check('side rail rendered', (await page.locator('nav button').count()) >= 7);
 check('no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
 
@@ -161,6 +161,69 @@ check(
   tocPageClaim === actualChapterPage,
   `mục lục nói ${tocPageClaim}, thực tế ${actualChapterPage}`,
 );
+
+/* ------------------------------------------------- footnotes & long tables */
+
+console.log('\nChú thích chân trang và bảng dài');
+
+const footnotes = await page.evaluate(() => {
+  const blocks = Array.from(document.querySelectorAll('.sr-page-body > .sr-footnotes'));
+  return blocks.map((ol) => {
+    const body = ol.closest('.sr-page-body');
+    const marks = Array.from(ol.querySelectorAll('.sr-footnote')).map((li) =>
+      li.getAttribute('data-sr-fn-def'),
+    );
+    const refs = Array.from(body.querySelectorAll('.sr-footnote-ref')).map((s) =>
+      s.getAttribute('data-sr-fn'),
+    );
+    const r = ol.getBoundingClientRect();
+    const br = body.getBoundingClientRect();
+    return { marks, refs, bottomGap: Math.round(br.bottom - r.bottom) };
+  });
+});
+check('có chú thích chân trang được in ra', footnotes.length >= 1, JSON.stringify(footnotes));
+check(
+  'mỗi chú thích nằm đúng trang có tham chiếu của nó',
+  footnotes.every((f) => f.marks.every((m) => f.refs.includes(m))),
+  JSON.stringify(footnotes.map((f) => [f.marks, f.refs])),
+);
+check(
+  'chú thích được ghim sát đáy vùng nội dung',
+  footnotes.every((f) => Math.abs(f.bottomGap) <= 2),
+  JSON.stringify(footnotes.map((f) => f.bottomGap)),
+);
+
+const tableSplit = await page.evaluate(() => {
+  const head = document.querySelector('[data-sr-type="table"][data-sr-split="head"]');
+  const tail = document.querySelector('[data-sr-split="tail"]');
+  if (!head || !tail) return null;
+  const bodies = Array.from(document.querySelectorAll('.sr-page-body'));
+  const rows = (el) => el.querySelectorAll('tbody tr').length;
+  return {
+    headRows: rows(head),
+    tailRows: rows(tail),
+    tailHasHeader: !!tail.querySelector('thead th'),
+    tailCaption: tail.querySelector('.sr-caption')?.textContent ?? '',
+    headPage: bodies.findIndex((b) => b.contains(head)),
+    tailPage: bodies.findIndex((b) => b.contains(tail)),
+  };
+});
+check('bảng dài được cắt qua trang', !!tableSplit && tableSplit.headRows > 0 && tableSplit.tailRows > 0,
+  JSON.stringify(tableSplit));
+check('phần tiếp của bảng lặp lại dòng tiêu đề', !!tableSplit?.tailHasHeader);
+check('phần tiếp của bảng ghi "tiếp theo"', (tableSplit?.tailCaption ?? '').includes('tiếp theo'),
+  tableSplit?.tailCaption);
+check('hai phần của bảng nằm trên hai trang liên tiếp',
+  !!tableSplit && tableSplit.tailPage === tableSplit.headPage + 1,
+  JSON.stringify([tableSplit?.headPage, tableSplit?.tailPage]));
+
+const figureFit = await page.evaluate(() => {
+  const imgs = Array.from(document.querySelectorAll('.sr-page-body figure img'));
+  const body = document.querySelector('.sr-page-body');
+  const limit = body ? body.getBoundingClientRect().height : 0;
+  return imgs.map((i) => Math.round(i.getBoundingClientRect().height - limit));
+});
+check('không ảnh nào cao hơn vùng nội dung', figureFit.every((d) => d <= 0), JSON.stringify(figureFit));
 
 /* ------------------------------------------------------------ layout engine */
 
@@ -336,18 +399,205 @@ check(
   `${bodySize}px`,
 );
 
+/* -------------------------------------------------------------- block canvas */
+
+console.log('\nBlock canvas');
+
+const cardCount = await page.locator('[data-card-index]').count();
+check('tài liệu hiện thành các khối card', cardCount >= 20, `cards=${cardCount}`);
+check(
+  'card có nhãn loại và số dòng',
+  await page.evaluate(() => {
+    const h = document.querySelector('[data-card-index] header');
+    return !!h && /dòng \d+/.test(h.textContent ?? '');
+  }),
+);
+check('card bảng hiện thành lưới sửa được', (await page.locator('[data-card-index] table input').count()) > 0);
+check('card công thức có xem trước KaTeX', (await page.locator('[data-card-index] .katex').count()) > 0);
+
+// --- quick insert ----------------------------------------------------------
+await page.getByRole('button', { name: /Thêm khối$/ }).first().click();
+await page.getByRole('menuitem', { name: /Bảng/ }).first().click();
+await page.waitForTimeout(400);
+check(
+  'menu thả xuống thêm được khối mới',
+  (await page.locator('[data-card-index]').count()) === cardCount + 1,
+  `${cardCount} -> ${await page.locator('[data-card-index]').count()}`,
+);
+
+// --- undo ------------------------------------------------------------------
+await page.keyboard.press('Control+z');
+await page.waitForTimeout(400);
+check(
+  'Ctrl+Z hoàn tác được thao tác trên canvas',
+  (await page.locator('[data-card-index]').count()) === cardCount,
+  String(await page.locator('[data-card-index]').count()),
+);
+
+// --- reorder ---------------------------------------------------------------
+const firstHeadingBefore = await page.evaluate(
+  () => document.querySelector('[data-card-index="0"] input')?.value ?? '',
+);
+await page.locator('[data-card-index="0"] button[aria-label^="Xuống"]').click();
+await page.waitForTimeout(400);
+const firstHeadingAfter = await page.evaluate(
+  () => document.querySelector('[data-card-index="0"] input')?.value ?? '',
+);
+check('nút xuống đổi được thứ tự khối', firstHeadingBefore !== firstHeadingAfter,
+  `${firstHeadingBefore} -> ${firstHeadingAfter}`);
+await page.keyboard.press('Control+z');
+await page.waitForTimeout(400);
+check(
+  'hoàn tác trả lại đúng thứ tự cũ',
+  (await page.evaluate(() => document.querySelector('[data-card-index="0"] input')?.value ?? '')) ===
+    firstHeadingBefore,
+);
+
+// --- source view -----------------------------------------------------------
+await page.getByRole('button', { name: 'Xem mã nguồn' }).click();
+await page.waitForTimeout(300);
+const sourceText = await page.evaluate(
+  () => document.querySelector('[role="dialog"] textarea')?.value ?? '',
+);
+check('“Xem mã nguồn” mở ra Markdown thật', sourceText.startsWith('---') && sourceText.includes('# '),
+  sourceText.slice(0, 40));
+check('mã nguồn giữ nguyên nội dung tài liệu', sourceText.includes('Ước lượng huyết áp'),
+  sourceText.slice(0, 120));
+await page.keyboard.press('Escape');
+await page.waitForTimeout(300);
+check('đóng hộp thoại bằng Escape', (await page.locator('[role="dialog"]').count()) === 0);
+
+// --- smart paste -----------------------------------------------------------
+const pasteInto = async (text, html) => {
+  await page.evaluate(
+    ([t, h]) => {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', t);
+      if (h) dt.setData('text/html', h);
+      const target = document.querySelector('[data-card-index="2"]');
+      target?.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+    },
+    [text, html ?? ''],
+  );
+  await page.waitForTimeout(500);
+};
+
+const beforePaste = await page.locator('[data-card-index]').count();
+await page.locator('[data-card-index="2"] header').click();
+await pasteInto('A\tB\tC\n1\t2\t3\n4\t5\t6');
+check(
+  'Ctrl+V dữ liệu Excel tạo khối bảng mới',
+  (await page.locator('[data-card-index]').count()) === beforePaste + 1,
+  `${beforePaste} -> ${await page.locator('[data-card-index]').count()}`,
+);
+check(
+  'khối vừa dán được gắn nhãn đã nhận dạng',
+  await page.evaluate(() => document.body.innerText.includes('nhận dạng:')),
+);
+await page.keyboard.press('Control+z');
+await page.waitForTimeout(400);
+
+await page.locator('[data-card-index="2"] header').click();
+await pasteInto('\\frac{a}{b} = \\sqrt{c}');
+check(
+  'Ctrl+V LaTeX tạo khối công thức',
+  await page.evaluate(() =>
+    Array.from(document.querySelectorAll('[data-card-index]')).some((c) =>
+      (c.textContent ?? '').includes('\\sqrt{c}'),
+    ),
+  ),
+);
+await page.keyboard.press('Control+z');
+await page.waitForTimeout(400);
+
+// --- paste an image --------------------------------------------------------
+const cardsBeforeImage = await page.locator('[data-card-index]').count();
+await page.locator('[data-card-index="2"] header').click();
+await page.evaluate(() => {
+  // 1x1 transparent PNG
+  const b64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const file = new File([bytes], 'anh-chup.png', { type: 'image/png' });
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  document
+    .querySelector('[data-card-index="2"]')
+    ?.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+});
+await page.waitForTimeout(1200);
+check(
+  'Ctrl+V ảnh từ clipboard tạo khối hình',
+  (await page.locator('[data-card-index]').count()) === cardsBeforeImage + 1,
+  `${cardsBeforeImage} -> ${await page.locator('[data-card-index]').count()}`,
+);
+check(
+  'ảnh dán vào được lưu thành tài nguyên và hiển thị',
+  await page.evaluate(() =>
+    Array.from(document.querySelectorAll('[data-card-index] img')).some((i) =>
+      i.src.startsWith('blob:'),
+    ),
+  ),
+);
+await page.keyboard.press('Control+z');
+await page.waitForTimeout(400);
+
+// --- drag one card onto another's edge to make a two-column row ------------
+const beforeCols = await page.locator('[data-card-index]').count();
+await page.evaluate(() => {
+  const from = document.querySelector('[data-card-index="3"]');
+  const to = document.querySelector('[data-card-index="2"]');
+  if (!from || !to) return;
+  const dt = new DataTransfer();
+  const rect = to.getBoundingClientRect();
+  from.dispatchEvent(new DragEvent('dragstart', { dataTransfer: dt, bubbles: true }));
+  const right = rect.left + rect.width * 0.9;
+  const mid = rect.top + rect.height / 2;
+  to.dispatchEvent(
+    new DragEvent('dragover', { dataTransfer: dt, bubbles: true, clientX: right, clientY: mid }),
+  );
+  to.dispatchEvent(
+    new DragEvent('drop', { dataTransfer: dt, bubbles: true, clientX: right, clientY: mid }),
+  );
+});
+await page.waitForTimeout(500);
+check(
+  'kéo ngang gộp hai khối thành hàng hai cột',
+  await page.evaluate(() =>
+    Array.from(document.querySelectorAll('[data-card-index] header')).some((h) =>
+      (h.textContent ?? '').includes('Hai cột'),
+    ),
+  ),
+  `cards ${beforeCols} -> ${await page.locator('[data-card-index]').count()}`,
+);
+
+await page.keyboard.press('Control+Enter');
+await page.waitForTimeout(3500);
+check(
+  'hàng hai cột in ra thành lưới hai cột',
+  (await page.locator('.sr-page-body .sr-colrow').count()) >= 1,
+);
+await page.keyboard.press('Control+z');
+await page.waitForTimeout(400);
+await page.keyboard.press('Control+Enter');
+await page.waitForTimeout(3000);
+
 /* ----------------------------------------------------------- render on demand */
 
 console.log('\nRender theo yêu cầu');
 const before = await page.locator('.sr-page').count();
-await page.locator('.cm-content').click();
-await page.keyboard.press('Control+End');
-await page.keyboard.type('\n\nMột đoạn mới vừa được gõ thêm vào cuối tài liệu.');
+const lastCard = (await page.locator('[data-card-index]').count()) - 1;
+await page.locator(`[data-card-index="${lastCard}"] textarea`).last().click();
+await page.keyboard.type(' Một đoạn mới vừa được gõ thêm vào cuối tài liệu.');
 await page.waitForTimeout(800);
 
 const afterTyping = await page.locator('.sr-page').count();
 const typedVisible = await page.evaluate(() =>
-  document.body.innerText.includes('Một đoạn mới vừa được gõ thêm'),
+  Array.from(document.querySelectorAll('[data-card-index] textarea')).some((t) =>
+    t.value.includes('Một đoạn mới vừa được gõ thêm'),
+  ),
 );
 const previewHasIt = await page.evaluate(() =>
   Array.from(document.querySelectorAll('.sr-page-body')).some((p) =>
@@ -355,7 +605,7 @@ const previewHasIt = await page.evaluate(() =>
   ),
 );
 check('gõ chữ KHÔNG tự render lại', !previewHasIt && afterTyping === before, `pages ${before}->${afterTyping}`);
-check('nội dung vừa gõ có trong editor', typedVisible);
+check('nội dung vừa gõ có trong canvas', typedVisible);
 check(
   'có báo hiệu chưa dựng lại',
   await page.evaluate(() => document.body.innerText.includes('chưa dựng lại')),

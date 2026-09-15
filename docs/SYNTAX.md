@@ -203,6 +203,24 @@ làm lệch dù một ký tự, kết quả bị bỏ và mã hiện ở dạng 
 Bảng màu chọn sao cho khi in trắng đen mỗi loại token ra một mức xám khác nhau. Muốn tắt
 hẳn: panel **Template → Khối mã → Tô màu cú pháp**.
 
+### Chú thích chân trang
+
+```markdown
+Huyết áp tâm thu[^ht] tỉ lệ nghịch với PTT.
+
+[^ht]: Systolic blood pressure, đo bằng mmHg.
+  Dòng thụt lề 2 dấu cách vẫn thuộc chú thích trên.
+```
+
+Nhãn đặt tùy ý (`[^1]`, `[^ht]`), **đánh số theo thứ tự được tham chiếu** chứ không theo
+thứ tự bạn viết định nghĩa. Định nghĩa đặt ở đâu trong tệp cũng được — nó không nằm trong
+dòng văn bản mà được kéo xuống chân **đúng trang có tham chiếu**. Tài liệu hai cột thì
+chú thích nằm ở chân cột chứa tham chiếu, đúng thông lệ tạp chí hai cột.
+
+Tham chiếu không có định nghĩa → lỗi `SR-V015`. Định nghĩa không ai dùng → nhắc `SR-V034`.
+Tắt toàn bộ chức năng bằng `footnotes.enabled: false` trong template.
+
+
 ### Danh sách
 
 ```markdown
@@ -225,6 +243,27 @@ Nội dung.
 ```
 
 Biến thể có màu riêng: `note` (mặc định), `tip`, `warning`, `danger`.
+
+### Hàng hai cột
+
+```markdown
+::: cols
+Khối bên trái.
+|||
+| A | B |
+|---|---|
+| 1 | 2 |
+:::
+```
+
+Dòng ngăn là **đúng ba dấu `|`** trên một dòng riêng — không thể lẫn với dòng bảng.
+Mỗi cột chứa khối bất kỳ (đoạn văn, bảng, hình, công thức). Cả hàng là một khối nguyên,
+không bị cắt qua trang.
+
+Trên canvas: kéo một card sang **mép trái hoặc mép phải** của card khác là thành hàng hai
+cột; nút ⧉ trên đầu card tách ngược lại.
+
+Thiếu dòng `|||` → cảnh báo `SR-P013`. Quên `:::` đóng → lỗi `SR-P012`.
 
 ### Đường kẻ ngang
 
@@ -290,6 +329,16 @@ Do template điều khiển, không do nguồn:
 
 ## 6. Trích dẫn và tài liệu tham khảo
 
-Kiểu `numeric`: `[@smith2020]` hiện thành `[1]`, đánh số **theo thứ tự xuất hiện lần đầu**.
+Hai kiểu, chọn bằng `citation.style` trong template:
+
+| Kiểu | Trong văn bản | Danh mục cuối |
+|---|---|---|
+| `numeric` (mặc định BTL) | `[1]`, `[2]` — đánh số **theo thứ tự xuất hiện lần đầu** | theo đúng thứ tự đó, có `[n]` |
+| `author-year` | `(Nguyễn, 2020)`, `(Trần và Lê, 2019)`, `(Phạm và cs., 2021)` | xếp theo vần A–Z, thụt treo, không có `[n]` |
+
+Họ lấy là **từ đầu tiên của tác giả thứ nhất** — đúng với tên Việt và với dạng
+`Smith J., Lee K.`. Liên từ và cụm "và cs." đổi được bằng `citation.and` / `citation.etAl`.
+Thiếu `year` thì hiện `n.d.`.
+
 Mục tham khảo chưa từng được trích dẫn vẫn được liệt kê ở cuối, kèm gợi ý `SR-V032`.
 Khóa trích dẫn không có trong `bibliography` là lỗi `SR-V014`.

@@ -11,6 +11,8 @@ import type { CounterStyle, TemplateDescriptor } from './types.js';
 export interface NumberingResult {
   labels: Record<string, LabelRecord>;
   citationOrder: string[];
+  /** Footnote label -> printed number, in order of first reference. */
+  footnoteNumbers: Record<string, number>;
   diagnostics: Diagnostic[];
 }
 
@@ -36,6 +38,8 @@ export function assignNumbers(doc: DocumentNode, t: TemplateDescriptor): Numberi
   const diagnostics: Diagnostic[] = [];
   const labels: Record<string, LabelRecord> = {};
   const citationOrder: string[] = [];
+  const footnoteNumbers: Record<string, number> = {};
+  const footnoteDefs = new Map(doc.footnotes.map((f) => [f.label, f]));
 
   const headingCounters = [0, 0, 0, 0, 0, 0];
   let eq = 0;
@@ -161,6 +165,25 @@ export function assignNumbers(doc: DocumentNode, t: TemplateDescriptor): Numberi
         }
         break;
       }
+      case 'footnoteRef': {
+        // Numbered by first reference, not by where the definition was typed.
+        if (footnoteDefs.has(node.label) && footnoteNumbers[node.label] === undefined) {
+          footnoteNumbers[node.label] = Object.keys(footnoteNumbers).length + 1;
+        }
+        node.number = footnoteNumbers[node.label] ?? null;
+        if (node.number === null) {
+          diagnostics.push({
+            code: 'SR-V015',
+            severity: 'error',
+            stage: 'validator',
+            nodeId: node.id,
+            message: `Chú thích chân trang "[^${node.label}]" chưa có định nghĩa.`,
+            hint: `Thêm một dòng "[^${node.label}]: nội dung" ở bất kỳ đâu trong tài liệu.`,
+            position: node.position,
+          });
+        }
+        break;
+      }
       default:
         break;
     }
@@ -191,6 +214,10 @@ export function assignNumbers(doc: DocumentNode, t: TemplateDescriptor): Numberi
         });
       }
     } else if (node.type === 'citation') {
+      node.shortForms = node.keys.map((k) => {
+        const entry = doc.meta.bibliography.find((b) => b.key === k);
+        return entry ? authorYear(entry, t) : null;
+      });
       node.numbers = node.keys.map((k) => {
         if (!bibKeys.has(k)) {
           diagnostics.push({
@@ -210,9 +237,53 @@ export function assignNumbers(doc: DocumentNode, t: TemplateDescriptor): Numberi
     return undefined;
   });
 
+  for (const def of doc.footnotes) {
+    def.number = footnoteNumbers[def.label] ?? null;
+    if (def.number === null) {
+      diagnostics.push({
+        code: 'SR-V034',
+        severity: 'info',
+        stage: 'validator',
+        nodeId: def.id,
+        message: `Chú thích "[^${def.label}]" được định nghĩa nhưng không chỗ nào dùng tới.`,
+        hint: 'Dùng nó bằng [^' + def.label + '] trong văn bản, hoặc bỏ dòng định nghĩa đi.',
+        position: def.position,
+      });
+    }
+  }
+
   doc.labels = labels;
   doc.citationOrder = citationOrder;
-  return { labels, citationOrder, diagnostics };
+  return { labels, citationOrder, footnoteNumbers, diagnostics };
+}
+
+/**
+ * Short in-text form for author-year citations: "Nguyễn, 2020",
+ * "Nguyễn & Lê, 2020", "Nguyễn và cs., 2020".
+ *
+ * The family name is taken as the first word of the first author. That is right
+ * for Vietnamese names and for the "Smith J., Lee K." shape the bibliography
+ * uses; anything else is left as written rather than guessed at.
+ */
+export function authorYear(
+  entry: { authors?: string; year?: string | number; title?: string },
+  t: TemplateDescriptor,
+): string {
+  const year = entry.year === undefined || entry.year === '' ? 'n.d.' : String(entry.year);
+  const people = String(entry.authors ?? '')
+    .split(/[;,]/)
+    .map((a) => a.trim())
+    .filter(Boolean);
+  const family = (who: string): string => (who.split(/\s+/)[0] ?? who).trim();
+  if (people.length === 0) {
+    const title = String(entry.title ?? '').trim();
+    return title ? `${title}, ${year}` : year;
+  }
+  if (people.length === 1) return `${family(people[0] as string)}, ${year}`;
+  if (people.length === 2) {
+    return `${family(people[0] as string)} ${t.citation.and} ${family(people[1] as string)}, ${year}`;
+  }
+  return `${family(people[0] as string)} ${t.citation.etAl}, ${year}`;
 }
 
 function format(counter: number, style: CounterStyle, sectionPrefix: string): string {

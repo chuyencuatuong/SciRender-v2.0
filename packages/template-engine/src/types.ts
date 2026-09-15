@@ -89,6 +89,8 @@ export interface LabelSpec {
   references: string;
   appendix: string;
   page: string;
+  /** Appended to a caption when a table carries over to the next page. */
+  continued: string;
   /** Word used when a cross-reference is rendered, e.g. "Hình 3". */
   refFigure: string;
   refTable: string;
@@ -109,12 +111,37 @@ export interface CaptionSpec {
   align: 'left' | 'center';
 }
 
+export interface FootnoteSpec {
+  enabled: boolean;
+  fontSize: string;
+  lineHeight: number;
+  /** Rule drawn between the text block and the notes. */
+  separator: boolean;
+  separatorWidth: string;
+  gap: string;
+}
+
+export interface PageBudget {
+  /** Minimum body pages the faculty expects. */
+  min: number;
+  /** Maximum body pages. */
+  max: number;
+}
+
 export interface LayoutSpec {
   orphans: number; // minimum lines left at the bottom of a page
   widows: number; // minimum lines carried to the next page
   keepHeadingWithNext: boolean;
   /** Block types that must never be split across a page break. */
   atomicBlocks: string[];
+  /** Carry a long table over a page break, repeating its header row. */
+  splitTables: boolean;
+  /** Minimum body rows kept on each side of a table split. */
+  tableOrphans: number;
+  /** Split a long list between items instead of pushing it whole. */
+  splitLists: boolean;
+  /** Expected body-page range, checked after pagination. Null = no check. */
+  pageBudget: PageBudget | null;
   showPageNumbers: boolean;
   pageNumberPosition: 'footer-center' | 'footer-right' | 'none';
   /** Numbering used for the body flow. */
@@ -219,7 +246,17 @@ export interface TemplateDescriptor {
   diagrams: DiagramSpec;
   frontMatter: FrontMatterSpec;
   cover: CoverSpec;
-  citation: { style: CitationStyle; open: string; close: string; references: ReferenceStyle };
+  citation: {
+    style: CitationStyle;
+    open: string;
+    close: string;
+    references: ReferenceStyle;
+    /** Joiner for exactly two authors in an author-year citation. */
+    and: string;
+    /** Suffix for three or more authors, e.g. "và cs." or "et al.". */
+    etAl: string;
+  };
+  footnotes: FootnoteSpec;
   colors: ColorSpec;
 }
 
@@ -237,6 +274,7 @@ export interface ResolvedTemplate {
     contentHeightPx: number;
     bodySizePx: number;
     lineHeightPx: number;
+    columnGapPx: number;
   };
   css: string;
 }

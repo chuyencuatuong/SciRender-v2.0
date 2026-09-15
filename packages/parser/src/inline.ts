@@ -2,7 +2,7 @@ import type { InlineNode, Point, RefKind } from '@scirender/ast';
 import { makeNodeId } from '@scirender/ast';
 import { Locator } from './locator.js';
 
-const REF_KINDS = new Set<string>(['eq', 'fig', 'tbl', 'sec', 'dia']);
+const REF_KINDS = new Set<string>(['eq', 'fig', 'tbl', 'sec', 'dia', 'lst']);
 
 interface Ctx {
   src: string;
@@ -162,6 +162,25 @@ function scan(ctx: Ctx, from: number, to: number): InlineNode[] {
       }
     }
 
+    // --- footnote reference `[^1]` ----------------------------------------
+    if (ch === '[' && src[i + 1] === '^') {
+      const fnClose = src.indexOf(']', i + 2);
+      const fnLabel = fnClose === -1 ? '' : src.slice(i + 2, fnClose);
+      if (fnClose !== -1 && fnClose < to && /^[A-Za-z0-9_-]+$/.test(fnLabel)) {
+        flush(i);
+        out.push({
+          type: 'footnoteRef',
+          id: id(ctx, 'footnoteRef', i),
+          position: ctx.loc.span(i, fnClose + 1),
+          label: fnLabel,
+          number: null,
+        });
+        i = fnClose + 1;
+        bufStart = i;
+        continue;
+      }
+    }
+
     // --- citation `[@key; @key2]` or link `[text](url)` --------------------
     if (ch === '[') {
       const close = matchBracket(src, i, to, '[', ']');
@@ -176,6 +195,7 @@ function scan(ctx: Ctx, from: number, to: number): InlineNode[] {
             position: ctx.loc.span(i, close + 1),
             keys: citeKeys,
             numbers: citeKeys.map(() => null),
+            shortForms: citeKeys.map(() => null),
           });
           i = close + 1;
           bufStart = i;

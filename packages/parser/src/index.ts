@@ -27,9 +27,10 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
   doc.meta = fm.meta;
 
   const body = src.slice(fm.bodyOffset);
-  const state: BlockParseState = { diagnostics: [], ordinal: { n: 0 } };
+  const state: BlockParseState = { diagnostics: [], ordinal: { n: 0 }, footnotes: [] };
   const lines = toLines(body, fm.bodyLine, fm.bodyOffset);
   doc.children = parseBlocks(lines, state);
+  doc.footnotes = state.footnotes ?? [];
 
   const lastLine = lines.length ? (lines[lines.length - 1] as { line: number; text: string }) : null;
   doc.position = {

@@ -46,6 +46,7 @@ export function resolveTemplate(
       contentHeightPx: round(pageHeightPx - marginTopPx - marginBottomPx),
       bodySizePx,
       lineHeightPx: round(bodySizePx * descriptor.typography.lineHeight),
+      columnGapPx: round(toPx(p.columnGap, 0)),
     },
     css: compileCss(descriptor),
   };

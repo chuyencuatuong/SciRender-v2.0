@@ -2,6 +2,7 @@ import type {
   AlignMode,
   BlockNode,
   Diagnostic,
+  FootnoteDefinition,
   InlineNode,
   ListItemNode,
   Point,
@@ -22,6 +23,8 @@ export interface SrcLine {
 export interface BlockParseState {
   diagnostics: Diagnostic[];
   ordinal: { n: number };
+  /** `[^label]: …` definitions found while scanning; attached to the document. */
+  footnotes?: FootnoteDefinition[];
 }
 
 const RE_HEADING = /^(#{1,6})\s+(.*)$/;
@@ -30,6 +33,7 @@ const RE_THEMATIC = /^ {0,3}((\*\s*){3,}|(-\s*){3,}|(_\s*){3,})$/;
 const RE_BULLET = /^(\s*)([-*+])\s+(.*)$/;
 const RE_ORDERED = /^(\s*)(\d{1,9})[.)]\s+(.*)$/;
 const RE_CAPTION = /^:\s+(.*)$/;
+const RE_FOOTNOTE_DEF = /^\[\^([A-Za-z0-9_-]+)\]:\s*(.*)$/;
 const RE_IMAGE_ONLY = /^!\[([^\]]*)\]\(([^)]*)\)\s*(\{[^{}]*\})?\s*$/;
 
 export function toLines(body: string, firstLine: number, firstOffset: number): SrcLine[] {
@@ -76,6 +80,48 @@ function dedent(lines: SrcLine[], n: number): SrcLine[] {
   });
 }
 
+/**
+ * Reads `[^label]: text`, plus any following lines indented by at least two
+ * spaces, as one footnote definition. Definitions are collected out of the
+ * block flow: they are printed at the foot of whichever page references them,
+ * never where they were typed.
+ */
+function readFootnoteDefinition(
+  lines: SrcLine[],
+  start: number,
+  st: BlockParseState,
+  label: string,
+  first: string,
+): number {
+  const firstLine = lines[start] as SrcLine;
+  const parts: string[] = [first];
+  let i = start + 1;
+  while (i < lines.length) {
+    const next = lines[i] as SrcLine;
+    if (isBlank(next)) {
+      const after = lines[i + 1];
+      if (!after || isBlank(after) || !/^ {2,}\S/.test(after.text)) break;
+      parts.push('');
+      i++;
+      continue;
+    }
+    if (!/^ {2,}\S/.test(next.text)) break;
+    parts.push(next.text.trim());
+    i++;
+  }
+  const last = lines[i - 1] as SrcLine;
+  const pos = span(firstLine, last);
+  const body = parts.join('\n').trim();
+  (st.footnotes ??= []).push({
+    id: nid('footnote', pos, st),
+    label,
+    children: inlineOf(body, firstLine, st, label.length + 4),
+    number: null,
+    position: pos,
+  });
+  return i;
+}
+
 export function parseBlocks(lines: SrcLine[], st: BlockParseState): BlockNode[] {
   const out: BlockNode[] = [];
   let i = 0;
@@ -117,6 +163,13 @@ export function parseBlocks(lines: SrcLine[], st: BlockParseState): BlockNode[] 
       continue;
     }
 
+    // ------------------------------------------------------ footnote definition
+    const fn = RE_FOOTNOTE_DEF.exec(t);
+    if (fn) {
+      i = readFootnoteDefinition(lines, i, st, fn[1] as string, fn[2] ?? '');
+      continue;
+    }
+
     // ---------------------------------------------------------- thematic rule
     if (RE_THEMATIC.test(t)) {
       const pos = span(line, line);
@@ -146,7 +199,11 @@ export function parseBlocks(lines: SrcLine[], st: BlockParseState): BlockNode[] 
       continue;
     }
 
-    // ---------------------------------------------------------------- callout
+    // ------------------------------------------------------- columns / callout
+    if (/^:::\s*cols\b/.test(t.trim())) {
+      i = readColumns(lines, i, out, st);
+      continue;
+    }
     if (/^:::/.test(t.trim())) {
       i = readCallout(lines, i, out, st);
       continue;
@@ -315,6 +372,59 @@ function readFence(
     number: null,
   });
   return codeCaption ? codeCaption.next : next;
+}
+
+/**
+ * `::: cols` … `|||` … `:::` — a row of blocks side by side.
+ *
+ * The separator is a line of exactly three pipes, which cannot be confused with
+ * a table row (those start with a single pipe and need a delimiter row).
+ */
+function readColumns(
+  lines: SrcLine[],
+  i: number,
+  out: BlockNode[],
+  st: BlockParseState,
+): number {
+  const first = lines[i] as SrcLine;
+  const groups: SrcLine[][] = [[]];
+  let j = i + 1;
+  let closed = false;
+  while (j < lines.length) {
+    const text = (lines[j] as SrcLine).text.trim();
+    if (/^:::+\s*$/.test(text)) { closed = true; break; }
+    if (/^\|\|\|\s*$/.test(text)) { groups.push([]); j++; continue; }
+    (groups[groups.length - 1] as SrcLine[]).push(lines[j] as SrcLine);
+    j++;
+  }
+  const last = (lines[Math.min(j, lines.length - 1)] ?? first) as SrcLine;
+  const pos = span(first, last);
+  if (!closed) {
+    st.diagnostics.push({
+      code: 'SR-P012',
+      severity: 'error',
+      stage: 'parser',
+      message: 'Khối "::: cols" không được đóng.',
+      position: pos,
+    });
+  }
+  if (groups.length < 2) {
+    st.diagnostics.push({
+      code: 'SR-P013',
+      severity: 'warning',
+      stage: 'parser',
+      message: 'Hàng hai cột chỉ có một cột — thiếu dòng "|||" ngăn giữa.',
+      hint: 'Thêm một dòng chỉ gồm ba dấu | giữa hai khối.',
+      position: pos,
+    });
+  }
+  out.push({
+    type: 'columns',
+    id: nid('columns', pos, st),
+    position: pos,
+    columns: groups.map((g) => parseBlocks(g, st)),
+  });
+  return closed ? j + 1 : j;
 }
 
 function readCallout(

@@ -57,17 +57,29 @@ function inlineOne(node: InlineNode, t: TemplateDescriptor): string {
       }${escapeHtml(num)}</span>`;
     }
     case 'citation': {
+      const authorYearStyle = t.citation.style === 'author-year';
       const rendered = node.keys.map((key, i) => {
-        const n = node.numbers[i];
-        if (n == null) {
+        const shown = authorYearStyle ? node.shortForms[i] : node.numbers[i];
+        if (shown == null) {
           return `<span class="sr-unresolved" title="Không có trong danh mục tham khảo">${escapeHtml(key)}</span>`;
         }
-        return String(n);
+        return escapeHtml(String(shown));
       });
-      const { open, close } = t.citation;
-      return `<span class="sr-citation">${escapeHtml(open)}${rendered.join(', ')}${escapeHtml(
-        close,
-      )}</span>`;
+      const open = authorYearStyle ? '(' : t.citation.open;
+      const close = authorYearStyle ? ')' : t.citation.close;
+      return `<span class="sr-citation">${escapeHtml(open)}${rendered.join(
+        authorYearStyle ? '; ' : ', ',
+      )}${escapeHtml(close)}</span>`;
+    }
+    case 'footnoteRef': {
+      if (node.number == null) {
+        return `<sup class="sr-unresolved" title="Chưa có định nghĩa chú thích">[^${escapeHtml(
+          node.label,
+        )}]</sup>`;
+      }
+      // data-sr-fn is what the layout engine keys on to pull the right note
+      // down to the foot of whichever page this reference ends up on.
+      return `<sup class="sr-footnote-ref" data-sr-fn="${node.number}">${node.number}</sup>`;
     }
     case 'break':
       return '<br>';
@@ -250,6 +262,19 @@ export function renderBlock(
       return `<div class="sr-callout sr-callout-${escapeAttr(node.variant)}"${attrsOf(
         node,
       )}>${title}${node.children.map((c) => renderBlock(c, t, assets)).join('')}</div>`;
+    }
+    case 'columns': {
+      // A row of blocks side by side. It is one unit as far as pagination is
+      // concerned, which is why it never gets split.
+      const cells = node.columns
+        .map(
+          (col) =>
+            `<div class="sr-col">${col.map((c) => renderBlock(c, t, assets)).join('')}</div>`,
+        )
+        .join('');
+      return `<div class="sr-colrow" style="--sr-colrow:${node.columns.length}"${attrsOf(
+        node,
+      )}>${cells}</div>`;
     }
     case 'thematicBreak':
       return `<hr${attrsOf(node)}>`;

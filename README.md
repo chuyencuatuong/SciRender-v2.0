@@ -113,7 +113,7 @@ trong `useRender` vì chúng cần DOM thật.
 **Không còn live render.** Gõ chữ không dựng lại trang; bấm **Dựng trang** hoặc
 <kbd>Ctrl</kbd>+<kbd>Enter</kbd> mới dựng. Lý do: phân trang phải đo hộp dòng thật của
 trình duyệt, chạy việc đó sau mỗi phím gõ là nguyên nhân giật lag. Thanh trạng thái báo
-"chưa dựng lại" khi bản xem trước đã cũ hơn nội dung trong editor.
+"chưa dựng lại" khi bản xem trước đã cũ hơn nội dung trên canvas.
 
 Mục lục cần một **điểm bất động**: nó hiển thị số trang, mà thêm nó vào lại làm đổi số
 trang phần đầu. `useRender` lặp tối đa ba lượt và dừng ngay khi các số thôi đổi.
@@ -124,7 +124,7 @@ trang phần đầu. `useRender` lặp tối đa ba lượt và dừng ngay khi 
 
 ```
 scirender/
-├─ apps/web/                  Giao diện (React 18 + Vite + Tailwind + CodeMirror 6)
+├─ apps/web/                  Giao diện (React 18 + Vite + Tailwind) — block canvas
 ├─ packages/
 │  ├─ ast/                    Kiểu dữ liệu AST, Diagnostic, tiện ích duyệt cây
 │  ├─ parser/                 Scientific Markdown → AST (front matter, khối, nội dòng)
@@ -216,21 +216,55 @@ trang xem trước cũng vậy.
 
 ---
 
-## Giới hạn đã biết của MVP
+## Block canvas — cột giữa
+
+Tài liệu hiện ra thành một cột **card**, mỗi khối một card: đề mục, đoạn văn, công thức,
+hình, bảng, sơ đồ, khối mã, chú thích chân trang.
+
+| Thao tác | Cách làm |
+|---|---|
+| Đổi thứ tự | kéo tay nắm ⠿ lên/xuống, hoặc <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> |
+| Xếp hai khối cạnh nhau | kéo một card sang **mép trái/phải** của card khác, hoặc nút ⧉ |
+| Thêm khối | menu **Thêm khối** — 15 loại dựng sẵn |
+| Nhân bản / xóa | nút trên đầu card, hoặc <kbd>Ctrl</kbd>+<kbd>D</kbd> |
+| Hoàn tác | <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> |
+| Xem Markdown | nút **Xem mã nguồn** — sửa và Áp dụng cũng được |
+
+**Card là lát cắt của Markdown, không phải một mô hình tài liệu thứ hai.** Mỗi card giữ
+đúng đoạn văn bản mà parser đã đọc, và ghép các card lại thì ra đúng tệp cũ. Nhờ vậy canvas
+không thể trôi lệch khỏi thứ đem đi in (P1, P3) — có kiểm tra khứ hồi trong `pnpm smoke`.
+
+### Dán thông minh (Ctrl+V)
+
+Bấm vào một card rồi <kbd>Ctrl</kbd>+<kbd>V</kbd>:
+
+| Nội dung trong clipboard | Kết quả |
+|---|---|
+| Ảnh chụp màn hình | lưu thành tài nguyên, tạo khối Hình kèm ô chú thích và số |
+| Vùng chọn từ Excel / bảng HTML | lưới dữ liệu khoa học, giữ nguyên từng ô |
+| CSV / TSV | như trên, hiểu cả dấu nháy kép của CSV |
+| Mã LaTeX | khối công thức, xem trước KaTeX ngay trong card |
+| Đoạn code | khối mã, tự đoán ngôn ngữ để tô màu |
+| Mã Mermaid | khối sơ đồ |
+| Văn bản thường | đoạn văn |
+
+Nhận dạng chỉ **bọc** văn bản, không sửa một ký tự nào (P1), và luôn hiện nhãn "nhận dạng:
+…" kèm nút **dán dạng văn bản** để hoàn tác (P6). Đang gõ dở trong một ô đã có chữ thì
+<kbd>Ctrl</kbd>+<kbd>V</kbd> dán thường như mọi trình soạn thảo — trừ ảnh, ảnh thì luôn
+thành khối Hình.
+
+---
+
+## Giới hạn đã biết
 
 Nói thẳng, để khỏi mất thời gian phát hiện lại:
 
-- **Bảng và hình không cắt được qua trang.** Khối nào cao hơn phần còn lại của trang sẽ
-  đẩy nguyên khối sang trang sau, để lại khoảng trắng. Cắt bảng nhiều trang (kèm lặp
-  dòng tiêu đề) là việc của Phase 2.
-- **Cột giữa vẫn là editor Markdown**, chưa phải canvas card kéo thả. Smart paste
-  (Ctrl+V nhận diện ảnh / bảng Excel / LaTeX) đi kèm canvas nên cũng chưa có.
-- **Bố cục 2 cột dùng `column-count` của CSS**, nên trong một trang thì cân cột do
-  trình duyệt quyết định, không do layout engine. Kiểm soát chặt hơn cần Typst (Phase 3).
-- **Không có chú thích chân trang (footnote)** và không có mục lục tự động.
-- **Kiểu trích dẫn chỉ có `numeric`** theo thứ tự xuất hiện. `author-year` đã có chỗ trong
-  descriptor nhưng chưa cài đặt.
-- **Chống ngắt trang mới ở mức đoạn văn.** Danh sách và blockquote hiện là khối nguyên.
+- **Bố cục hai cột không cân cột.** Layout engine đổ đầy cột trái rồi mới sang cột phải;
+  nó không làm phẳng hai cột ở trang cuối như tạp chí thật.
+- **Hình vẫn không cắt qua trang** (đúng ý), nhưng một hình cao hơn trang sẽ bị **thu nhỏ**
+  để vừa, chứ app không tự tách hình.
+- **Chưa import `.docx` / `.bib`.** Nhập chỉ nhận Markdown và bundle của chính SciRender.
+- **Chưa có mục lục cho phụ lục riêng** và chưa có tham chiếu chéo tới số trang.
 - **PDF đi qua hộp thoại in của trình duyệt.** Chọn "Save as PDF", đặt lề = None và tắt
   "Headers and footers" để khớp đúng bản xem trước.
 - Dữ liệu nằm trong IndexedDB của **một trình duyệt trên một máy**. Xóa dữ liệu duyệt web
@@ -240,8 +274,9 @@ Nói thẳng, để khỏi mất thời gian phát hiện lại:
 
 ## Lộ trình
 
-- **Phase 2** — block canvas: mỗi khối là một card kéo thả đổi thứ tự hoặc chia hai cột,
-  smart paste theo loại nội dung, cắt bảng qua trang, footnote, import `.docx`/`.bib`.
+- **Phase 2 — đã xong**: block canvas (card kéo thả, chia hai cột), smart paste theo loại
+  nội dung, cắt bảng qua trang, footnote, trích dẫn author-year, phân trang hai cột thật.
+  Còn lại của Phase 2: import `.docx` / `.bib`.
 - **Phase 3** — backend Typst thay cho Paged Media để kiểm soát bố cục ở mức nhà in;
   `renderer-pdf` đã tách sẵn để thay thế mà không đụng tới AST hay template.
 

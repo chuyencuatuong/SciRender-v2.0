@@ -228,3 +228,126 @@ export function isSplittable(el: Element): boolean {
   if (type === 'paragraph' || type === 'blockquote') return true;
   return el.tagName === 'P';
 }
+
+/* ----------------------------------------------- structural (row/item) splits */
+
+/** The caption element of a table/figure wrapper, and where it sits. */
+function captionOf(wrapper: Element): { el: Element; above: boolean } | null {
+  const cap = wrapper.querySelector(':scope > .sr-caption');
+  if (!cap) return null;
+  return { el: cap, above: wrapper.firstElementChild === cap };
+}
+
+/**
+ * Splits a table wrapper between two body rows, repeating the header on the
+ * continuation. Returns null when neither side would keep `minRows` rows —
+ * a table that would leave a single orphan row behind is moved whole instead.
+ */
+export function splitTable(
+  wrapper: Element,
+  availableBottom: number,
+  minRows: number,
+  continuedLabel: string,
+): [Element, Element] | null {
+  const table = wrapper.querySelector('table');
+  if (!table) return null;
+  const body = table.querySelector('tbody');
+  const rows = Array.from(body ? body.rows : table.rows).filter(
+    (r) => r.parentElement?.tagName !== 'THEAD',
+  );
+  if (rows.length < minRows * 2) return null;
+
+  let fit = 0;
+  for (const row of rows) {
+    if (row.getBoundingClientRect().bottom <= availableBottom + 0.5) fit++;
+    else break;
+  }
+  if (fit < minRows || rows.length - fit < minRows) return null;
+
+  const head = wrapper.cloneNode(true) as Element;
+  const tail = wrapper.cloneNode(true) as Element;
+  const cut = (clone: Element, keep: (index: number) => boolean): boolean => {
+    const t = clone.querySelector('table');
+    if (!t) return false;
+    const tb = t.querySelector('tbody');
+    const list = Array.from(tb ? tb.rows : t.rows).filter(
+      (r) => r.parentElement?.tagName !== 'THEAD',
+    );
+    list.forEach((row, index) => {
+      if (!keep(index)) row.remove();
+    });
+    return true;
+  };
+  if (!cut(head, (i) => i < fit)) return null;
+  if (!cut(tail, (i) => i >= fit)) return null;
+
+  const cap = captionOf(wrapper);
+  const headCap = captionOf(head);
+  const tailCap = captionOf(tail);
+  if (cap?.above) {
+    // The number is announced once; the carry-over says it is the same table.
+    if (tailCap) tailCap.el.textContent = `${tailCap.el.textContent} (${continuedLabel})`;
+  } else if (cap) {
+    headCap?.el.remove();
+  }
+
+  // Only the head owns the identity, so the outline maps the table to one page.
+  for (const el of Array.from(tail.querySelectorAll('[data-sr-id]'))) {
+    el.removeAttribute('data-sr-id');
+  }
+  tail.removeAttribute('data-sr-id');
+  head.setAttribute('data-sr-split', 'head');
+  tail.setAttribute('data-sr-split', 'tail');
+  return [head, tail];
+}
+
+/** Splits a list between two items, renumbering the continuation of an `<ol>`. */
+export function splitList(
+  list: Element,
+  availableBottom: number,
+  minItems: number,
+): [Element, Element] | null {
+  const items = Array.from(list.children).filter((c) => c.tagName === 'LI');
+  if (items.length < minItems * 2) return null;
+
+  let fit = 0;
+  for (const item of items) {
+    if (item.getBoundingClientRect().bottom <= availableBottom + 0.5) fit++;
+    else break;
+  }
+  if (fit < minItems || items.length - fit < minItems) return null;
+
+  const head = list.cloneNode(true) as Element;
+  const tail = list.cloneNode(true) as Element;
+  const keep = (clone: Element, pred: (index: number) => boolean): void => {
+    Array.from(clone.children)
+      .filter((c) => c.tagName === 'LI')
+      .forEach((li, index) => {
+        if (!pred(index)) li.remove();
+      });
+  };
+  keep(head, (i) => i < fit);
+  keep(tail, (i) => i >= fit);
+
+  if (tail.tagName === 'OL') {
+    const start = Number(list.getAttribute('start') ?? '1') || 1;
+    tail.setAttribute('start', String(start + fit));
+  }
+  for (const el of Array.from(tail.querySelectorAll('[data-sr-id]'))) {
+    el.removeAttribute('data-sr-id');
+  }
+  tail.removeAttribute('data-sr-id');
+  head.setAttribute('data-sr-split', 'head');
+  tail.setAttribute('data-sr-split', 'tail');
+  return [head, tail];
+}
+
+export function isTable(el: Element): boolean {
+  return el.getAttribute('data-sr-type') === 'table' && !!el.querySelector('table');
+}
+
+export function isList(el: Element): boolean {
+  const type = el.getAttribute('data-sr-type');
+  return (type === 'list' || el.tagName === 'UL' || el.tagName === 'OL') &&
+    (el.tagName === 'UL' || el.tagName === 'OL');
+}

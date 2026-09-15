@@ -99,11 +99,28 @@ Kiểu số `[1]`, đánh theo thứ tự xuất hiện lần đầu, danh mục
 Định dạng dòng tham khảo theo mẫu APA trong tài liệu gốc; đổi sang IEEE bằng
 `citation.references: 'ieee'`.
 
+## Bảng dài, hình lớn, chú thích chân trang
+
+| Tình huống | Cách xử lý |
+|---|---|
+| Bảng dài hơn phần trống còn lại | cắt giữa hai dòng, lặp lại dòng tiêu đề, chú thích trang sau ghi "(tiếp theo)". Mỗi bên giữ tối thiểu `layout.tableOrphans` dòng, nếu không thì đẩy nguyên bảng sang trang mới |
+| Danh sách dài | cắt giữa hai mục; `<ol>` phần tiếp được đánh số tiếp, không quay về 1 |
+| Ảnh cao hơn vùng nội dung | thu vừa chiều cao trang, chừa chỗ cho chú thích — ảnh **không bao giờ** bị cắt đôi |
+| Sơ đồ cao hơn vùng nội dung | thu vừa cả hai chiều, tự đổi chiều nếu vừa hơn, cảnh báo `SR-L003` khi vẫn quá nhỏ |
+| Chú thích chân trang | in ở chân **đúng trang có tham chiếu**, có đường kẻ ngăn, 10pt |
+
+## Kiểm tra độ dài 15–30 trang
+
+Điều 1.2.2 được kiểm tra thật, không phải để bạn tự đếm: `layout.pageBudget` của mẫu BTL
+đặt `{ min: 15, max: 30 }`, tính trên **phần nội dung** (không tính bìa và phần đầu).
+Thanh trạng thái hiện `nội dung 18/15–30 trang · đạt`, và panel Chẩn đoán báo `SR-L010`
+(thiếu) hoặc `SR-L011` (vượt).
+
+App **không** tự co giãn để chạm mốc — nó chỉ báo (P1).
+
 ## Những gì template **không** tự làm thay bạn
 
 - **Không tự viết nội dung.** Tóm tắt, lời cảm ơn, nội dung chương đều do bạn viết.
 - **Không tự sửa lỗi trình bày.** Thiếu chú thích bảng, nhảy cấp đề mục, tham chiếu chết
   đều bị báo trong panel Chẩn đoán chứ không bị lặng lẽ vá.
-- **Không kiểm tra độ dài 15–30 trang** theo điều 1.2.2 — số trang hiện ở thanh trạng
-  thái, bạn tự đối chiếu.
 - **Không in bìa lên giấy màu.** Đó là việc của tiệm in.

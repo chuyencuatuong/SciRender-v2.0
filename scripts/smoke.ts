@@ -25,6 +25,34 @@ import {
   type TemplateDescriptor,
 } from '../packages/template-engine/src/index.js';
 import { validate } from '../packages/validator/src/index.js';
+import {
+  detectKind,
+  makeColumns,
+  moveCard,
+  splitColumns,
+  toCards,
+  toSource,
+} from '../apps/web/src/lib/cards.js';
+import { detectPaste } from '../apps/web/src/lib/paste.js';
+import {
+  headingDepth,
+  parseCode,
+  parseDiagram,
+  parseEquation,
+  parseFigure,
+  parseTable,
+  serializeCode,
+  serializeDiagram,
+  serializeEquation,
+  serializeFigure,
+  serializeTable,
+  setHeadingDepth,
+  type CodeForm,
+  type DiagramForm,
+  type EquationForm,
+  type FigureForm,
+  type TableForm,
+} from '../apps/web/src/lib/card-forms.js';
 import { SAMPLE_DOCUMENT } from '../apps/web/src/lib/sample.js';
 
 let failures = 0;
@@ -206,7 +234,7 @@ check('mục lục có CHƯƠNG 1.', frontHtml.includes('CHƯƠNG 1.'));
 check('mục lục có TÀI LIỆU THAM KHẢO trang 9', frontHtml.includes('TÀI LIỆU THAM KHẢO') && frontHtml.includes('>9<'));
 check('có dấu chấm dẫn (leaders)', frontHtml.includes('sr-list-fill'));
 check('3 hình vào danh mục', s.rendered.figures.length === 3, String(s.rendered.figures.length));
-check('3 bảng vào danh mục', s.rendered.tables.length === 3, String(s.rendered.tables.length));
+check('4 bảng vào danh mục', s.rendered.tables.length === 4, String(s.rendered.tables.length));
 
 const fewFigures = compile(
   SAMPLE_DOCUMENT.replace(/\n: Quy trình hiệu chuẩn theo từng đối tượng \{#dia:hieuchuan\}\n/, '\n'),
@@ -401,6 +429,298 @@ check(
   'matlab cũng được tô màu',
   compile('```matlab\nfor i = 1:10\n  disp(i);\nend\n```').rendered.html.includes('sr-hl-keyword'),
 );
+
+/* ---------------------------------------------------------------- footnotes */
+
+section('Chú thích chân trang');
+
+const fnDoc = compile(
+  [
+    'Huyết áp tâm thu[^ht] tỉ lệ nghịch với PTT[^ptt].',
+    '',
+    '[^ht]: Systolic blood pressure, đo bằng mmHg.',
+    '[^ptt]: Pulse transit time — *khoảng truyền sóng mạch*.',
+    '  Dòng thụt lề này vẫn thuộc chú thích trên.',
+  ].join('\n'),
+);
+check('định nghĩa chú thích được tách khỏi dòng văn bản', fnDoc.doc.footnotes.length === 2,
+  String(fnDoc.doc.footnotes.length));
+const fnOrder = fnDoc.doc.footnotes.map((f) => `${f.label}=${f.number}`).join(',');
+check('chú thích đánh số theo thứ tự được tham chiếu', fnOrder === 'ht=1,ptt=2', fnOrder);
+check('định nghĩa không lọt vào thân bài',
+  !fnDoc.rendered.html.includes('[^ht]:'));
+check('tham chiếu render thành sup có data-sr-fn',
+  fnDoc.rendered.html.includes('data-sr-fn="1"') && fnDoc.rendered.html.includes('data-sr-fn="2"'));
+check('nội dung chú thích giữ định dạng nội dòng',
+  (fnDoc.rendered.footnotes['2'] ?? '').includes('<em>khoảng truyền sóng mạch</em>'));
+check('dòng thụt lề được gộp vào chú thích',
+  (fnDoc.rendered.footnotes['2'] ?? '').includes('Dòng thụt lề này'));
+
+const fnMissing = compile('Câu có chú thích lạ[^khong-co].');
+check('tham chiếu không có định nghĩa bị báo lỗi',
+  fnMissing.diagnostics.some((d) => d.code === 'SR-V015'));
+const fnUnused = compile('Không ai dùng.\n\n[^thua]: Nội dung thừa.');
+check('định nghĩa không ai dùng được nhắc',
+  fnUnused.diagnostics.some((d) => d.code === 'SR-V034'));
+
+/* --------------------------------------------------- author-year citations */
+
+section('Trích dẫn author-year');
+
+const BIB = [
+  '---',
+  'title: T',
+  'bibliography:',
+  '  - key: nguyen2020',
+  '    authors: Nguyễn Văn A',
+  '    year: 2020',
+  '    title: Bài một',
+  '  - key: tran2019',
+  '    authors: Trần B, Lê C',
+  '    year: 2019',
+  '    title: Bài hai',
+  '  - key: pham2021',
+  '    authors: Phạm D, Hoàng E, Vũ F',
+  '    year: 2021',
+  '    title: Bài ba',
+  '---',
+  '',
+  'Một [@nguyen2020], hai [@tran2019], ba [@pham2021].',
+].join('\n');
+
+const ayHtml = compile(BIB, 'hcmut-btl', (d) => ({
+  ...d,
+  citation: { ...d.citation, style: 'author-year' },
+})).rendered.html;
+check('một tác giả ra "Họ, năm"', ayHtml.includes('(Nguyễn, 2020)'));
+check('hai tác giả nối bằng liên từ của template', ayHtml.includes('(Trần và Lê, 2019)'));
+check('ba tác giả trở lên rút thành và cs.', ayHtml.includes('(Phạm và cs., 2021)'));
+check('danh mục author-year không đánh số [n]',
+  !/sr-reference-item"><span>\[1\]/.test(ayHtml));
+
+const numHtml = compile(BIB).rendered.html;
+check('kiểu numeric vẫn ra [1] [2] [3]',
+  numHtml.includes('[1]') && numHtml.includes('[2]') && numHtml.includes('[3]'));
+
+/* ------------------------------------------------------- cross-ref mã nguồn */
+
+const lstDoc = compile(
+  ['```python', 'x = 1', '```', '', ': Chú thích {#lst:x}', '', 'Xem @lst:x.'].join('\n'),
+);
+check('tham chiếu @lst: phân giải được',
+  lstDoc.rendered.html.includes('sr-crossref') && !lstDoc.rendered.html.includes('@lst:x'),
+);
+
+/* --------------------------------------------------------- hàng hai cột */
+
+section('Hàng hai cột');
+
+const colsDoc = compile(
+  ['::: cols', 'Cột trái có **đậm**.', '|||', '| A | B |', '|---|---|', '| 1 | 2 |', ':::'].join('\n'),
+);
+const colsNode = colsDoc.doc.children.find((n) => n.type === 'columns');
+check('hàng hai cột parse thành node columns', colsNode?.type === 'columns');
+check('có đúng hai cột', colsNode?.type === 'columns' && colsNode.columns.length === 2,
+  colsNode?.type === 'columns' ? String(colsNode.columns.length) : 'missing');
+check('cột phải giữ nguyên là bảng',
+  colsNode?.type === 'columns' && colsNode.columns[1]?.[0]?.type === 'table');
+check('render ra lưới hai cột', colsDoc.rendered.html.includes('sr-colrow') &&
+  (colsDoc.rendered.html.match(/sr-col"/g) ?? []).length === 2);
+
+const colsOne = compile('::: cols\nChỉ một cột.\n:::');
+check('thiếu dòng ||| thì được cảnh báo',
+  colsOne.diagnostics.some((d) => d.code === 'SR-P013'));
+const colsOpen = compile('::: cols\nA\n|||\nB');
+check('không đóng ::: thì báo lỗi',
+  colsOpen.diagnostics.some((d) => d.code === 'SR-P012'));
+
+
+const colsRef = compile(
+  [
+    '---',
+    'title: T',
+    'bibliography:',
+    '  - key: k1',
+    '    authors: A',
+    '    year: 2020',
+    '---',
+    '',
+    '# C {#sec:c}',
+    '',
+    '::: cols',
+    'Trích dẫn [@k1] và tham chiếu @sec:c.',
+    '|||',
+    '![Hình trong cột](asset:logo-bk){#fig:trongcot}',
+    ':::',
+  ].join('\n'),
+);
+check('trích dẫn trong hàng hai cột được đánh số',
+  colsRef.rendered.html.includes('>[1]<') || colsRef.rendered.html.includes('[1]'),
+  colsRef.diagnostics.map((d) => d.code).join(','));
+check('không sinh lỗi trích dẫn hỏng trong cột',
+  !colsRef.diagnostics.some((d) => d.code === 'SR-V014'));
+check('tham chiếu chéo trong cột phân giải được',
+  !colsRef.rendered.html.includes('@sec:c'));
+check('hình trong cột vào danh mục hình',
+  colsRef.rendered.figures.length === 1, String(colsRef.rendered.figures.length));
+
+const fnCite = compile(
+  [
+    '---',
+    'title: T',
+    'bibliography:',
+    '  - key: k9',
+    '    authors: B',
+    '    year: 2021',
+    '---',
+    '',
+    'Câu[^a].',
+    '',
+    '[^a]: Xem thêm [@k9].',
+  ].join('\n'),
+);
+check('trích dẫn nằm trong chú thích chân trang vẫn được đánh số',
+  !fnCite.diagnostics.some((d) => d.code === 'SR-V014'),
+  fnCite.diagnostics.map((d) => d.code).join(','));
+
+/* ------------------------------------------------------------ block canvas */
+
+section('Block canvas');
+
+const canvasSource = SAMPLE_DOCUMENT.replace(/\r\n?/g, '\n');
+const canvas = toCards(canvasSource);
+check('tài liệu mẫu tách được thành nhiều card', canvas.cards.length > 20,
+  String(canvas.cards.length));
+check('front matter được giữ riêng', canvas.frontMatter.startsWith('---'));
+check('không card nào rỗng', canvas.cards.every((c) => c.text.trim().length > 0));
+
+const rebuilt = toSource(canvas);
+const normalise = (s: string) => s.trim().replace(/\n{3,}/g, '\n\n');
+check('card ghép lại ra đúng nguồn ban đầu', normalise(rebuilt) === normalise(canvasSource),
+  `${normalise(rebuilt).length} vs ${normalise(canvasSource).length}`);
+
+const reparsed = compile(rebuilt);
+check('nguồn dựng lại từ card vẫn parse ra cùng số khối',
+  reparsed.doc.children.length === compile(canvasSource).doc.children.length,
+  `${reparsed.doc.children.length} vs ${compile(canvasSource).doc.children.length}`);
+check('nguồn dựng lại không sinh lỗi mới',
+  reparsed.diagnostics.filter((d) => d.severity === 'error').length ===
+    compile(canvasSource).diagnostics.filter((d) => d.severity === 'error').length);
+
+const capCard = canvas.cards.find((c) => c.kind === 'table');
+check('chú thích đi theo bảng, không thành card riêng',
+  !!capCard && capCard.text.includes('\n\n: '), capCard?.text.slice(-60));
+check('định nghĩa chú thích chân trang là card riêng',
+  canvas.cards.some((c) => c.kind === 'footnote'));
+
+check('nhận lại loại card sau khi sửa: bảng', detectKind('| a | b |\n|---|---|') === 'table');
+check('nhận lại loại card sau khi sửa: công thức', detectKind('$$\nx=1\n$$') === 'equation');
+check('nhận lại loại card sau khi sửa: sơ đồ', detectKind('```mermaid\nflowchart TB\n```') === 'diagram');
+check('nhận lại loại card sau khi sửa: mã nguồn', detectKind('```python\nx=1\n```') === 'codeBlock');
+check('nhận lại loại card sau khi sửa: hai cột', detectKind('::: cols\nA\n|||\nB\n:::') === 'columns');
+
+const moved = moveCard(canvas.cards, 2, 0);
+check('đổi thứ tự card giữ nguyên số lượng', moved.length === canvas.cards.length);
+check('đổi thứ tự card đưa đúng khối lên đầu', moved[0]?.id === canvas.cards[2]?.id);
+
+const pair = makeColumns('Trái', 'Phải');
+check('gộp hai card thành hàng hai cột', splitColumns(pair)?.join('|') === 'Trái|Phải', pair);
+
+/* ------------------------------------------------------------- dán thông minh */
+
+section('Dán thông minh (Ctrl+V)');
+
+const excel = 'Thông số\tGiá trị\tGhi chú\nTần số\t125 Hz\tđồng bộ\nADC\t16 bit\t';
+const pExcel = detectPaste(excel);
+check('dán TSV từ Excel ra bảng', pExcel.kind === 'table', pExcel.kind);
+check('bảng giữ đúng số cột', (pExcel.markdown.split('\n')[0] ?? '').split('|').length === 5,
+  pExcel.markdown.split('\n')[0]);
+check('bảng giữ nguyên từng ô', pExcel.markdown.includes('125 Hz') && pExcel.markdown.includes('đồng bộ'));
+
+const csv = 'a,b,c\n1,2,3\n4,5,6';
+check('dán CSV cũng ra bảng', detectPaste(csv).kind === 'table');
+const csvQuoted = 'Tên,"Giá trị, có phẩy"\nA,"1,5"';
+const pQuoted = detectPaste(csvQuoted);
+check('CSV có dấu nháy được tách đúng', pQuoted.markdown.includes('Giá trị, có phẩy'), pQuoted.markdown);
+
+const pipeCell = detectPaste('a\tb|c\n1\t2');
+check('ô chứa dấu | được thoát, không làm vỡ bảng', pipeCell.markdown.includes('b\\|c'));
+
+const pLatex = detectPaste('\\frac{a}{b} = \\sqrt{c}');
+check('dán LaTeX ra khối công thức', pLatex.kind === 'latex', pLatex.kind);
+check('công thức được bọc $$ và có nhãn', pLatex.markdown.startsWith('$$') && pLatex.markdown.includes('{#eq:'));
+check('LaTeX đã có $$ không bị bọc hai lần',
+  (detectPaste('$$\\alpha + \\beta$$').markdown.match(/\$\$/g) ?? []).length === 2);
+
+const prose = 'Hệ số \\alpha được chọn bằng thực nghiệm. Giá trị này ảnh hưởng tới sai số. Ta sẽ bàn ở chương sau.';
+check('văn xuôi có nhắc \\alpha không bị nhận nhầm là công thức',
+  detectPaste(prose).kind === 'text', detectPaste(prose).kind);
+
+const py = 'def ptt(a, b):\n    if a > b:\n        return a - b\n    return 0';
+const pCode = detectPaste(py);
+check('dán code python ra khối mã', pCode.kind === 'code', pCode.kind);
+check('đoán được ngôn ngữ python', pCode.markdown.startsWith('```python'), pCode.markdown.slice(0, 12));
+check('mã giữ nguyên từng ký tự', pCode.markdown.includes(py));
+
+const mer = 'flowchart LR\n  A[X] --> B[Y]';
+check('dán mermaid ra sơ đồ', detectPaste(mer).kind === 'diagram');
+check('sơ đồ được bọc ```mermaid', detectPaste(mer).markdown.startsWith('```mermaid'));
+
+const plain = 'Một đoạn văn bình thường, không có gì đặc biệt.';
+const pPlain = detectPaste(plain);
+check('văn bản thường vẫn là văn bản', pPlain.kind === 'text');
+check('văn bản thường không bị thêm bớt ký tự', pPlain.markdown === plain);
+
+const mdTable = '| a | b |\n|---|---|\n| 1 | 2 |';
+check('bảng Markdown dán vào giữ nguyên', detectPaste(mdTable).markdown === mdTable);
+
+/* --------------------------------------------------- biểu mẫu trong card */
+
+section('Biểu mẫu card (khứ hồi)');
+
+const eqText = '$$\n\\frac{a}{b} = c\n$$ {#eq:ten}';
+const eqForm = parseEquation(eqText);
+check('công thức parse được', !!eqForm && eqForm.tex === '\\frac{a}{b} = c' && eqForm.label === 'eq:ten',
+  JSON.stringify(eqForm));
+check('công thức khứ hồi nguyên vẹn', serializeEquation(eqForm as EquationForm) === eqText);
+
+const codeText = '```python\nx = 1\n```\n\n: Chú thích {#lst:ten}';
+const codeForm = parseCode(codeText);
+check('khối mã parse được', !!codeForm && codeForm.lang === 'python' && codeForm.code === 'x = 1',
+  JSON.stringify(codeForm));
+check('khối mã khứ hồi nguyên vẹn', serializeCode(codeForm as CodeForm) === codeText,
+  serializeCode(codeForm as CodeForm));
+
+const diaText = '```mermaid\nflowchart TB\n  A --> B\n```\n\n: Sơ đồ {#dia:ten}';
+const diaForm = parseDiagram(diaText);
+check('sơ đồ parse được', !!diaForm && diaForm.source === 'flowchart TB\n  A --> B');
+check('sơ đồ khứ hồi nguyên vẹn', serializeDiagram(diaForm as DiagramForm) === diaText,
+  serializeDiagram(diaForm as DiagramForm));
+const diaDir = parseDiagram('```mermaid\nflowchart TB\n```\n\n: X {#dia:y dir=LR}');
+check('đọc được dir= trong chú thích sơ đồ', diaDir?.direction === 'LR', JSON.stringify(diaDir));
+
+const figText = '![Chú thích hình](asset:logo-bk){#fig:x width=80%}';
+const figForm = parseFigure(figText);
+check('hình parse được', !!figForm && figForm.src === 'asset:logo-bk' && figForm.width === '80%');
+check('hình khứ hồi nguyên vẹn', serializeFigure(figForm as FigureForm) === figText,
+  serializeFigure(figForm as FigureForm));
+
+const tblText = '| A | B |\n|:---|---:|\n| 1 | 2 |\n| 3 | 4 |\n\n: Bảng thử {#tbl:x}';
+const tblForm = parseTable(tblText);
+check('bảng parse được', !!tblForm && tblForm.rows.length === 2 && tblForm.align[1] === 'right',
+  JSON.stringify(tblForm));
+check('bảng khứ hồi nguyên vẹn', serializeTable(tblForm as TableForm) === tblText,
+  serializeTable(tblForm as TableForm));
+const tblPipe = parseTable('| a | b\\|c |\n|---|---|\n| 1 | 2 |');
+check('ô chứa | được đọc đúng', tblPipe?.header[1] === 'b|c', JSON.stringify(tblPipe?.header));
+check('ô chứa | được ghi lại có thoát',
+  serializeTable(tblPipe as TableForm).includes('b\\|c'));
+
+check('khối không đúng dạng thì biểu mẫu trả null', parseTable('chỉ là đoạn văn') === null);
+check('công thức sai dạng thì biểu mẫu trả null', parseEquation('$x$') === null);
+
+check('đổi cấp đề mục', setHeadingDepth('## Tên', 1) === '# Tên');
+check('đọc cấp đề mục', headingDepth('### A') === 3);
 
 /* -------------------------------------------------------------- edge cases */
 
