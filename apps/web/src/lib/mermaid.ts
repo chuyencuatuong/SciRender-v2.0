@@ -126,10 +126,18 @@ function fitScale(size: Natural, maxW: number, maxH: number): number {
 function applyFittedSize(svg: string, size: Natural, scale: number): string {
   const w = Math.round(size.width * scale);
   const h = Math.round(size.height * scale);
-  return svg
-    .replace(/\s(width|height)="[^"]*"/g, '')
-    .replace(/\sstyle="[^"]*max-width:[^"]*"/g, '')
-    .replace(/<svg\b/, `<svg width="${w}" height="${h}" style="max-width:100%"`);
+  // Only the ROOT <svg> tag may be touched. Stripping width/height across the
+  // whole string also emptied every <rect> and <foreignObject> inside, which
+  // made node boxes and labels collapse to 0x0 — the arrows were all that was
+  // left on the page.
+  const open = /<svg\b[^>]*>/.exec(svg);
+  if (!open) return svg;
+  const tag = open[0];
+  const attrs = tag
+    .slice(4, tag.endsWith('/>') ? -2 : -1)
+    .replace(/\s(?:width|height|style)="[^"]*"/g, '');
+  const rebuilt = `<svg${attrs} width="${w}" height="${h}" style="max-width:100%">`;
+  return svg.slice(0, open.index) + rebuilt + svg.slice(open.index + tag.length);
 }
 
 /**

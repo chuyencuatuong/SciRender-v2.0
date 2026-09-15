@@ -98,6 +98,15 @@ export function useRender(): RenderState {
       if (cancelled) return;
 
       const t = result.template;
+
+      // The template stylesheet must be in the document BEFORE anything is
+      // measured. It used to be installed by an effect that only ran once the
+      // render had finished, so the very first pagination of a session measured
+      // every block at the browser's default 16px instead of the template's
+      // 13pt — blocks came out short and a page happily accepted content that
+      // did not fit on it.
+      applyTemplateCss(t.css);
+
       const mermaid = await resolveMermaidBlocks(result.blocks, t.descriptor, {
         contentWidthPx: t.metrics.contentWidthPx,
         contentHeightPx: t.metrics.contentHeightPx,
@@ -105,16 +114,18 @@ export function useRender(): RenderState {
       const bodyBlocks = mermaid.blocks;
       if (cancelled || !hostRef.current) return;
 
-      // Two frames so the template stylesheet and web fonts are applied before
-      // anything is measured.
-      await nextFrame();
-      await nextFrame();
+      // Nothing may be measured until every font AND every image the document
+      // uses has loaded. An <img> that has not decoded yet reports height 0, so
+      // the page looks emptier than it is and the next block is accepted onto a
+      // page it does not fit — the same document would paginate two different
+      // ways depending on the browser cache (P2).
+      const bodyElements = await settleMedia(hostRef.current, bodyBlocks, t.metrics.bodySizePx);
       if (cancelled || !hostRef.current) return;
 
       const opts = optionsFromTemplate(t);
       const warnings: LayoutWarning[] = [...mermaid.warnings];
 
-      const body = paginate(bodyBlocks, opts, hostRef.current);
+      const body = paginate(bodyElements, opts, hostRef.current);
       warnings.push(...body.warnings);
 
       const numbers: FrontNumbers = {
@@ -203,6 +214,85 @@ export function useRender(): RenderState {
   return state;
 }
 
+/** Installs (or refreshes) the single stylesheet that both the visible pages
+ * and the offscreen measuring host are laid out with. */
+function applyTemplateCss(css: string): void {
+  let style = document.getElementById('sr-template-css') as HTMLStyleElement | null;
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'sr-template-css';
+    document.head.appendChild(style);
+  }
+  if (style.textContent !== css) style.textContent = css;
+}
+
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+/**
+ * Builds the block elements once, inside the measuring host, and waits until
+ * every image has decoded and every font has loaded before handing them back.
+ *
+ * The elements themselves are returned — not their HTML — because a fresh <img>
+ * parsed from a string reports height 0 until it decodes, and a page measured
+ * that way accepts a block that does not fit. Reusing the settled elements is
+ * what makes pagination reproducible across reloads (P2).
+ */
+async function settleMedia(
+  host: HTMLElement,
+  blocks: string[],
+  bodySizePx: number,
+): Promise<Element[]> {
+  host.textContent = '';
+  const staging = document.createElement('div');
+  staging.className = 'sr-doc';
+  staging.style.width = '100%';
+  staging.innerHTML = blocks.join('');
+  const elements = Array.from(staging.children);
+  host.appendChild(staging);
+
+  // Wait until the template stylesheet has actually taken effect. Asking for a
+  // frame is not proof; asking the browser what a document-level element now
+  // computes to is.
+  const probe = document.createElement('div');
+  probe.textContent = '\u00a0';
+  staging.appendChild(probe);
+  for (let i = 0; i < 30; i++) {
+    await nextFrame();
+    const size = Number.parseFloat(getComputedStyle(probe).fontSize);
+    if (Number.isFinite(size) && Math.abs(size - bodySizePx) < 0.5) break;
+  }
+  probe.remove();
+
+  await Promise.all(
+    Array.from(staging.querySelectorAll('img')).map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          if (img.complete && img.naturalWidth > 0) {
+            resolve();
+            return;
+          }
+          const done = (): void => resolve();
+          img.addEventListener('load', done, { once: true });
+          // A broken image still has to stop blocking the render (P6 reports it
+          // separately); it simply measures at its alt-text height.
+          img.addEventListener('error', done, { once: true });
+        }),
+    ),
+  );
+
+  const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
+  if (fonts) {
+    try {
+      await fonts.ready;
+    } catch {
+      /* font loading is best effort — never block a render on it */
+    }
+  }
+
+  await nextFrame();
+  staging.remove();
+  host.textContent = '';
+  return elements;
 }

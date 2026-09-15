@@ -25,18 +25,8 @@ export function App(): JSX.Element {
     void init();
   }, [init]);
 
-  // The template stylesheet drives both the visible pages and the offscreen
-  // measuring host, so both must see exactly the same rules.
-  useEffect(() => {
-    if (!render.result) return;
-    let style = document.getElementById('sr-template-css') as HTMLStyleElement | null;
-    if (!style) {
-      style = document.createElement('style');
-      style.id = 'sr-template-css';
-      document.head.appendChild(style);
-    }
-    style.textContent = render.result.template.css;
-  }, [render.result?.template.css]);
+  // The template stylesheet is installed by the render pipeline itself, before
+  // it measures anything — see applyTemplateCss in useRender.
 
   // Ctrl/Cmd+Enter renders from anywhere in the app.
   useEffect(() => {

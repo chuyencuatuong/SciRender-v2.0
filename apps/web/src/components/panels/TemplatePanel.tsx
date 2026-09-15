@@ -418,6 +418,12 @@ export function TemplatePanel({ result }: Props): JSX.Element {
             onChange={(v) => setOverrides({ code: { wrap: v } })}
           />
         </Field>
+        <Field label="Tô màu cú pháp (tắt nếu in trắng đen)">
+          <Toggle
+            checked={t?.code.highlight ?? false}
+            onChange={(v) => setOverrides({ code: { highlight: v } })}
+          />
+        </Field>
 
         <Divider label="Chống mồ côi / góa" />
         <div className="grid grid-cols-2 gap-2">
