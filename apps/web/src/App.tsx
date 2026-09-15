@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { TopBar } from '~/components/TopBar';
 import { SideRail } from '~/components/SideRail';
 import { SidePanel } from '~/components/SidePanel';
-import { EditorPane } from '~/components/EditorPane';
+import { CanvasPane } from '~/components/canvas/CanvasPane';
 import { PreviewPane } from '~/components/PreviewPane';
 import { StatusBar } from '~/components/StatusBar';
 import { useRender } from '~/hooks/useRender';
@@ -89,7 +89,7 @@ export function App(): JSX.Element {
             className="flex min-w-0 flex-col border-r border-ink-200 bg-white"
             style={{ width: `${prefs.editorWidth}%` }}
           >
-            <EditorPane render={render} />
+            <CanvasPane />
           </div>
 
           <div

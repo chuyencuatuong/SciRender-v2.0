@@ -44,7 +44,6 @@ export default defineConfig({
         manualChunks: {
           katex: ['katex'],
           mermaid: ['mermaid'],
-          codemirror: ['codemirror', '@codemirror/view', '@codemirror/state', '@codemirror/lang-markdown'],
         },
       },
     },

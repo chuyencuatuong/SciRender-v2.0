@@ -118,9 +118,12 @@ $$
 SBP = \\frac{a}{PTT^{2}} + b
 $$ {#eq:sbp}
 
-trong đó $a$ và $b$ là hai tham số hiệu chuẩn theo từng đối tượng. Từ @eq:sbp có
-thể thấy quan hệ giữa huyết áp và PTT là phi tuyến, nên mô hình hồi quy tuyến
-tính đơn thuần sẽ chịu sai số hệ thống ở hai đầu dải đo.
+trong đó $a$ và $b$ là hai tham số hiệu chuẩn theo từng đối tượng[^hieuchuan]. Từ
+@eq:sbp có thể thấy quan hệ giữa huyết áp và PTT là phi tuyến, nên mô hình hồi quy
+tuyến tính đơn thuần sẽ chịu sai số hệ thống ở hai đầu dải đo.
+
+[^hieuchuan]: Hiệu chuẩn được thực hiện một lần cho mỗi đối tượng, bằng ba cặp đo
+  tham chiếu ở ba mức huyết áp khác nhau.
 
 Thời gian truyền sóng mạch được xác định bằng khoảng cách giữa đỉnh R của ECG và
 điểm chân sóng của PPG:
@@ -155,6 +158,38 @@ bày ở @tbl:dulieu.
 | DBP trung bình | 68,9 mmHg | độ lệch chuẩn 11,2 |
 
 : Thống kê mô tả tập dữ liệu {#tbl:dulieu}
+
+Bảng @tbl:dactrung liệt kê toàn bộ đặc trưng được trích xuất. Bảng dài hơn phần
+trống còn lại của trang nên được cắt sang trang sau, dòng tiêu đề lặp lại[^bangdai].
+
+[^bangdai]: Quy cách của khoa không nói về bảng dài. Cách xử lý ở đây theo thông lệ
+  trình bày khoa học: lặp lại dòng tiêu đề và ghi "(tiếp theo)" ở chú thích.
+
+| STT | Đặc trưng | Nguồn | Đơn vị |
+|----:|:----------|:------|:-------|
+| 1 | PTT trung bình | ECG + PPG | s |
+| 2 | PTT độ lệch chuẩn | ECG + PPG | s |
+| 3 | Nhịp tim trung bình | ECG | nhịp/phút |
+| 4 | Biến thiên nhịp tim SDNN | ECG | ms |
+| 5 | Biến thiên nhịp tim RMSSD | ECG | ms |
+| 6 | Biên độ đỉnh PPG | PPG | đơn vị tương đối |
+| 7 | Thời gian lên sóng PPG | PPG | s |
+| 8 | Thời gian xuống sóng PPG | PPG | s |
+| 9 | Diện tích dưới sóng PPG | PPG | đơn vị tương đối |
+| 10 | Chỉ số tăng cường AI | PPG | % |
+| 11 | Độ rộng sóng ở 25% biên độ | PPG | s |
+| 12 | Độ rộng sóng ở 50% biên độ | PPG | s |
+| 13 | Độ rộng sóng ở 75% biên độ | PPG | s |
+| 14 | Tỉ số biên độ đỉnh trên chân | PPG | — |
+| 15 | Đạo hàm bậc nhất cực đại | PPG | 1/s |
+| 16 | Đạo hàm bậc hai cực đại | PPG | 1/s² |
+| 17 | Khoảng RR trung bình | ECG | s |
+| 18 | Biên độ sóng R | ECG | mV |
+| 19 | Độ rộng phức bộ QRS | ECG | s |
+| 20 | Năng lượng băng 0,5–5 Hz | PPG | đơn vị tương đối |
+| 21 | Chỉ số chất lượng tín hiệu | ECG + PPG | 0–1 |
+
+: Toàn bộ 21 đặc trưng được trích xuất {#tbl:dactrung}
 
 ## Mô hình và hàm mất mát
 

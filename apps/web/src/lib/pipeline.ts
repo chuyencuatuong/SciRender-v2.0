@@ -44,6 +44,8 @@ export interface CompileResult {
   outline: OutlineEntry[];
   figures: ListEntry[];
   tables: ListEntry[];
+  /** Footnote number -> its HTML, handed to the layout engine. */
+  footnotes: Record<string, string>;
   timings: StageTiming[];
   /** Input hash — identical inputs produce an identical hash and result (P2). */
   signature: string;
@@ -117,6 +119,7 @@ export function compile(input: CompileInput): CompileResult {
     tables: rendered.tables.length
       ? rendered.tables
       : collectTables(document, template.descriptor),
+    footnotes: rendered.footnotes,
     timings,
     signature: signatureOf(input),
   };

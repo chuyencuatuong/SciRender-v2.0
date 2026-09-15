@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  checkPageBudget,
   optionsFromTemplate,
   paginate,
   type LayoutWarning,
@@ -24,6 +25,8 @@ export interface RenderState {
   result: CompileResult | null;
   pages: RenderedPage[];
   warnings: LayoutWarning[];
+  /** Pages of the body flow only — what the faculty page budget is about. */
+  bodyPageCount: number;
   pageOfNode: Record<string, number>;
   running: boolean;
   error: string | null;
@@ -34,6 +37,7 @@ const EMPTY: RenderState = {
   result: null,
   pages: [],
   warnings: [],
+  bodyPageCount: 0,
   pageOfNode: {},
   running: false,
   error: null,
@@ -122,11 +126,15 @@ export function useRender(): RenderState {
       const bodyElements = await settleMedia(hostRef.current, bodyBlocks, t.metrics.bodySizePx);
       if (cancelled || !hostRef.current) return;
 
-      const opts = optionsFromTemplate(t);
+      const opts = {
+        ...optionsFromTemplate(t),
+        footnotes: t.descriptor.footnotes.enabled ? result.footnotes : {},
+      };
       const warnings: LayoutWarning[] = [...mermaid.warnings];
 
       const body = paginate(bodyElements, opts, hostRef.current);
       warnings.push(...body.warnings);
+      warnings.push(...checkPageBudget(body.pages.length, t.descriptor.layout.pageBudget));
 
       const numbers: FrontNumbers = {
         bodyPageOf: body.pageOfNode,
@@ -150,7 +158,7 @@ export function useRender(): RenderState {
             break;
           }
           if (cancelled || !hostRef.current) return;
-          const front = paginate(frontBlocks, opts, hostRef.current);
+          const front = paginate(frontBlocks, { ...opts, footnotes: {} }, hostRef.current);
           frontPages = front.pages;
 
           const nextFrontPageOf: Partial<Record<FrontSectionKind, number>> = {};
@@ -188,6 +196,7 @@ export function useRender(): RenderState {
         result,
         pages,
         warnings,
+        bodyPageCount: body.pages.length,
         pageOfNode: body.pageOfNode,
         running: false,
         error: null,

@@ -60,7 +60,8 @@ export interface AppState {
   createDocument: (withSample?: boolean) => Promise<void>;
   openDocument: (id: string) => Promise<void>;
   removeDocument: (id: string) => Promise<void>;
-  addAssets: (files: FileList | File[]) => Promise<void>;
+  /** Stores the files and returns the asset names they got. */
+  addAssets: (files: FileList | File[]) => Promise<string[]>;
   removeAsset: (id: string) => Promise<void>;
   requestGotoLine: (line: number) => void;
   refreshLibrary: () => Promise<void>;
@@ -264,11 +265,13 @@ export const useStore = create<AppState>((set, get) => ({
     const { docId } = get();
     const list = Array.from(files);
     const existingNames = new Set(get().assets.map((a) => a.name));
+    const added: string[] = [];
     for (const file of list) {
       let name = assetNameFromFile(file.name);
       let n = 2;
       while (existingNames.has(name)) name = `${assetNameFromFile(file.name)}-${n++}`;
       existingNames.add(name);
+      added.push(name);
       await putAsset({
         id: newId('asset'),
         docId,
@@ -286,6 +289,7 @@ export const useStore = create<AppState>((set, get) => ({
     const merged = { ...BUILTIN_ASSETS, ...map };
     revokeAssets = revoke;
     set({ assets, assetMap: merged });
+    return added;
   },
 
   async removeAsset(id) {
