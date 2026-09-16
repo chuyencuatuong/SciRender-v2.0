@@ -42,6 +42,10 @@ export interface AppState {
   library: StoredDocument[];
   prefs: Preferences;
   panel: PanelId;
+  /** Side panel visible. The dock tab toggles it. */
+  panelOpen: boolean;
+  /** Errors + warnings, mirrored here so the dock can badge without the render. */
+  diagnosticCount: number;
   dirty: boolean;
   savedAt: number | null;
   storageError: string | null;
@@ -55,6 +59,8 @@ export interface AppState {
   /** Commit the editor content to the preview. */
   render: () => void;
   setPanel: (panel: PanelId) => void;
+  setPanelOpen: (open: boolean) => void;
+  setDiagnosticCount: (n: number) => void;
   setTemplateId: (id: string) => void;
   setOverrides: (patch: TemplateOverrides) => void;
   resetOverrides: () => void;
@@ -100,6 +106,8 @@ export const useStore = create<AppState>((set, get) => ({
   library: [],
   prefs: { ...DEFAULT_PREFERENCES },
   panel: 'diagnostics',
+  panelOpen: true,
+  diagnosticCount: 0,
   dirty: false,
   savedAt: null,
   storageError: null,
@@ -149,6 +157,14 @@ export const useStore = create<AppState>((set, get) => ({
   render() {
     set((s) => ({ renderedSource: s.source, renderNonce: s.renderNonce + 1 }));
     track('render.request', { bytes: get().source.length });
+  },
+
+  setPanelOpen(panelOpen) {
+    set({ panelOpen });
+  },
+
+  setDiagnosticCount(diagnosticCount) {
+    if (get().diagnosticCount !== diagnosticCount) set({ diagnosticCount });
   },
 
   setPanel(panel) {

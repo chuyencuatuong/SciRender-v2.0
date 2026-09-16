@@ -43,10 +43,10 @@ export function TemplatePanel({ result }: Props): JSX.Element {
   return (
     <>
       <div className="sr-panel-title">
-        <span>Template</span>
+        <h2>Mẫu trình bày</h2>
         {hasOverrides ? (
           <button
-            className="flex items-center gap-1 normal-case tracking-normal text-ink-400 hover:text-ink-700"
+            className="ml-auto flex items-center gap-1 text-[11px] text-ink-400 transition hover:text-deep-600"
             onClick={resetOverrides}
           >
             <RotateCcw size={11} /> Đặt lại

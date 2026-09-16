@@ -12,7 +12,7 @@ export function ResearchPanel(): JSX.Element {
 
   return (
     <>
-      <div className="sr-panel-title">Dữ liệu nghiên cứu</div>
+      <div className="sr-panel-title"><h2>Dữ liệu nghiên cứu</h2></div>
 
       <div className="sr-scroll min-h-0 flex-1 overflow-y-auto p-3">
         <div className="rounded-md border border-ink-200 p-3">

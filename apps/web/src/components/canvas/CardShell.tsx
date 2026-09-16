@@ -8,7 +8,7 @@ import {
   Rows2,
   Trash2,
 } from 'lucide-react';
-import { detectKind, KIND_LABEL, KIND_TONE, splitColumns, type Card } from '~/lib/cards';
+import { detectKind, KIND_LABEL, splitColumns, type Card } from '~/lib/cards';
 import { CardEditor } from './CardEditors';
 
 export type DropZone = 'above' | 'below' | 'left' | 'right';
@@ -35,10 +35,10 @@ interface Props {
 }
 
 const ZONE_RING: Record<DropZone, string> = {
-  above: 'before:absolute before:inset-x-0 before:-top-1 before:h-0.5 before:rounded before:bg-sky-500',
-  below: 'after:absolute after:inset-x-0 after:-bottom-1 after:h-0.5 after:rounded after:bg-sky-500',
-  left: 'before:absolute before:inset-y-1 before:-left-1 before:w-1 before:rounded before:bg-flag-500',
-  right: 'after:absolute after:inset-y-1 after:-right-1 after:w-1 after:rounded after:bg-flag-500',
+  above: 'after:absolute after:inset-x-2 after:-top-1 after:h-0.5 after:rounded after:bg-sky-500',
+  below: 'after:absolute after:inset-x-2 after:-bottom-1 after:h-0.5 after:rounded after:bg-sky-500',
+  left: 'after:absolute after:inset-y-2 after:-left-1 after:w-1 after:rounded after:bg-flag-500',
+  right: 'after:absolute after:inset-y-2 after:-right-1 after:w-1 after:rounded after:bg-flag-500',
 };
 
 /**
@@ -85,13 +85,29 @@ export function CardShell(props: Props): JSX.Element {
         props.onDrop();
       }}
       onMouseDown={props.onSelect}
-      className={`group relative rounded-lg border bg-white transition-[border-color,box-shadow] duration-150 ${
-        selected
-          ? 'border-sky-400 shadow-[0_0_0_3px_rgba(26,143,227,0.14)]'
-          : 'border-ink-200 hover:border-ink-300 hover:shadow-sm'
+      className={`group relative rounded-[12px] px-3.5 py-2 transition-[background,box-shadow] duration-200 ${
+        selected ? 'bg-white shadow-card' : 'hover:bg-white/70'
       } ${dropZone ? ZONE_RING[dropZone] : ''}`}
     >
-      <header className="flex h-7 items-center gap-1.5 rounded-t-lg border-b border-ink-100 bg-ink-50/50 px-1.5">
+      {/* Thanh chỉ dấu bên trái thay cho cái khung: khối phẳng lì cho tới khi
+          bạn chạm vào nó. */}
+      <span
+        aria-hidden="true"
+        className={`absolute left-[-2px] bottom-2 top-2 w-[2px] rounded-full bg-sky-500 transition-[opacity,transform] duration-200 ${
+          selected ? 'opacity-100' : 'scale-y-50 opacity-0 group-hover:scale-y-100 group-hover:opacity-100'
+        }`}
+      />
+
+      <header className="pointer-events-none absolute -top-3 right-2 z-20 flex h-[30px] items-center gap-px rounded-full px-1 opacity-0 transition-[opacity,transform] duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[on=true]:pointer-events-auto data-[on=true]:opacity-100"
+        data-on={selected}
+        style={{
+          background: 'rgba(255,255,255,.92)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          boxShadow:
+            '0 1px 2px rgba(15,23,42,.05), 0 8px 16px -6px rgba(15,23,42,.10), 0 24px 48px -16px rgba(15,23,42,.14)',
+        }}
+      >
         <span
           role="button"
           tabIndex={-1}
@@ -99,15 +115,13 @@ export function CardShell(props: Props): JSX.Element {
           title="Kéo dọc để đổi thứ tự · kéo sang mép trái/phải khối khác để xếp hai cột"
           onMouseDown={() => setHandleDown(true)}
           onMouseUp={() => setHandleDown(false)}
-          className="cursor-grab text-ink-300 transition-colors hover:text-deep-600 active:cursor-grabbing group-hover:text-ink-500"
+          className="grid h-[26px] w-[22px] cursor-grab place-items-center rounded-full text-ink-400 transition-colors hover:text-deep-600 active:cursor-grabbing"
         >
           <GripVertical size={13} />
         </span>
-        <span
-          className={`rounded px-1.5 py-0.5 text-[10.5px] font-medium ${KIND_TONE[card.kind]}`}
-        >
-          {KIND_LABEL[card.kind]}
-        </span>
+        <span className="mx-0.5 h-[15px] w-px bg-black/[0.07]" />
+        <span className="px-1.5 text-[11.5px] text-ink-500">{KIND_LABEL[card.kind]}</span>
+        <span className="mx-0.5 h-[15px] w-px bg-black/[0.07]" />
 
         {props.recognised ? (
           <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-deep-700">
@@ -122,12 +136,7 @@ export function CardShell(props: Props): JSX.Element {
           </span>
         ) : null}
 
-        {/* Hidden until this card is the one you are working on. */}
-        <div
-          className={`ml-auto flex items-center gap-0.5 transition-opacity duration-150 ${
-            selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
-          }`}
-        >
+        <div className="flex items-center gap-0.5">
           <IconBtn title="Lên (Alt+↑)" disabled={index === 0} onClick={() => props.onMove(-1)}>
             <ArrowUp size={12} />
           </IconBtn>
@@ -160,7 +169,7 @@ export function CardShell(props: Props): JSX.Element {
         </div>
       </header>
 
-      <div className="px-2.5 py-2">
+      <div className="min-w-0">
         {columns ? (
           <div className="grid grid-cols-2 gap-2">
             {columns.map((part, i) => (
@@ -208,8 +217,8 @@ function IconBtn({
       aria-label={title}
       disabled={disabled}
       onClick={onClick}
-      className={`grid h-5 w-5 place-items-center rounded text-ink-400 transition hover:bg-white disabled:opacity-30 ${
-        danger ? 'hover:text-flag-600' : 'hover:text-deep-600'
+      className={`grid h-[26px] w-[26px] place-items-center rounded-full text-ink-400 transition disabled:opacity-25 ${
+        danger ? 'hover:bg-flag-50 hover:text-flag-600' : 'hover:bg-sky-500/10 hover:text-deep-600'
       }`}
     >
       {children}

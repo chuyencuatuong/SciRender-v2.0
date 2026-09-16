@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Lightbulb } from 'lucide-react';
+import { useReducedMotion } from '~/lib/motion';
 import type { CompileResult } from '~/lib/pipeline';
 
 interface Props {
@@ -23,7 +25,7 @@ export function HealthPanel({ result }: Props): JSX.Element {
   if (!result) {
     return (
       <>
-        <div className="sr-panel-title">Document Health</div>
+        <div className="sr-panel-title"><h2>Sức khỏe tài liệu</h2></div>
         <p className="px-3 py-8 text-center text-[12px] text-ink-400">Chưa có dữ liệu.</p>
       </>
     );
@@ -35,31 +37,31 @@ export function HealthPanel({ result }: Props): JSX.Element {
   return (
     <>
       <div className="sr-panel-title">
-        <span>Document Health</span>
-        <span className={`text-sm font-bold normal-case ${GRADE_TONE[health.grade] ?? ''}`}>
+        <h2>Sức khỏe tài liệu</h2>
+        <span className={`ml-auto font-serif text-[15px] ${GRADE_TONE[health.grade] ?? ''}`}>
           {health.grade}
         </span>
       </div>
 
-      <div className="sr-scroll min-h-0 flex-1 overflow-y-auto">
-        <div className="border-b border-ink-200 px-3 py-4 text-center">
-          <div className="text-[34px] font-bold leading-none text-ink-900">{health.score}</div>
-          <div className="mt-1 text-[11px] uppercase tracking-wider text-ink-400">trên 100 điểm</div>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink-100">
-            <motion.div
-              className="h-full rounded-full bg-deep-600"
-              initial={false}
-              animate={{ width: `${health.score}%` }}
-              transition={{ type: 'spring', stiffness: 160, damping: 22 }}
-            />
+      <div className="sr-scroll min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+        <div className="mb-3 flex items-center gap-4 rounded-[14px] bg-white p-4 shadow-card">
+          <ScoreRing score={health.score} />
+          <div className="min-w-0">
+            <h3 className="m-0 text-[12.5px] font-medium text-ink-900">
+              {health.score >= 85
+                ? 'Tốt — gần như không còn gì phải sửa'
+                : health.score >= 70
+                  ? 'Khá — còn vài chỗ nên sửa'
+                  : 'Cần rà lại trước khi nộp'}
+            </h3>
+            <p className="m-0 mt-1 text-[11.5px] leading-[1.45] text-ink-500">
+              Điểm đo chất lượng kỹ thuật: cấu trúc, tính đầy đủ, nhất quán. Không đánh giá nội
+              dung khoa học.
+            </p>
           </div>
-          <p className="mt-2 text-[11px] leading-snug text-ink-400">
-            Điểm đo chất lượng kỹ thuật của tài liệu (cấu trúc, tính đầy đủ, nhất quán), không đánh
-            giá nội dung khoa học.
-          </p>
         </div>
 
-        <div className="border-b border-ink-200 px-3 py-2">
+        <div className="px-1">
           {health.dimensions.map((d) => (
             <div key={d.id} className="py-1.5">
               <div className="flex items-baseline justify-between">
@@ -68,14 +70,14 @@ export function HealthPanel({ result }: Props): JSX.Element {
                   {d.score}/{d.max}
                 </span>
               </div>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-ink-100">
+              <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-black/[0.07]">
                 <motion.div
                   className={`h-full rounded-full ${
                     d.score / d.max >= 0.8
-                      ? 'bg-emerald-500'
+                      ? 'bg-gradient-to-r from-sky-500 to-deep-600'
                       : d.score / d.max >= 0.5
-                        ? 'bg-amber-500'
-                        : 'bg-flag-500'
+                        ? 'bg-gradient-to-r from-amber-400 to-amber-600'
+                        : 'bg-gradient-to-r from-flag-400 to-flag-600'
                   }`}
                   initial={false}
                   animate={{ width: `${(d.score / d.max) * 100}%` }}
@@ -88,12 +90,12 @@ export function HealthPanel({ result }: Props): JSX.Element {
         </div>
 
         {health.suggestions.length > 0 ? (
-          <div className="border-b border-ink-200 px-3 py-2">
-            <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
-              <Lightbulb size={12} /> Gợi ý cải thiện
+          <div className="px-1 pt-3">
+            <div className="mb-1.5 flex items-center gap-1.5 px-1.5 text-[10px] font-medium uppercase tracking-[0.09em] text-ink-400">
+              <Lightbulb size={11} strokeWidth={1.5} className="sr-glow-hint text-[#d9a100]" /> Gợi ý cải thiện
             </div>
             {health.suggestions.map((sg) => (
-              <div key={sg.id} className="mb-2 rounded-md border border-ink-200 p-2">
+              <div key={sg.id} className="mb-1.5 rounded-[11px] bg-white p-2.5 shadow-card">
                 <div className="flex items-start gap-1.5">
                   <span className={`sr-chip shrink-0 ${PRIORITY_TONE[sg.priority] ?? ''}`}>
                     {sg.priority === 'high' ? 'Cao' : sg.priority === 'medium' ? 'Vừa' : 'Thấp'}
@@ -106,11 +108,11 @@ export function HealthPanel({ result }: Props): JSX.Element {
           </div>
         ) : null}
 
-        <div className="px-3 py-2">
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+        <div className="px-1 pt-3">
+          <div className="mb-1.5 px-1.5 text-[10px] font-medium uppercase tracking-[0.09em] text-ink-400">
             Thống kê
           </div>
-          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 px-1.5 text-[12px]">
             <Row k="Số từ" v={s.words} />
             <Row k="Số đoạn" v={s.paragraphs} />
             <Row k="Đề mục" v={s.headings} />
@@ -125,6 +127,70 @@ export function HealthPanel({ result }: Props): JSX.Element {
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * The score as a ring rather than a bar: it is one number out of a hundred, and
+ * a ring says "out of a whole" without a second label. It sweeps once on open,
+ * and not at all when the system asks for reduced motion.
+ */
+function ScoreRing({ score }: { score: number }): JSX.Element {
+  const reduced = useReducedMotion();
+  const [shown, setShown] = useState(reduced ? score : 0);
+  const R = 35;
+  const C = 2 * Math.PI * R;
+
+  useEffect(() => {
+    if (reduced) {
+      setShown(score);
+      return;
+    }
+    let raf = 0;
+    let t0 = 0;
+    const step = (ts: number): void => {
+      if (!t0) t0 = ts;
+      const k = Math.min(1, (ts - t0) / 900);
+      setShown(Math.round(score * (1 - Math.pow(1 - k, 3))));
+      if (k < 1) raf = window.requestAnimationFrame(step);
+    };
+    raf = window.requestAnimationFrame(step);
+    return () => window.cancelAnimationFrame(raf);
+  }, [score, reduced]);
+
+  return (
+    <div className="relative h-[84px] w-[84px] shrink-0">
+      <svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true">
+        <defs>
+          <linearGradient id="sr-health-ring" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#1a8fe3" />
+            <stop offset="60%" stopColor="#0b2c7f" />
+            <stop offset="100%" stopColor="#092467" />
+          </linearGradient>
+        </defs>
+        <circle cx="42" cy="42" r={R} fill="none" stroke="rgba(15,23,42,.07)" strokeWidth="6" />
+        <circle
+          cx="42"
+          cy="42"
+          r={R}
+          fill="none"
+          stroke="url(#sr-health-ring)"
+          strokeWidth="6"
+          strokeLinecap="round"
+          transform="rotate(-90 42 42)"
+          strokeDasharray={C}
+          strokeDashoffset={C * (1 - shown / 100)}
+        />
+      </svg>
+      <div className="absolute inset-0 grid place-items-center text-center leading-none">
+        <div>
+          <b className="font-serif text-[26px] font-normal tracking-[-0.02em] tabular-nums">
+            {shown}
+          </b>
+          <span className="mt-[3px] block font-mono text-[9px] text-ink-400">/ 100</span>
+        </div>
+      </div>
+    </div>
   );
 }
 

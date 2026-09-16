@@ -98,31 +98,56 @@ function HeadingEditor({ text, onChange }: EditorProps): JSX.Element {
 
 function EquationEditor({ text, onChange, kind }: EditorProps): JSX.Element {
   const form = parseEquation(text);
+  const [tab, setTab] = useState<'code' | 'preview'>('preview');
   const preview = useMemo(() => (form ? renderMath(form.tex, true) : null), [form?.tex]);
   if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} />;
 
   return (
-    <div className="space-y-2">
-      <div className="rounded border border-ink-200 bg-ink-50/50 px-2 py-1.5">
-        <AutoTextarea
-          value={form.tex}
-          mono
-          ariaLabel="Mã LaTeX"
-          onChange={(tex) => onChange(serializeEquation({ ...form, tex }))}
-        />
+    <div className="overflow-hidden rounded-[12px] bg-ink-50">
+      <div className="flex items-center gap-0.5 px-2 pt-1.5" role="tablist" aria-label="Chế độ xem công thức">
+        {(['code', 'preview'] as const).map((k) => (
+          <button
+            key={k}
+            role="tab"
+            aria-selected={tab === k}
+            onClick={() => setTab(k)}
+            className={`h-6 rounded-t-[7px] px-2.5 font-mono text-[11px] tracking-[0.02em] transition ${
+              tab === k ? 'bg-white/90 text-deep-600' : 'text-ink-400 hover:text-ink-700'
+            }`}
+          >
+            {k === 'code' ? 'LaTeX' : 'Xem trước'}
+          </button>
+        ))}
+        {form.label ? (
+          <span className="ml-auto pr-1 font-mono text-[10px] text-ink-300">{form.label}</span>
+        ) : null}
       </div>
-      <div className="min-h-[2rem] overflow-x-auto rounded border border-dashed border-ink-200 px-2 py-1 text-center">
-        {preview?.error ? (
-          <span className="text-[12px] text-flag-600">{preview.error}</span>
+
+      <div className="px-3 pb-3 pt-1.5">
+        {tab === 'code' ? (
+          <AutoTextarea
+            value={form.tex}
+            mono
+            ariaLabel="Mã LaTeX"
+            onChange={(tex) => onChange(serializeEquation({ ...form, tex }))}
+          />
         ) : (
-          <span dangerouslySetInnerHTML={{ __html: preview?.html ?? '' }} />
+          <div className="min-h-[2rem] overflow-x-auto py-1 text-center">
+            {preview?.error ? (
+              <span className="text-[12px] text-flag-600">{preview.error}</span>
+            ) : (
+              <span dangerouslySetInnerHTML={{ __html: preview?.html ?? '' }} />
+            )}
+          </div>
         )}
+        <div className="mt-2">
+          <LabelField
+            value={form.label}
+            placeholder="eq:ten-nhan"
+            onChange={(label) => onChange(serializeEquation({ ...form, label }))}
+          />
+        </div>
       </div>
-      <LabelField
-        value={form.label}
-        placeholder="eq:ten-nhan"
-        onChange={(label) => onChange(serializeEquation({ ...form, label }))}
-      />
     </div>
   );
 }
@@ -153,7 +178,7 @@ function CodeEditor({ text, onChange, kind }: EditorProps): JSX.Element {
           ))}
         </select>
       </div>
-      <div className="rounded border border-ink-200 bg-ink-50/50 px-2 py-1.5">
+      <div className="rounded-[10px] bg-ink-50 px-3 py-2">
         <AutoTextarea
           value={form.code}
           mono
@@ -198,7 +223,7 @@ function DiagramEditor({ text, onChange, kind }: EditorProps): JSX.Element {
           </option>
         ))}
       </select>
-      <div className="rounded border border-ink-200 bg-ink-50/50 px-2 py-1.5">
+      <div className="rounded-[10px] bg-ink-50 px-3 py-2">
         <AutoTextarea
           value={form.source}
           mono
@@ -227,7 +252,7 @@ function FigureEditor({ text, onChange, kind }: EditorProps): JSX.Element {
   const src = form.src.startsWith('asset:') ? assetMap[form.src.slice(6)] : form.src;
   return (
     <div className="space-y-2">
-      <div className="grid min-h-[80px] place-items-center rounded border border-dashed border-ink-200 bg-ink-50/40 p-2">
+      <div className="grid min-h-[80px] place-items-center rounded-[10px] bg-ink-50 p-3">
         {src ? (
           <img src={src} alt={form.alt} className="max-h-40 max-w-full object-contain" />
         ) : (
@@ -330,14 +355,14 @@ function TableEditor({ text, onChange, kind }: EditorProps): JSX.Element {
           <thead>
             <tr>
               {form.header.map((h, c) => (
-                <th key={c} className="border border-ink-200 bg-ink-50 p-0 align-top">
+                <th key={c} className="border-b border-black/[0.08] bg-ink-50 p-0 align-top first:rounded-tl-[8px] last:rounded-tr-[8px]">
                   <input
                     className="w-full min-w-[80px] bg-transparent px-1.5 py-1 font-semibold outline-none"
                     value={h}
                     aria-label={`Tiêu đề cột ${c + 1}`}
                     onChange={(e) => setCell(-1, c, e.target.value)}
                   />
-                  <div className="flex items-center justify-between border-t border-ink-200 px-1 py-0.5">
+                  <div className="flex items-center justify-between border-t border-black/[0.06] px-1 py-0.5">
                     <select
                       className="bg-transparent text-[10px] text-ink-500 outline-none"
                       value={form.align[c] ?? 'default'}
@@ -372,7 +397,7 @@ function TableEditor({ text, onChange, kind }: EditorProps): JSX.Element {
             {form.rows.map((row, r) => (
               <tr key={r}>
                 {Array.from({ length: width }, (_, c) => (
-                  <td key={c} className="border border-ink-200 p-0 align-top">
+                  <td key={c} className="border-b border-black/[0.045] p-0 align-top">
                     <div className="flex items-center">
                       <input
                         className="w-full min-w-[80px] bg-transparent px-1.5 py-1 outline-none"
@@ -430,7 +455,7 @@ function MiniBtn({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 rounded border border-ink-200 px-1.5 py-0.5 text-[11px] text-ink-600 hover:border-sky-400 hover:text-deep-700"
+      className="inline-flex items-center gap-1 rounded-[7px] bg-black/[0.04] px-2 py-1 text-[11px] text-ink-600 transition hover:bg-sky-500/10 hover:text-deep-600"
     >
       {children}
     </button>

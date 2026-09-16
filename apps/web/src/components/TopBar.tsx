@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
+  Download,
   FileCode2,
-  FileDown,
   FilePlus2,
   Loader2,
   Package,
@@ -12,11 +12,11 @@ import {
   TriangleAlert,
   Upload,
 } from 'lucide-react';
-import { Menu } from '~/components/ui/Menu';
-import { exportStandaloneHtml, printDocument } from '@scirender/renderer-pdf';
+import { downloadPdf, exportStandaloneHtml, printDocument, slug } from '@scirender/renderer-pdf';
 import { importBundle, exportBundle } from '@scirender/storage';
 import { track } from '@scirender/telemetry';
 import type { RenderState } from '~/hooks/useRender';
+import { Menu, SplitMenu } from '~/components/ui/Menu';
 import { useStore } from '~/state/store';
 
 interface Props {
@@ -36,6 +36,7 @@ export function TopBar({ render }: Props): JSX.Element {
   const source = useStore((s) => s.source);
   const renderedSource = useStore((s) => s.renderedSource);
   const [busy, setBusy] = useState(false);
+  const [pdf, setPdf] = useState<{ done: number; total: number } | null>(null);
   const importRef = useRef<HTMLInputElement | null>(null);
 
   const stale = source !== renderedSource;
@@ -55,6 +56,26 @@ export function TopBar({ render }: Props): JSX.Element {
       footers,
       documentTitle: result.document.meta.title || title,
     });
+  };
+
+  const onDownloadPdf = async (scale: number): Promise<void> => {
+    if (!result || !render.pages.length) return;
+    setPdf({ done: 0, total: render.pages.length });
+    try {
+      const out = await downloadPdf({
+        pages: pageHtml,
+        template: result.template,
+        footers,
+        documentTitle: result.document.meta.title || title,
+        scale,
+        onProgress: (done, total) => setPdf({ done, total }),
+      });
+      track('export.pdf', { pages: out.pages, bytes: out.bytes, scale });
+    } catch (err) {
+      window.alert(`Không tạo được tệp PDF: ${(err as Error).message}`);
+    } finally {
+      setPdf(null);
+    }
   };
 
   const onExportHtml = (): void => {
@@ -100,60 +121,75 @@ export function TopBar({ render }: Props): JSX.Element {
     }
   };
 
+  // Ctrl+P in / Ctrl+Shift+P tải PDF — hai việc khác nhau nên hai phím khác nhau.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'p') return;
+      e.preventDefault();
+      if (e.shiftKey) void onDownloadPdf(2);
+      else onPrint();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  const noPages = !render.pages.length;
+
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-ink-200 bg-white px-3">
-      <div className="flex items-center gap-2 pr-2">
-        <div className="grid h-7 w-7 place-items-center rounded-md bg-deep-600 text-[13px] font-bold text-white">
-          S
-        </div>
-        <div className="leading-tight">
-          <div className="text-[13px] font-semibold text-ink-900">SciRender</div>
-          <div className="text-[10px] uppercase tracking-wider text-ink-400">
-            Document Intelligence Studio
-          </div>
-        </div>
+    <header
+      data-sr-topbar
+      className="sr-frost relative z-50 flex h-[60px] shrink-0 items-center gap-3 border-b border-black/[0.05] pl-2.5 pr-3.5"
+    >
+      <div className="flex shrink-0 items-baseline gap-2 pl-1">
+        <span className="font-serif text-[20px] font-normal tracking-[-0.015em] text-ink-900">
+          Sci<i className="font-light not-italic text-deep-600">Render</i>
+        </span>
+        <span className="hidden -translate-y-px rounded-full px-[5px] py-px font-mono text-[9.5px] tracking-wide text-ink-400 ring-1 ring-black/[0.07] sm:inline">
+          v2.4
+        </span>
       </div>
 
-      <div className="mx-1 h-6 w-px bg-ink-200" />
-
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        <span className="truncate text-[13px] font-medium text-ink-800" title={title}>
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <h1
+          className="hidden min-w-0 truncate text-[13.5px] font-medium tracking-[-0.005em] text-ink-900 md:block"
+          title={title}
+        >
           {title}
-        </span>
+        </h1>
         <SaveState dirty={dirty} savedAt={savedAt} />
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         {result ? (
           errors > 0 ? (
-            <span className="sr-chip bg-flag-50 text-flag-600">
+            <span className="sr-chip hidden bg-flag-50 text-flag-600 lg:inline-flex">
               <TriangleAlert size={12} /> {errors} lỗi
             </span>
           ) : warnings > 0 ? (
-            <span className="sr-chip bg-amber-50 text-amber-700">{warnings} cảnh báo</span>
+            <span className="sr-chip hidden bg-amber-50 text-amber-700 lg:inline-flex">
+              {warnings} cảnh báo
+            </span>
           ) : (
-            <span className="sr-chip bg-emerald-50 text-emerald-700">
+            <span className="sr-chip hidden bg-emerald-50 text-emerald-700 lg:inline-flex">
               <CheckCircle2 size={12} /> Không lỗi
             </span>
           )
         ) : null}
 
         <button
-          className={stale ? 'sr-btn-render' : 'sr-btn'}
+          className={stale ? 'sr-btn-render' : 'sr-btn-ghost'}
           onClick={requestRender}
           disabled={render.running}
           title="Dựng lại trang (Ctrl + Enter)"
         >
           {render.running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-          Dựng trang
+          <span className="hidden sm:inline">Dựng trang</span>
         </button>
 
-        {/* Seven buttons competing for attention became three: the one thing you
-            do constantly stays a button, the rest live where they belong. */}
         <Menu
           label="Tệp"
           icon={<FilePlus2 size={14} />}
-          width={230}
+          width={236}
           items={[
             {
               id: 'new',
@@ -186,29 +222,55 @@ export function TopBar({ render }: Props): JSX.Element {
           ]}
         />
 
-        <Menu
-          label="Xuất"
-          icon={<FileDown size={14} />}
-          variant="primary"
-          width={240}
+        {/* In và Tải PDF là hai việc khác nhau, nên là hai mục khác nhau chứ
+            không phải một nút "In / PDF" mập mờ như trước. */}
+        <SplitMenu
+          label={pdf ? `Đang tạo PDF ${pdf.done}/${pdf.total}` : 'Xuất'}
+          icon={pdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+          onPrimary={() => void onDownloadPdf(2)}
+          primaryTitle="Tải tệp PDF về máy (Ctrl + Shift + P)"
+          disabled={noPages || !!pdf}
+          width={306}
           items={[
             {
+              id: 'pdf',
+              label: 'Tải PDF về máy',
+              description: 'Có tệp ngay, khổ và lề đã đúng. Chữ trong tệp là ảnh.',
+              icon: <Download size={13} />,
+              hint: '⌘⇧P',
+              disabled: noPages || !!pdf,
+              onSelect: () => void onDownloadPdf(2),
+            },
+            {
+              id: 'pdf-hi',
+              label: 'Tải PDF nét cao',
+              description: 'Gấp rưỡi độ nét, tệp nặng hơn và lâu hơn.',
+              icon: <Download size={13} />,
+              disabled: noPages || !!pdf,
+              onSelect: () => void onDownloadPdf(3),
+            },
+            'separator',
+            {
               id: 'print',
-              label: 'In / lưu PDF…',
+              label: 'In…',
+              description: 'Mở hộp thoại in. Chọn “Save as PDF” nếu muốn chữ chọn được.',
               icon: <Printer size={13} />,
-              disabled: !render.pages.length,
+              hint: '⌘P',
+              disabled: noPages,
               onSelect: onPrint,
             },
+            'separator',
             {
               id: 'html',
               label: 'Tệp HTML độc lập',
               icon: <FileCode2 size={13} />,
+              hint: '⌘E',
               disabled: !result,
               onSelect: onExportHtml,
             },
             {
               id: 'bundle2',
-              label: 'Bundle (.scirender.json)',
+              label: 'Bundle sao lưu',
               icon: <Package size={13} />,
               disabled: busy,
               onSelect: () => void onExportBundle(),
@@ -233,25 +295,27 @@ export function TopBar({ render }: Props): JSX.Element {
 }
 
 function SaveState({ dirty, savedAt }: { dirty: boolean; savedAt: number | null }): JSX.Element {
+  const base =
+    'inline-flex h-[25px] shrink-0 items-center gap-1.5 rounded-full bg-white px-2.5 text-[11px] shadow-card';
   if (dirty) {
-    return <span className="sr-chip bg-ink-100 text-ink-500">Đang chỉnh sửa…</span>;
+    return (
+      <span className={`${base} text-ink-500`}>
+        <span className="h-[5px] w-[5px] rounded-full bg-sky-500" /> Đang chỉnh sửa…
+      </span>
+    );
   }
-  if (!savedAt) return <span className="sr-chip bg-ink-100 text-ink-500">Chưa lưu</span>;
+  if (!savedAt) {
+    return (
+      <span className={`${base} text-ink-400`}>
+        <span className="h-[5px] w-[5px] rounded-full bg-ink-300" /> Chưa lưu
+      </span>
+    );
+  }
   return (
-    <span className="sr-chip bg-ink-100 text-ink-500">
-      Đã lưu cục bộ {new Date(savedAt).toLocaleTimeString('vi-VN')}
+    <span className={`${base} text-ink-500`}>
+      <span className="h-[5px] w-[5px] rounded-full bg-emerald-500" /> Đã lưu cục bộ{' '}
+      {new Date(savedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
     </span>
-  );
-}
-
-function slug(s: string): string {
-  return (
-    s
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-zA-Z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .toLowerCase() || 'scirender-document'
   );
 }
 

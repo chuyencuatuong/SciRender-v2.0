@@ -1,10 +1,15 @@
-import { useEffect, useRef } from 'react';
-import { Loader2, Minus, Play, Plus, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronLeft, Loader2, Maximize2, Minus, Play, Plus } from 'lucide-react';
 import type { PageKind, RenderState } from '~/hooks/useRender';
 import { useStore } from '~/state/store';
 
 interface Props {
   render: RenderState;
+  /**
+   * Dưới 1180px bản in trượt lên che mất thanh công cụ bên soạn thảo, nên lối
+   * quay về phải nằm ngay trong đầu bản in — nếu không người dùng bị kẹt.
+   */
+  onBack?: (() => void) | null;
 }
 
 const ZOOM_STEPS = [0.4, 0.5, 0.65, 0.75, 0.85, 1, 1.15, 1.35, 1.6];
@@ -15,7 +20,7 @@ const KIND_LABEL: Record<PageKind, string> = {
   body: 'Nội dung',
 };
 
-export function PreviewPane({ render }: Props): JSX.Element {
+export function PreviewPane({ render, onBack = null }: Props): JSX.Element {
   const prefs = useStore((s) => s.prefs);
   const showTech = useStore((s) => s.prefs.showTechStats);
   const setPref = useStore((s) => s.setPref);
@@ -24,6 +29,9 @@ export function PreviewPane({ render }: Props): JSX.Element {
   const source = useStore((s) => s.source);
   const renderedSource = useStore((s) => s.renderedSource);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Zoom follows the column width until the reader takes over; after that it is
+  // theirs. A page wider than its column is the one thing a preview must not do.
+  const [manualZoom, setManualZoom] = useState(false);
 
   const stale = source !== renderedSource;
 
@@ -47,57 +55,65 @@ export function PreviewPane({ render }: Props): JSX.Element {
       ZOOM_STEPS.length - 1,
       Math.max(0, (zoomIndex === -1 ? 5 : zoomIndex) + delta),
     );
+    setManualZoom(true);
     setPref('zoom', ZOOM_STEPS[idx] ?? 1);
   };
+
+  const fitToWidth = useCallback((): void => {
+    const host = scrollRef.current;
+    const page = host?.querySelector('.sr-page') as HTMLElement | null;
+    if (!host || !page) return;
+    const natural = page.getBoundingClientRect().width / (prefs.zoom || 1);
+    if (!natural) return;
+    const next = Math.min(1, Math.max(0.3, (host.clientWidth - 72) / natural));
+    if (Math.abs(next - prefs.zoom) > 0.005) setPref('zoom', Math.round(next * 100) / 100);
+  }, [prefs.zoom, setPref]);
+
+  useEffect(() => {
+    if (manualZoom) return;
+    const host = scrollRef.current;
+    if (!host || typeof ResizeObserver === 'undefined') return;
+    fitToWidth();
+    const ro = new ResizeObserver(() => fitToWidth());
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [fitToWidth, manualZoom, render.pages.length]);
 
   const t = render.result?.template;
   const pages = render.pages;
 
   return (
     <>
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-ink-200 bg-ink-50 px-2">
-        <span className="text-[11.5px] font-medium text-ink-600">
-          {pages.length ? `${pages.length} trang` : 'Chưa dựng trang'}
-        </span>
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-black/[0.045] bg-ink-50 px-4">
+        {/* Số trang nằm ở đảo thu phóng dưới chân giấy, nên ở đây chỉ còn
+            trạng thái: thanh này trả lời "bản in đã mới chưa", không đếm. */}
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="-ml-1.5 inline-flex h-[27px] items-center gap-1 whitespace-nowrap rounded-[8px] px-2 text-[12px] font-medium text-ink-600 transition hover:bg-black/[0.04] hover:text-deep-600"
+          >
+            <ChevronLeft size={14} strokeWidth={1.8} /> Soạn thảo
+          </button>
+        ) : (
+          <span className="text-[11.5px] font-medium text-ink-600">Bản in</span>
+        )}
         {render.running ? (
-          <span className="flex items-center gap-1 text-[11px] text-ink-400">
+          <span className="flex items-center gap-1.5 text-[11px] text-ink-400">
             <Loader2 size={11} className="animate-spin" /> đang dựng
           </span>
         ) : showTech && render.durationMs ? (
-          <span className="font-mono text-[10.5px] text-ink-400">{render.durationMs} ms</span>
+          <span className="font-mono text-[10.5px] text-ink-300">{render.durationMs} ms</span>
         ) : null}
 
         {stale ? (
-          <button
-            className="sr-btn-render !py-1 !text-[11.5px]"
-            onClick={requestRender}
-            title="Ctrl + Enter"
-          >
+          <button className="sr-btn-render !px-2.5 !py-1 !text-[11.5px]" onClick={requestRender} title="Ctrl + Enter">
             <Play size={12} /> Có thay đổi — dựng lại
           </button>
         ) : null}
-
-        <div className="ml-auto flex items-center gap-1">
-          <button className="sr-btn !px-1.5 !py-1" onClick={() => stepZoom(-1)} title="Thu nhỏ">
-            <Minus size={13} />
-          </button>
-          <span className="w-12 text-center text-[11.5px] tabular-nums text-ink-600">
-            {Math.round(prefs.zoom * 100)}%
-          </span>
-          <button className="sr-btn !px-1.5 !py-1" onClick={() => stepZoom(1)} title="Phóng to">
-            <Plus size={13} />
-          </button>
-          <button
-            className="sr-btn !px-1.5 !py-1"
-            onClick={() => setPref('zoom', 1)}
-            title="Về 100%"
-          >
-            <RefreshCw size={13} />
-          </button>
-        </div>
       </div>
 
-      <div ref={scrollRef} className="sr-canvas sr-scroll min-h-0 flex-1 overflow-auto">
+      <div ref={scrollRef} className="sr-canvas sr-scroll relative min-h-0 flex-1 overflow-auto">
         {render.error ? (
           <div className="m-4 rounded-md border border-flag-300 bg-flag-50 p-3">
             <div className="mb-1 text-[12.5px] font-semibold text-flag-700">
@@ -114,13 +130,12 @@ export function PreviewPane({ render }: Props): JSX.Element {
             {render.running ? 'Đang dựng tài liệu…' : 'Bấm Dựng trang để xem kết quả.'}
           </div>
         ) : (
+          // `zoom` chứ không phải `transform: scale`: zoom tham gia vào bố cục nên
+          // trang tự căn giữa và vùng cuộn đúng chiều cao. Bản xem trước chỉ để
+          // nhìn — việc đo trang diễn ra ở host đo riêng, nên dùng zoom là an toàn.
           <div
-            className="flex flex-col items-center gap-6 py-6"
-            style={{
-              transform: `scale(${prefs.zoom})`,
-              transformOrigin: 'top center',
-              width: `${100 / prefs.zoom}%`,
-            }}
+            className="flex flex-col items-center gap-6 py-8"
+            style={{ zoom: prefs.zoom }}
           >
             {(pages.length ? pages : [{ html: '', footer: '', kind: 'body' as PageKind }]).map(
               (page, i) => (
@@ -148,6 +163,50 @@ export function PreviewPane({ render }: Props): JSX.Element {
             )}
           </div>
         )}
+
+        {/* Đảo nổi: thu phóng đặt trên nền giấy chứ không chen vào thanh trên,
+            vì nó là việc của mắt chứ không phải của tài liệu. */}
+        <div
+          role="group"
+          aria-label="Thu phóng bản in"
+          className="sr-frost pointer-events-auto sticky bottom-5 z-30 mx-auto flex h-[38px] w-fit items-center gap-0.5 rounded-full px-1.5 shadow-island"
+        >
+          <span className="px-2 text-[11px] text-ink-500">
+            {pages.length ? `${pages.length} trang` : '—'}
+          </span>
+          <span className="mx-1 h-4 w-px bg-black/[0.07]" />
+          <button
+            onClick={() => stepZoom(-1)}
+            title="Thu nhỏ"
+            aria-label="Thu nhỏ"
+            className="grid h-7 w-7 place-items-center rounded-full text-ink-500 transition hover:bg-sky-500/10 hover:text-deep-600"
+          >
+            <Minus size={14} strokeWidth={1.8} />
+          </button>
+          <span className="min-w-[46px] text-center font-mono text-[11px] tabular-nums text-ink-700">
+            {Math.round(prefs.zoom * 100)}%
+          </span>
+          <button
+            onClick={() => stepZoom(1)}
+            title="Phóng to"
+            aria-label="Phóng to"
+            className="grid h-7 w-7 place-items-center rounded-full text-ink-500 transition hover:bg-sky-500/10 hover:text-deep-600"
+          >
+            <Plus size={14} strokeWidth={1.8} />
+          </button>
+          <span className="mx-1 h-4 w-px bg-black/[0.07]" />
+          <button
+            onClick={() => {
+              setManualZoom(false);
+              fitToWidth();
+            }}
+            title="Vừa khung"
+            aria-label="Vừa khung"
+            className="grid h-7 w-7 place-items-center rounded-full text-ink-500 transition hover:bg-sky-500/10 hover:text-deep-600"
+          >
+            <Maximize2 size={13} strokeWidth={1.6} />
+          </button>
+        </div>
       </div>
     </>
   );

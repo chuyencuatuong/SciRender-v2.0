@@ -24,6 +24,16 @@ import { FrontMatterDialog } from './FrontMatterDialog';
 let seq = 0;
 const nextId = (): string => `card-new-${seq++}`;
 
+export interface ViewSwitch {
+  view: 'canvas' | 'preview';
+  setView: (view: 'canvas' | 'preview') => void;
+}
+
+interface Props {
+  /** Shown only below the split breakpoint, where the two panes share the width. */
+  viewSwitch: ViewSwitch | null;
+}
+
 interface Drag {
   from: number;
   over: number | null;
@@ -38,7 +48,7 @@ interface Drag {
  * reads, and "Xem mã nguồn" shows exactly that text. This is what keeps the
  * canvas from drifting away from what gets printed (P1, P3).
  */
-export function CanvasPane(): JSX.Element {
+export function CanvasPane({ viewSwitch }: Props): JSX.Element {
   const source = useStore((s) => s.source);
   const docId = useStore((s) => s.docId);
   const setSource = useStore((s) => s.setSource);
@@ -308,47 +318,75 @@ export function CanvasPane(): JSX.Element {
 
   return (
     <>
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-ink-200 bg-ink-50/60 px-2">
+      <div className="flex h-11 shrink-0 items-center gap-1.5 overflow-hidden border-b border-black/[0.045] px-3">
         <InsertMenu onInsert={(tpl) => insertAt(doc.cards.length, tpl.text)} />
         <button
           type="button"
           onClick={() => setShowFront(true)}
-          className="inline-flex items-center gap-1 rounded border border-ink-200 bg-white px-2 py-1 text-[12px] text-ink-700 transition hover:border-sky-400 hover:text-deep-700"
+          title="Thông tin tài liệu — tên nhóm, GVHD, MSSV"
+          className="inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] text-ink-500 transition hover:bg-black/[0.04] hover:text-ink-900"
         >
-          <FileText size={13} /> Thông tin tài liệu
+          <FileText size={13} strokeWidth={1.5} /> Thông tin
         </button>
         <button
           type="button"
           onClick={() => setShowSource(true)}
-          className="inline-flex items-center gap-1 rounded border border-ink-200 bg-white px-2 py-1 text-[12px] text-ink-700 transition hover:border-sky-400 hover:text-deep-700"
+          title="Xem mã nguồn Markdown của tài liệu"
+          className="inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] text-ink-500 transition hover:bg-black/[0.04] hover:text-ink-900"
         >
-          <Braces size={13} /> Xem mã nguồn
+          <Braces size={13} strokeWidth={1.5} /> Mã nguồn
         </button>
 
-        <div className="ml-auto flex items-center gap-0.5">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {viewSwitch ? (
+            <div
+              role="tablist"
+              aria-label="Khung nhìn"
+              className="mr-1 flex h-[28px] items-center gap-0.5 rounded-[9px] bg-black/[0.05] px-[3px]"
+            >
+              {(['canvas', 'preview'] as const).map((v) => (
+                <button
+                  key={v}
+                  role="tab"
+                  aria-selected={viewSwitch.view === v}
+                  onClick={() => viewSwitch.setView(v)}
+                  className={`h-[22px] rounded-[7px] px-2.5 text-[11.5px] transition ${
+                    viewSwitch.view === v
+                      ? 'bg-white font-medium text-deep-600 shadow-[0_1px_2px_rgba(15,23,42,.08)]'
+                      : 'text-ink-500'
+                  }`}
+                >
+                  {v === 'canvas' ? 'Soạn' : 'Bản in'}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <button
             type="button"
             title="Hoàn tác (Ctrl+Z)"
             aria-label="Hoàn tác"
             onClick={undo}
-            className="grid h-6 w-6 place-items-center rounded text-ink-500 hover:bg-white hover:text-deep-600"
+            className="grid h-[26px] w-[26px] place-items-center rounded-[7px] text-ink-400 transition hover:bg-black/[0.04] hover:text-deep-600"
           >
-            <Undo2 size={13} />
+            <Undo2 size={13} strokeWidth={1.5} />
           </button>
           <button
             type="button"
             title="Làm lại (Ctrl+Y)"
             aria-label="Làm lại"
             onClick={redo}
-            className="grid h-6 w-6 place-items-center rounded text-ink-500 hover:bg-white hover:text-deep-600"
+            className="grid h-[26px] w-[26px] place-items-center rounded-[7px] text-ink-400 transition hover:bg-black/[0.04] hover:text-deep-600"
           >
-            <Redo2 size={13} />
+            <Redo2 size={13} strokeWidth={1.5} />
           </button>
-          <span className="ml-1 text-[11px] text-ink-400">{doc.cards.length} khối</span>
+          <span className="ml-1 whitespace-nowrap font-mono text-[10.5px] text-ink-300">
+            {doc.cards.length} khối
+          </span>
         </div>
       </div>
 
-      <div ref={listRef} className="sr-scroll min-h-0 flex-1 overflow-y-auto p-3">
+      <div ref={listRef} className="sr-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-28 pt-6">
+        <div className="mx-auto max-w-[660px]">
         <AnimatePresence>
           {coverAdded && coverAdded !== coverNoticeSeen ? (
             <motion.div
@@ -438,15 +476,16 @@ export function CanvasPane(): JSX.Element {
           ))}
         </AnimatePresence>
 
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-3">
           <InsertMenu
             compact
             label="Thêm khối ở cuối"
             onInsert={(tpl: CardTemplate) => insertAt(doc.cards.length, tpl.text)}
           />
           <span className="text-[11px] text-ink-400">
-            Bấm vào một khối rồi Ctrl+V — app tự nhận dạng ảnh, bảng Excel, LaTeX hay code.
+            hoặc bấm vào một khối rồi Ctrl+V — app tự nhận dạng ảnh, bảng Excel, LaTeX, code
           </span>
+        </div>
         </div>
       </div>
 

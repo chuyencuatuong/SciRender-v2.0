@@ -17,8 +17,8 @@ export function LibraryPanel(): JSX.Element {
   return (
     <>
       <div className="sr-panel-title">
-        <span>Thư viện tài liệu</span>
-        <span className="font-normal normal-case tracking-normal text-ink-400">
+        <h2>Thư viện</h2>
+        <span className="ml-auto font-mono text-[11px] text-ink-400">
           {library.length}
         </span>
       </div>

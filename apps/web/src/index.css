@@ -1,24 +1,58 @@
+@import './styles/fonts.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /*
- * Bảng màu: Deep Blue (chính) · Sky Blue (phụ) · Red (cảnh báo) · White (nền).
- * Xanh đậm và xanh trời lấy từ logo Bách khoa nên giao diện và trang bìa cùng
- * một hệ màu. Đỏ chỉ dùng cho lỗi và hành động xoá — không dùng để trang trí.
+ * Hệ thống thiết kế SciRender — "Editorial Luxury" trên bảng màu Bách khoa.
+ *
+ * Màu giữ nguyên bộ gốc: Deep Blue #0b2c7f (chính), Sky Blue #1a8fe3 (tiêu
+ * điểm), Red #d62828 (chỉ lỗi và xoá), trắng làm mặt. Cái đổi là *cách dùng*:
+ * nền trắng ngà ấm, mặt trắng tinh nổi lên bằng bóng hai tầng rất nhẹ, viền
+ * mỏng tới mức gần như không thấy. Không khối nào bị đóng khung — thứ tách các
+ * khối ra là khoảng trắng và bóng, không phải đường kẻ.
  */
 :root {
   color-scheme: light;
+
+  /* nền và mặt */
+  --sr-bg: #f8f9fa;
+  --sr-bg-sunk: #f3f4f6;
+  --sr-surface: #ffffff;
+  --sr-surface-warm: #f9fafb;
+  --sr-hairline: rgba(15, 23, 42, 0.07);
+  --sr-hairline-soft: rgba(15, 23, 42, 0.045);
+
+  /* mực */
+  --sr-ink-900: #16181d;
+  --sr-ink-700: #3c414d;
+  --sr-ink-600: #525866;
+  --sr-ink-500: #6b7280;
+  --sr-ink-400: #9ba1ad;
+  --sr-ink-300: #c3c7d0;
+
+  /* bảng màu gốc */
   --sr-deep: #0b2c7f;
   --sr-deep-700: #092467;
   --sr-sky: #1a8fe3;
+  --sr-sky-wash: rgba(26, 143, 227, 0.09);
+  --sr-sky-line: rgba(26, 143, 227, 0.3);
   --sr-red: #d62828;
-  --sr-ui-bg: #f2f5fa;
-  --sr-ui-panel: #ffffff;
-  --sr-ui-border: #dde3ec;
-  --sr-ui-text: #1b2230;
-  --sr-ui-muted: #6b7a93;
-  --sr-ui-canvas: #44506a;
+
+  /* nền trang in: xám trung tính để tờ giấy nổi lên */
+  --sr-paper-ground: #dedee3;
+
+  /* bóng: hai tầng cho thẻ, ba tầng cho tờ giấy */
+  --sr-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 24px -8px rgba(15, 23, 42, 0.07);
+  --sr-shadow-pop: 0 1px 2px rgba(15, 23, 42, 0.05), 0 8px 16px -6px rgba(15, 23, 42, 0.1),
+    0 24px 48px -16px rgba(15, 23, 42, 0.14);
+  --sr-shadow-paper: 0 1px 1px rgba(11, 22, 45, 0.05), 0 10px 20px -8px rgba(11, 22, 45, 0.1),
+    0 40px 72px -28px rgba(11, 22, 45, 0.2);
+  --sr-shadow-island: 0 1px 2px rgba(15, 23, 42, 0.06), 0 10px 28px -10px rgba(15, 23, 42, 0.22);
+
+  --sr-ease: cubic-bezier(0.2, 0, 0, 1);
+  --sr-dock: 56px;
+  --sr-panel: 272px;
 }
 
 html,
@@ -29,10 +63,27 @@ body,
 
 body {
   margin: 0;
-  background: var(--sr-ui-bg);
-  color: var(--sr-ui-text);
-  font-family: Inter, 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--sr-bg);
+  color: var(--sr-ink-900);
+  font-family: 'Be Vietnam Pro', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
   -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+:focus-visible {
+  outline: 2px solid var(--sr-sky);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
 
 /* The measuring host must be laid out but never visible or interactive. */
@@ -46,102 +97,192 @@ body {
 }
 
 /* ------------------------------------------------------------- scrollbars */
+.sr-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 23, 42, 0.16) transparent;
+}
 .sr-scroll::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 .sr-scroll::-webkit-scrollbar-thumb {
-  background: #bcc6d6;
-  border-radius: 6px;
-  border: 2px solid transparent;
+  background: rgba(15, 23, 42, 0.16);
+  border-radius: 999px;
+  border: 3px solid transparent;
   background-clip: content-box;
 }
 .sr-scroll::-webkit-scrollbar-thumb:hover {
-  background: #8e9cb3;
+  background: rgba(15, 23, 42, 0.28);
   background-clip: content-box;
 }
 .sr-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* ------------------------------------------------------------- page canvas */
-.sr-canvas {
-  background: var(--sr-ui-canvas);
+/* ---------------------------------------------------------------- kính mờ */
+.sr-frost {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
 }
-.sr-page-shell {
-  box-shadow: 0 2px 6px rgba(9, 20, 45, 0.22), 0 10px 32px rgba(9, 20, 45, 0.26);
-}
-.sr-page-marker {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: #c3cddd;
-}
-.sr-page-kind {
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #93a3bd;
+.sr-frost-soft {
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
 }
 
-/* ------------------------------------------------------------- CodeMirror */
-.cm-editor {
-  height: 100%;
-  font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
-  font-size: 13.5px;
+/* ------------------------------------------------------------- page canvas */
+.sr-canvas {
+  background:
+    radial-gradient(86% 46% at 50% -10%, rgba(255, 255, 255, 0.24), transparent 66%),
+    var(--sr-paper-ground);
 }
-.cm-editor .cm-scroller {
-  line-height: 1.7;
-  padding-bottom: 40vh;
+.sr-page-shell {
+  box-shadow: var(--sr-shadow-paper), 0 0 0 0.5px rgba(11, 22, 45, 0.1);
+  border-radius: 2px;
 }
-.cm-editor.cm-focused {
-  outline: none;
+.sr-page-marker {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: rgba(11, 22, 45, 0.42);
 }
-.cm-gutters {
-  background: #f7f9fc !important;
-  border-right: 1px solid var(--sr-ui-border) !important;
-  color: #9aa7bd !important;
-}
-.cm-activeLine {
-  background: #eef4fd !important;
-}
-.cm-activeLineGutter {
-  background: #e0ebfa !important;
-  color: #3d4c66 !important;
-}
-.cm-diag-error {
-  text-decoration: underline wavy var(--sr-red);
-  text-underline-offset: 3px;
-}
-.cm-diag-warning {
-  text-decoration: underline wavy #b45309;
-  text-underline-offset: 3px;
+.sr-page-kind {
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(11, 22, 45, 0.34);
 }
 
 /* --------------------------------------------------------- small utilities */
 .sr-chip {
   @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium;
 }
+
+/* Nút: không viền, nổi bằng bóng. Viền chỉ xuất hiện khi cần ranh giới thật. */
 .sr-btn {
-  @apply inline-flex items-center gap-1.5 rounded-md border border-ink-200 bg-white px-2.5 py-1.5 text-[12.5px] font-medium text-ink-700 transition hover:border-deep-300 hover:bg-deep-50 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center gap-1.5 rounded-[9px] bg-white px-3 py-[7px] text-[12.5px] font-medium text-ink-700 transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.sr-btn:hover:not(:disabled) {
+  box-shadow: var(--sr-shadow-card);
+  color: var(--sr-ink-900);
+}
+.sr-btn-ghost {
+  @apply inline-flex items-center gap-1.5 rounded-[9px] bg-transparent px-3 py-[7px] text-[12.5px] font-medium text-ink-600 transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
+}
+.sr-btn-ghost:hover:not(:disabled) {
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--sr-ink-900);
 }
 .sr-btn-primary {
-  @apply inline-flex items-center gap-1.5 rounded-md border border-deep-600 bg-deep-600 px-2.5 py-1.5 text-[12.5px] font-medium text-white transition hover:bg-deep-500 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center gap-1.5 rounded-[9px] px-3 py-[7px] text-[12.5px] font-medium text-white transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
+  background: linear-gradient(180deg, #14409f, var(--sr-deep));
+  box-shadow: 0 1px 2px rgba(11, 44, 127, 0.35), 0 6px 16px -6px rgba(11, 44, 127, 0.5);
+}
+.sr-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
 }
 .sr-btn-render {
-  @apply inline-flex items-center gap-1.5 rounded-md border border-sky-600 bg-sky-500 px-3 py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-sky-600 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
+  @apply inline-flex items-center gap-1.5 rounded-[9px] px-3 py-[7px] text-[12.5px] font-semibold text-white transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
+  background: linear-gradient(180deg, #2fa0ef, var(--sr-sky));
+  box-shadow: 0 1px 2px rgba(26, 143, 227, 0.3), 0 6px 16px -6px rgba(26, 143, 227, 0.45);
 }
+.sr-btn-render:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
 .sr-rail-btn {
-  @apply relative flex h-10 w-10 items-center justify-center rounded-lg text-ink-500 transition hover:bg-ink-100 hover:text-ink-800;
+  @apply relative flex h-[38px] w-[38px] items-center justify-center rounded-[10px] text-ink-400 transition;
+}
+.sr-rail-btn:hover {
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--sr-ink-700);
 }
 .sr-rail-btn-active {
-  @apply bg-deep-600/10 text-deep-600 hover:bg-deep-600/15 hover:text-deep-600;
+  color: var(--sr-deep);
+  background: var(--sr-sky-wash);
 }
+.sr-rail-btn-active::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--sr-deep);
+}
+
 .sr-panel-title {
-  @apply flex items-center justify-between border-b border-ink-200 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500;
+  @apply flex items-baseline gap-2 px-4 pb-2.5 pt-4;
+}
+.sr-panel-title h2 {
+  @apply m-0 text-[16px] font-normal tracking-[-0.01em];
+  font-family: 'Literata', Georgia, serif;
 }
 .sr-field-label {
-  @apply mb-1 block text-[11px] font-medium uppercase tracking-wide text-ink-500;
+  @apply mb-1 block text-[10px] font-medium uppercase tracking-[0.09em] text-ink-400;
 }
+/* Native select trông lạc lõng giữa các nút không viền — kéo nó về cùng hệ. */
+select.sr-input {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ba1ad' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 26px;
+}
+
 .sr-input {
-  @apply w-full rounded-md border border-ink-200 bg-white px-2 py-1.5 text-[12.5px] text-ink-800 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20;
+  @apply w-full rounded-[8px] bg-white px-2.5 py-1.5 text-[12.5px] text-ink-800 outline-none transition;
+  box-shadow: inset 0 0 0 1px var(--sr-hairline);
+}
+.sr-input:focus {
+  box-shadow: inset 0 0 0 1px var(--sr-sky), 0 0 0 3px var(--sr-sky-wash);
+}
+
+/* Viên lọc mềm — dùng ở panel Chẩn đoán và bất cứ chỗ nào cần chọn một trong nhiều */
+.sr-pill {
+  @apply inline-flex h-[26px] items-center rounded-full px-[9px] text-[11.5px] text-ink-500 transition;
+  background: rgba(15, 23, 42, 0.04);
+}
+.sr-pill:hover {
+  background: rgba(15, 23, 42, 0.07);
+  color: var(--sr-ink-700);
+}
+.sr-pill[aria-pressed='true'] {
+  background: var(--sr-surface);
+  color: var(--sr-deep);
+  font-weight: 500;
+  box-shadow: var(--sr-shadow-card);
+}
+
+.sr-code {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  @apply rounded-[5px] px-[5px] py-px text-[9.5px] tracking-[0.03em] text-ink-500;
+  background: rgba(15, 23, 42, 0.05);
+}
+
+/* Bóng đèn gợi ý — ánh dạ quang rất nhẹ, chỉ ở icon */
+.sr-glow-hint {
+  filter: drop-shadow(0 0 5px rgba(245, 180, 0, 0.55));
+}
+
+.sr-menu {
+  @apply absolute z-40 overflow-hidden rounded-xl bg-white py-1;
+  box-shadow: var(--sr-shadow-pop);
+}
+.sr-menu-item {
+  @apply flex w-full items-center gap-2.5 px-2.5 py-2 text-left text-[12.5px] text-ink-700 transition disabled:opacity-40;
+}
+.sr-menu-item:hover:not(:disabled) {
+  background: var(--sr-sky-wash);
+  color: var(--sr-deep);
+}
+.sr-kbd {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  @apply ml-auto rounded-[5px] px-1 text-[10px] text-ink-400;
+  background: rgba(15, 23, 42, 0.05);
 }

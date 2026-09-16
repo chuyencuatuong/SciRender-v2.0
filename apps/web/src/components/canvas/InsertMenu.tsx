@@ -83,8 +83,8 @@ export function InsertMenu({ onInsert, label = 'Thêm khối', compact = false }
         aria-haspopup="menu"
         className={
           compact
-            ? 'inline-flex items-center gap-1 rounded-md border border-dashed border-ink-300 px-2 py-1 text-[11.5px] text-ink-500 transition hover:border-sky-400 hover:bg-sky-50/60 hover:text-deep-700'
-            : 'inline-flex items-center gap-1 rounded-md border border-ink-200 bg-white px-2 py-1 text-[12px] font-medium text-ink-700 transition hover:border-sky-400 hover:bg-sky-50/60 hover:text-deep-700'
+            ? 'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-[9px] bg-black/[0.045] px-2.5 py-[5px] text-[11.5px] text-ink-600 transition hover:bg-sky-500/10 hover:text-deep-700'
+            : 'inline-flex h-[27px] shrink-0 items-center gap-1 whitespace-nowrap rounded-[8px] bg-white px-2.5 text-[12px] font-medium text-deep-700 shadow-card transition hover:text-deep-600'
         }
       >
         <Plus size={13} /> {label}
@@ -102,7 +102,7 @@ export function InsertMenu({ onInsert, label = 'Thêm khối', compact = false }
             animate={POP_IN.animate}
             exit={reduced ? undefined : POP_IN.exit}
             transition={POP_IN.transition}
-            className="absolute left-0 z-40 mt-1 w-[300px] overflow-hidden rounded-lg border border-ink-200 bg-white shadow-xl"
+            className="sr-menu absolute left-0 z-40 mt-1.5 w-[308px] overflow-hidden"
           >
             <div className="flex items-center gap-1.5 border-b border-ink-100 px-2.5 py-2">
               <Search size={13} className="text-ink-400" />

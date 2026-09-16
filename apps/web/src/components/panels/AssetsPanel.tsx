@@ -25,8 +25,8 @@ export function AssetsPanel(): JSX.Element {
   return (
     <>
       <div className="sr-panel-title">
-        <span>Tài nguyên</span>
-        <span className="font-normal normal-case tracking-normal text-ink-400">
+        <h2>Tài nguyên</h2>
+        <span className="ml-auto font-mono text-[11px] text-ink-400">
           {assets.length} tệp
         </span>
       </div>

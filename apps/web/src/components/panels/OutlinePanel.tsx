@@ -43,8 +43,8 @@ export function OutlinePanel({ render }: Props): JSX.Element {
   return (
     <>
       <div className="sr-panel-title">
-        <span>Cấu trúc tài liệu</span>
-        <span className="font-normal normal-case tracking-normal text-ink-400">
+        <h2>Dàn ý</h2>
+        <span className="ml-auto font-mono text-[11px] text-ink-400">
           {items.length} đề mục
         </span>
       </div>
