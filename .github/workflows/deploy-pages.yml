@@ -33,7 +33,8 @@ jobs:
         run: pnpm build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
-
+          VITE_PDF_SERVER_URL: ${{ vars.PDF_SERVER_URL }}
+          VITE_PDF_SERVER_TOKEN: ${{ secrets.PDF_SERVER_TOKEN }}
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
