@@ -12,7 +12,7 @@ import {
   TriangleAlert,
   Upload,
 } from 'lucide-react';
-import { downloadPdf, exportStandaloneHtml, printDocument, slug } from '@scirender/renderer-pdf';
+import { exportStandaloneHtml, printDocument, slug } from '@scirender/renderer-pdf';
 import { importBundle, exportBundle } from '@scirender/storage';
 import { track } from '@scirender/telemetry';
 import type { RenderState } from '~/hooks/useRender';
@@ -36,7 +36,6 @@ export function TopBar({ render }: Props): JSX.Element {
   const source = useStore((s) => s.source);
   const renderedSource = useStore((s) => s.renderedSource);
   const [busy, setBusy] = useState(false);
-  const [pdf, setPdf] = useState<{ done: number; total: number } | null>(null);
   const importRef = useRef<HTMLInputElement | null>(null);
 
   const stale = source !== renderedSource;
@@ -58,24 +57,15 @@ export function TopBar({ render }: Props): JSX.Element {
     });
   };
 
-  const onDownloadPdf = async (scale: number): Promise<void> => {
+  const onExportPdf = (): void => {
     if (!result || !render.pages.length) return;
-    setPdf({ done: 0, total: render.pages.length });
-    try {
-      const out = await downloadPdf({
-        pages: pageHtml,
-        template: result.template,
-        footers,
-        documentTitle: result.document.meta.title || title,
-        scale,
-        onProgress: (done, total) => setPdf({ done, total }),
-      });
-      track('export.pdf', { pages: out.pages, bytes: out.bytes, scale });
-    } catch (err) {
-      window.alert(`Không tạo được tệp PDF: ${(err as Error).message}`);
-    } finally {
-      setPdf(null);
-    }
+    track('export.pdf', { pages: render.pages.length, mode: 'browser-print' });
+    printDocument({
+      pages: pageHtml,
+      template: result.template,
+      footers,
+      documentTitle: result.document.meta.title || title,
+    });
   };
 
   const onExportHtml = (): void => {
@@ -126,7 +116,7 @@ export function TopBar({ render }: Props): JSX.Element {
     const onKey = (e: KeyboardEvent): void => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'p') return;
       e.preventDefault();
-      if (e.shiftKey) void onDownloadPdf(2);
+      if (e.shiftKey) onExportPdf();
       else onPrint();
     };
     window.addEventListener('keydown', onKey);
@@ -222,38 +212,29 @@ export function TopBar({ render }: Props): JSX.Element {
           ]}
         />
 
-        {/* In và Tải PDF là hai việc khác nhau, nên là hai mục khác nhau chứ
-            không phải một nút "In / PDF" mập mờ như trước. */}
+        {/* PDF được xuất qua pipeline print của trình duyệt để giữ text/vector thay vì raster hóa HTML. */}
         <SplitMenu
-          label={pdf ? `Đang tạo PDF ${pdf.done}/${pdf.total}` : 'Xuất'}
-          icon={pdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-          onPrimary={() => void onDownloadPdf(2)}
-          primaryTitle="Tải tệp PDF về máy (Ctrl + Shift + P)"
-          disabled={noPages || !!pdf}
+          label="Xuất"
+          icon={<Download size={14} />}
+          onPrimary={onExportPdf}
+          primaryTitle="Xuất PDF có thể chọn/tìm chữ (Ctrl + Shift + P)"
+          disabled={noPages}
           width={306}
           items={[
             {
               id: 'pdf',
-              label: 'Tải PDF về máy',
-              description: 'Có tệp ngay, khổ và lề đã đúng. Chữ trong tệp là ảnh.',
+              label: 'Xuất PDF',
+              description: 'Mở trình PDF của trình duyệt; chữ, liên kết và công thức vẫn là nội dung thật.',
               icon: <Download size={13} />,
               hint: '⌘⇧P',
-              disabled: noPages || !!pdf,
-              onSelect: () => void onDownloadPdf(2),
-            },
-            {
-              id: 'pdf-hi',
-              label: 'Tải PDF nét cao',
-              description: 'Gấp rưỡi độ nét, tệp nặng hơn và lâu hơn.',
-              icon: <Download size={13} />,
-              disabled: noPages || !!pdf,
-              onSelect: () => void onDownloadPdf(3),
+              disabled: noPages,
+              onSelect: onExportPdf,
             },
             'separator',
             {
               id: 'print',
               label: 'In…',
-              description: 'Mở hộp thoại in. Chọn “Save as PDF” nếu muốn chữ chọn được.',
+              description: 'Mở hộp thoại in để chọn máy in hoặc PDF.',
               icon: <Printer size={13} />,
               hint: '⌘P',
               disabled: noPages,
