@@ -18,7 +18,8 @@ import {
   type StoredDocument,
 } from '@scirender/storage';
 import { initTelemetry, setEnabled as setTelemetryEnabled, track } from '@scirender/telemetry';
-import type { TemplateOverrides } from '@scirender/template-engine';
+import { findTemplate, type TemplateOverrides } from '@scirender/template-engine';
+import { needsCover, withCover } from '~/lib/cover';
 import { BUILTIN_ASSETS } from '~/lib/builtin-assets';
 import { SAMPLE_DOCUMENT, EMPTY_DOCUMENT } from '~/lib/sample';
 
@@ -46,6 +47,8 @@ export interface AppState {
   storageError: string | null;
   /** Line the editor should scroll to; bumped by diagnostics/outline clicks. */
   gotoLine: { line: number; nonce: number } | null;
+  /** Timestamp of the last automatic cover insertion — the canvas announces it. */
+  coverAdded: number | null;
 
   init: () => Promise<void>;
   setSource: (source: string) => void;
@@ -64,6 +67,8 @@ export interface AppState {
   addAssets: (files: FileList | File[]) => Promise<string[]>;
   removeAsset: (id: string) => Promise<void>;
   requestGotoLine: (line: number) => void;
+  /** Remembers which block template was just inserted, for "Hay dùng". */
+  noteBlockUsed: (id: string) => void;
   refreshLibrary: () => Promise<void>;
 }
 
@@ -99,6 +104,7 @@ export const useStore = create<AppState>((set, get) => ({
   savedAt: null,
   storageError: null,
   gotoLine: null,
+  coverAdded: null,
 
   async init() {
     const prefs = loadPreferences();
@@ -151,6 +157,15 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   setTemplateId(templateId) {
+    // A cover template with no cover data printed an empty first page and left
+    // the writer to guess the YAML. Switching now brings the block with it —
+    // only when the document does not already have one (P1).
+    const template = findTemplate(templateId);
+    const source = get().source;
+    const filled = needsCover(source, template) ? withCover(source, template) : source;
+    if (filled !== source) {
+      set({ source: filled, coverAdded: Date.now() });
+    }
     set((s) => ({ templateId, dirty: true, renderNonce: s.renderNonce + 1 }));
     track('template.change', { templateId });
     void get().save();
@@ -304,6 +319,11 @@ export const useStore = create<AppState>((set, get) => ({
 
   requestGotoLine(line) {
     set({ gotoLine: { line, nonce: Date.now() } });
+  },
+
+  noteBlockUsed(id) {
+    const recent = [id, ...get().prefs.recentBlocks.filter((r) => r !== id)].slice(0, 5);
+    get().setPref('recentBlocks', recent);
   },
 
   async refreshLibrary() {

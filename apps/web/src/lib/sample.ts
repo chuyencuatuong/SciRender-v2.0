@@ -197,7 +197,7 @@ Ba mô hình được so sánh: hồi quy tuyến tính đa biến, rừng ngẫ
 nơ-ron một lớp ẩn. Hàm mất mát dùng chung là sai số bình phương trung bình:
 
 $$
-\\mathcal{L} = \\frac{1}{N} \\sum_{i=1}^{N} \\left( y_i - \\hat{y}_i \\right)^{2}
+\\mathcal{L}(\\theta) = \\frac{1}{N} \\sum_{i=1}^{N} \\left( y_i - \\hat{y}_i(\\theta) \\right)^{2} + \\lambda_1 \\|\\theta\\|_1 + \\lambda_2 \\|\\theta\\|_2^{2} + \\gamma \\sum_{j=1}^{M} \\log\\left( 1 + e^{-z_j} \\right) + \\beta \\int_{0}^{T} \\kappa(t)\\,dt
 $$ {#eq:loss}
 
 \`\`\`python

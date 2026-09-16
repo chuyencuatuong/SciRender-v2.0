@@ -8,7 +8,7 @@ import {
   Rows2,
   Trash2,
 } from 'lucide-react';
-import { KIND_LABEL, splitColumns, type Card } from '~/lib/cards';
+import { detectKind, KIND_LABEL, KIND_TONE, splitColumns, type Card } from '~/lib/cards';
 import { CardEditor } from './CardEditors';
 
 export type DropZone = 'above' | 'below' | 'left' | 'right';
@@ -35,19 +35,20 @@ interface Props {
 }
 
 const ZONE_RING: Record<DropZone, string> = {
-  above: 'before:absolute before:inset-x-0 before:-top-1 before:h-0.5 before:bg-sky-500',
-  below: 'after:absolute after:inset-x-0 after:-bottom-1 after:h-0.5 after:bg-sky-500',
-  left: 'before:absolute before:inset-y-0 before:-left-1 before:w-0.5 before:bg-flag-500',
-  right: 'after:absolute after:inset-y-0 after:-right-1 after:w-0.5 after:bg-flag-500',
+  above: 'before:absolute before:inset-x-0 before:-top-1 before:h-0.5 before:rounded before:bg-sky-500',
+  below: 'after:absolute after:inset-x-0 after:-bottom-1 after:h-0.5 after:rounded after:bg-sky-500',
+  left: 'before:absolute before:inset-y-1 before:-left-1 before:w-1 before:rounded before:bg-flag-500',
+  right: 'after:absolute after:inset-y-1 after:-right-1 after:w-1 after:rounded after:bg-flag-500',
 };
 
 /**
  * One block of the document.
  *
- * Dragging up or down reorders; dragging onto the left or right edge of another
- * card puts the two side by side in a `::: cols` row. The drop target is
- * decided from where the pointer is, and shown before the drop happens, so the
- * gesture is never a guess the user has to undo.
+ * The row of actions only appears on hover or when the card is selected: with
+ * six buttons on every card the column read as a control panel rather than a
+ * document. Dragging up or down reorders; dragging onto the left or right edge
+ * of another card puts the two side by side, and the target is shown before
+ * the drop so the gesture is never a guess.
  */
 export function CardShell(props: Props): JSX.Element {
   const { card, index, total, selected, dropZone } = props;
@@ -84,11 +85,13 @@ export function CardShell(props: Props): JSX.Element {
         props.onDrop();
       }}
       onMouseDown={props.onSelect}
-      className={`relative rounded-md border bg-white transition ${
-        selected ? 'border-sky-400 shadow-[0_0_0_2px_rgba(26,143,227,0.18)]' : 'border-ink-200'
+      className={`group relative rounded-lg border bg-white transition-[border-color,box-shadow] duration-150 ${
+        selected
+          ? 'border-sky-400 shadow-[0_0_0_3px_rgba(26,143,227,0.14)]'
+          : 'border-ink-200 hover:border-ink-300 hover:shadow-sm'
       } ${dropZone ? ZONE_RING[dropZone] : ''}`}
     >
-      <header className="flex h-7 items-center gap-1 border-b border-ink-100 bg-ink-50/60 px-1.5">
+      <header className="flex h-7 items-center gap-1.5 rounded-t-lg border-b border-ink-100 bg-ink-50/50 px-1.5">
         <span
           role="button"
           tabIndex={-1}
@@ -96,19 +99,22 @@ export function CardShell(props: Props): JSX.Element {
           title="Kéo dọc để đổi thứ tự · kéo sang mép trái/phải khối khác để xếp hai cột"
           onMouseDown={() => setHandleDown(true)}
           onMouseUp={() => setHandleDown(false)}
-          className="cursor-grab text-ink-400 hover:text-deep-600 active:cursor-grabbing"
+          className="cursor-grab text-ink-300 transition-colors hover:text-deep-600 active:cursor-grabbing group-hover:text-ink-500"
         >
           <GripVertical size={13} />
         </span>
-        <span className="text-[11px] font-medium text-ink-600">{KIND_LABEL[card.kind]}</span>
-        <span className="text-[10px] text-ink-400">dòng {card.line}</span>
+        <span
+          className={`rounded px-1.5 py-0.5 text-[10.5px] font-medium ${KIND_TONE[card.kind]}`}
+        >
+          {KIND_LABEL[card.kind]}
+        </span>
 
         {props.recognised ? (
-          <span className="ml-1 inline-flex items-center gap-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-deep-700">
+          <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-deep-700">
             nhận dạng: {props.recognised}
             <button
               type="button"
-              className="underline hover:text-flag-600"
+              className="underline underline-offset-2 hover:text-flag-600"
               onClick={props.onUndoRecognition}
             >
               dán dạng văn bản
@@ -116,7 +122,12 @@ export function CardShell(props: Props): JSX.Element {
           </span>
         ) : null}
 
-        <div className="ml-auto flex items-center gap-0.5">
+        {/* Hidden until this card is the one you are working on. */}
+        <div
+          className={`ml-auto flex items-center gap-0.5 transition-opacity duration-150 ${
+            selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+          }`}
+        >
           <IconBtn title="Lên (Alt+↑)" disabled={index === 0} onClick={() => props.onMove(-1)}>
             <ArrowUp size={12} />
           </IconBtn>
@@ -158,7 +169,7 @@ export function CardShell(props: Props): JSX.Element {
                   cột {i + 1}
                 </div>
                 <CardEditor
-                  kind="paragraph"
+                  kind={detectKind(part)}
                   text={part}
                   onChange={(next) => {
                     const pair = columns.slice() as [string, string];

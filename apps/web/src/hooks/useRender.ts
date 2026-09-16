@@ -8,6 +8,7 @@ import {
 import { renderFrontMatter, type FrontNumbers } from '@scirender/renderer-html';
 import { formatPageNumber, type FrontSectionKind } from '@scirender/template-engine';
 import { track } from '@scirender/telemetry';
+import { fitDisplayMath } from '~/lib/fit-math';
 import { resolveMermaidBlocks } from '~/lib/mermaid';
 import { compile, type CompileResult } from '~/lib/pipeline';
 import { useStore } from '~/state/store';
@@ -123,14 +124,21 @@ export function useRender(): RenderState {
       // the page looks emptier than it is and the next block is accepted onto a
       // page it does not fit — the same document would paginate two different
       // ways depending on the browser cache (P2).
-      const bodyElements = await settleMedia(hostRef.current, bodyBlocks, t.metrics.bodySizePx);
+      const mathWarnings: LayoutWarning[] = [];
+      const bodyElements = await settleMedia(
+        hostRef.current,
+        bodyBlocks,
+        t.metrics.bodySizePx,
+        t.metrics.contentWidthPx,
+        mathWarnings,
+      );
       if (cancelled || !hostRef.current) return;
 
       const opts = {
         ...optionsFromTemplate(t),
         footnotes: t.descriptor.footnotes.enabled ? result.footnotes : {},
       };
-      const warnings: LayoutWarning[] = [...mermaid.warnings];
+      const warnings: LayoutWarning[] = [...mermaid.warnings, ...mathWarnings];
 
       const body = paginate(bodyElements, opts, hostRef.current);
       warnings.push(...body.warnings);
@@ -252,8 +260,20 @@ async function settleMedia(
   host: HTMLElement,
   blocks: string[],
   bodySizePx: number,
+  contentWidthPx: number,
+  mathWarnings: LayoutWarning[],
 ): Promise<Element[]> {
   host.textContent = '';
+  // The measuring host must already be exactly one text column wide: formulas
+  // are fitted against it here, and a host sized by whatever the body happened
+  // to be would fit them to the wrong width — and to a different width on the
+  // next run, which is how a document paginates two ways (P2).
+  host.style.position = 'absolute';
+  host.style.left = '-100000px';
+  host.style.top = '0';
+  host.style.width = `${contentWidthPx}px`;
+  host.style.visibility = 'hidden';
+  host.style.pointerEvents = 'none';
   const staging = document.createElement('div');
   staging.className = 'sr-doc';
   staging.style.width = '100%';
@@ -299,6 +319,10 @@ async function settleMedia(
       /* font loading is best effort — never block a render on it */
     }
   }
+
+  // Long formulas are fitted to the column while the document is still laid
+  // out here, so pagination measures the height that will actually print.
+  mathWarnings.push(...fitDisplayMath(staging));
 
   await nextFrame();
   staging.remove();

@@ -17,6 +17,7 @@ const KIND_LABEL: Record<PageKind, string> = {
 
 export function PreviewPane({ render }: Props): JSX.Element {
   const prefs = useStore((s) => s.prefs);
+  const showTech = useStore((s) => s.prefs.showTechStats);
   const setPref = useStore((s) => s.setPref);
   const requestGotoLine = useStore((s) => s.requestGotoLine);
   const requestRender = useStore((s) => s.render);
@@ -62,8 +63,8 @@ export function PreviewPane({ render }: Props): JSX.Element {
           <span className="flex items-center gap-1 text-[11px] text-ink-400">
             <Loader2 size={11} className="animate-spin" /> đang dựng
           </span>
-        ) : render.durationMs ? (
-          <span className="text-[11px] text-ink-400">{render.durationMs} ms</span>
+        ) : showTech && render.durationMs ? (
+          <span className="font-mono text-[10.5px] text-ink-400">{render.durationMs} ms</span>
         ) : null}
 
         {stale ? (

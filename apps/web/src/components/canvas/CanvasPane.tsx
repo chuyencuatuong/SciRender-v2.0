@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Braces, FileText, Redo2, Undo2 } from 'lucide-react';
+import { CARD_IN, useReducedMotion } from '~/lib/motion';
 import {
   detectKind,
   makeColumns,
@@ -12,6 +14,7 @@ import {
   type CardTemplate,
 } from '~/lib/cards';
 import { detectPaste } from '~/lib/paste';
+import { BadgeCheck, X } from 'lucide-react';
 import { useStore } from '~/state/store';
 import { CardShell, type DropZone } from './CardShell';
 import { InsertMenu } from './InsertMenu';
@@ -41,6 +44,8 @@ export function CanvasPane(): JSX.Element {
   const setSource = useStore((s) => s.setSource);
   const addAssets = useStore((s) => s.addAssets);
   const gotoLine = useStore((s) => s.gotoLine);
+  const coverAdded = useStore((s) => s.coverAdded);
+  const [coverNoticeSeen, setCoverNoticeSeen] = useState<number | null>(null);
 
   const [doc, setDoc] = useState<CanvasDoc>(() => toCards(source));
   const [selected, setSelected] = useState(0);
@@ -59,6 +64,7 @@ export function CanvasPane(): JSX.Element {
     null,
   );
 
+  const reduced = useReducedMotion();
   const mine = useRef(source);
   const undoStack = useRef<CanvasDoc[]>([]);
   const redoStack = useRef<CanvasDoc[]>([]);
@@ -253,6 +259,15 @@ export function CanvasPane(): JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const mod = e.ctrlKey || e.metaKey;
+      // A dialog owns the keyboard while it is open, and Ctrl+Z inside a text
+      // field has to undo the text — not silently rewind the whole canvas.
+      if (document.querySelector('[role="dialog"]')) return;
+      const target = e.target as HTMLElement | null;
+      const typing =
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLInputElement ||
+        target?.isContentEditable === true;
+      if (typing && !e.altKey) return;
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
@@ -290,10 +305,6 @@ export function CanvasPane(): JSX.Element {
       ?.querySelector(`[data-card-index="${index}"]`)
       ?.scrollIntoView({ block: 'center' });
   }, [gotoLine?.nonce]);
-
-  const title = useMemo(() => /^title:\s*(.+)$/m.exec(doc.frontMatter)?.[1]?.trim() ?? '', [
-    doc.frontMatter,
-  ]);
 
   return (
     <>
@@ -337,45 +348,95 @@ export function CanvasPane(): JSX.Element {
         </div>
       </div>
 
-      <div ref={listRef} className="sr-scroll min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3">
-        {title ? (
-          <div className="px-0.5 text-[12px] text-ink-500">
-            <span className="font-medium text-ink-700">{title}</span> · front matter nằm trong
-            “Thông tin tài liệu”
+      <div ref={listRef} className="sr-scroll min-h-0 flex-1 overflow-y-auto p-3">
+        <AnimatePresence>
+          {coverAdded && coverAdded !== coverNoticeSeen ? (
+            <motion.div
+              initial={reduced ? false : { opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={reduced ? undefined : { opacity: 0, height: 0 }}
+              transition={{ duration: 0.18 }}
+              className="mb-2.5 overflow-hidden"
+            >
+              <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-2 text-[12px] text-deep-800">
+                <BadgeCheck size={14} className="mt-0.5 shrink-0 text-sky-600" />
+                <div className="flex-1">
+                  Mẫu này có trang bìa nên khối <strong>cover</strong> đã được thêm vào front
+                  matter với đúng chữ của khoa. Mở{' '}
+                  <button
+                    type="button"
+                    className="font-medium underline underline-offset-2"
+                    onClick={() => setShowFront(true)}
+                  >
+                    Thông tin tài liệu
+                  </button>{' '}
+                  để điền tên nhóm, GVHD và MSSV.
+                </div>
+                <button
+                  type="button"
+                  aria-label="Ẩn thông báo"
+                  onClick={() => setCoverNoticeSeen(coverAdded)}
+                  className="grid h-5 w-5 shrink-0 place-items-center rounded text-deep-500 hover:bg-white"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
+        {doc.cards.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-ink-300 px-4 py-10 text-center">
+            <div className="text-[13px] font-medium text-ink-700">Tài liệu đang trống</div>
+            <p className="mx-auto mt-1 max-w-[320px] text-[12px] text-ink-500">
+              Thêm khối đầu tiên bằng menu bên trên, hoặc dán thẳng nội dung từ Word, Excel
+              hay ảnh chụp màn hình vào đây.
+            </p>
           </div>
         ) : null}
 
-        {doc.cards.map((card, index) => (
-          <CardShell
-            key={card.id}
-            card={card}
-            index={index}
-            total={doc.cards.length}
-            selected={selected === index}
-            dropZone={drag?.over === index ? drag.zone : null}
-            recognised={recognised?.id === card.id ? recognised.label : null}
-            onSelect={() => setSelected(index)}
-            onChange={(text) => updateCard(index, text)}
-            onMove={(delta) => moveBy(index, delta)}
-            onDuplicate={() => duplicateAt(index)}
-            onDelete={() => removeAt(index)}
-            onUnmerge={() => unmerge(index)}
-            onMergeWithNext={() => mergeColumns(index, index + 1)}
-            onDragStart={() => setDragBoth({ from: index, over: null, zone: null })}
-            onDragEnd={() => setDragBoth(null)}
-            onDragOver={(zone) => {
-              const d = dragRef.current;
-              if (d) setDragBoth({ ...d, over: index, zone });
-            }}
-            onDrop={onDrop}
-            onUndoRecognition={() => {
-              if (!recognised) return;
-              const at = doc.cards.findIndex((c) => c.id === recognised.id);
-              if (at >= 0) updateCard(at, recognised.raw);
-              setRecognised(null);
-            }}
-          />
-        ))}
+        <AnimatePresence initial={false}>
+          {doc.cards.map((card, index) => (
+            <motion.div
+              key={card.id}
+              layout={reduced ? false : 'position'}
+              initial={reduced ? false : CARD_IN.initial}
+              animate={CARD_IN.animate}
+              exit={reduced ? undefined : CARD_IN.exit}
+              transition={CARD_IN.transition}
+              className="mb-2.5"
+            >
+              <CardShell
+                card={card}
+                index={index}
+                total={doc.cards.length}
+                selected={selected === index}
+                dropZone={drag?.over === index ? drag.zone : null}
+                recognised={recognised?.id === card.id ? recognised.label : null}
+                onSelect={() => setSelected(index)}
+                onChange={(text) => updateCard(index, text)}
+                onMove={(delta) => moveBy(index, delta)}
+                onDuplicate={() => duplicateAt(index)}
+                onDelete={() => removeAt(index)}
+                onUnmerge={() => unmerge(index)}
+                onMergeWithNext={() => mergeColumns(index, index + 1)}
+                onDragStart={() => setDragBoth({ from: index, over: null, zone: null })}
+                onDragEnd={() => setDragBoth(null)}
+                onDragOver={(zone) => {
+                  const d = dragRef.current;
+                  if (d) setDragBoth({ ...d, over: index, zone });
+                }}
+                onDrop={onDrop}
+                onUndoRecognition={() => {
+                  if (!recognised) return;
+                  const at = doc.cards.findIndex((c) => c.id === recognised.id);
+                  if (at >= 0) updateCard(at, recognised.raw);
+                  setRecognised(null);
+                }}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
 
         <div className="flex items-center gap-2 pt-1">
           <InsertMenu

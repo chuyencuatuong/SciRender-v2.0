@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   CheckCircle2,
+  FileCode2,
   FileDown,
   FilePlus2,
   Loader2,
+  Package,
   Play,
   Printer,
   Save,
   TriangleAlert,
   Upload,
 } from 'lucide-react';
+import { Menu } from '~/components/ui/Menu';
 import { exportStandaloneHtml, printDocument } from '@scirender/renderer-pdf';
 import { importBundle, exportBundle } from '@scirender/storage';
 import { track } from '@scirender/telemetry';
@@ -33,6 +36,7 @@ export function TopBar({ render }: Props): JSX.Element {
   const source = useStore((s) => s.source);
   const renderedSource = useStore((s) => s.renderedSource);
   const [busy, setBusy] = useState(false);
+  const importRef = useRef<HTMLInputElement | null>(null);
 
   const stale = source !== renderedSource;
   const result = render.result;
@@ -125,14 +129,13 @@ export function TopBar({ render }: Props): JSX.Element {
             <span className="sr-chip bg-flag-50 text-flag-600">
               <TriangleAlert size={12} /> {errors} lỗi
             </span>
+          ) : warnings > 0 ? (
+            <span className="sr-chip bg-amber-50 text-amber-700">{warnings} cảnh báo</span>
           ) : (
             <span className="sr-chip bg-emerald-50 text-emerald-700">
               <CheckCircle2 size={12} /> Không lỗi
             </span>
           )
-        ) : null}
-        {warnings > 0 ? (
-          <span className="sr-chip bg-amber-50 text-amber-700">{warnings} cảnh báo</span>
         ) : null}
 
         <button
@@ -141,51 +144,89 @@ export function TopBar({ render }: Props): JSX.Element {
           disabled={render.running}
           title="Dựng lại trang (Ctrl + Enter)"
         >
-          {render.running ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <Play size={14} />
-          )}
+          {render.running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
           Dựng trang
         </button>
 
-        <div className="mx-1 h-6 w-px bg-ink-200" />
+        {/* Seven buttons competing for attention became three: the one thing you
+            do constantly stays a button, the rest live where they belong. */}
+        <Menu
+          label="Tệp"
+          icon={<FilePlus2 size={14} />}
+          width={230}
+          items={[
+            {
+              id: 'new',
+              label: 'Tài liệu mới',
+              icon: <FilePlus2 size={13} />,
+              onSelect: () => void createDocument(false),
+            },
+            {
+              id: 'save',
+              label: 'Lưu ngay',
+              hint: 'tự động',
+              icon: <Save size={13} />,
+              disabled: !dirty,
+              onSelect: () => void save(),
+            },
+            'separator',
+            {
+              id: 'import',
+              label: 'Nhập bundle…',
+              icon: <Upload size={13} />,
+              onSelect: () => importRef.current?.click(),
+            },
+            {
+              id: 'bundle',
+              label: 'Xuất bundle sao lưu',
+              icon: <Package size={13} />,
+              disabled: busy,
+              onSelect: () => void onExportBundle(),
+            },
+          ]}
+        />
 
-        <button className="sr-btn" onClick={() => void createDocument(false)} title="Tài liệu mới">
-          <FilePlus2 size={14} /> Mới
-        </button>
-        <button className="sr-btn" onClick={() => void save()} disabled={!dirty}>
-          <Save size={14} /> Lưu
-        </button>
+        <Menu
+          label="Xuất"
+          icon={<FileDown size={14} />}
+          variant="primary"
+          width={240}
+          items={[
+            {
+              id: 'print',
+              label: 'In / lưu PDF…',
+              icon: <Printer size={13} />,
+              disabled: !render.pages.length,
+              onSelect: onPrint,
+            },
+            {
+              id: 'html',
+              label: 'Tệp HTML độc lập',
+              icon: <FileCode2 size={13} />,
+              disabled: !result,
+              onSelect: onExportHtml,
+            },
+            {
+              id: 'bundle2',
+              label: 'Bundle (.scirender.json)',
+              icon: <Package size={13} />,
+              disabled: busy,
+              onSelect: () => void onExportBundle(),
+            },
+          ]}
+        />
 
-        <label className="sr-btn cursor-pointer">
-          <Upload size={14} /> Nhập
-          <input
-            type="file"
-            accept=".json,application/json"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void onImport(f);
-              e.target.value = '';
-            }}
-          />
-        </label>
-
-        <button className="sr-btn" onClick={() => void onExportBundle()} disabled={busy}>
-          {busy ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />} Bundle
-        </button>
-        <button className="sr-btn" onClick={onExportHtml} disabled={!result}>
-          <FileDown size={14} /> HTML
-        </button>
-        <button
-          className="sr-btn-primary"
-          onClick={onPrint}
-          disabled={!render.pages.length}
-          title="Mở hộp thoại in của trình duyệt — chọn 'Save as PDF'"
-        >
-          <Printer size={14} /> In / PDF
-        </button>
+        <input
+          ref={importRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void onImport(f);
+            e.target.value = '';
+          }}
+        />
       </div>
     </header>
   );

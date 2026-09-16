@@ -356,8 +356,9 @@ function TableEditor({ text, onChange, kind }: EditorProps): JSX.Element {
                     </select>
                     <button
                       type="button"
-                      className="text-ink-400 hover:text-flag-600"
-                      title="Xóa cột"
+                      className="text-ink-400 hover:text-flag-600 disabled:opacity-25"
+                      title={width > 1 ? 'Xóa cột' : 'Bảng phải còn ít nhất một cột'}
+                      disabled={width <= 1}
                       onClick={() => dropCol(c)}
                     >
                       <Trash2 size={11} />
@@ -382,8 +383,9 @@ function TableEditor({ text, onChange, kind }: EditorProps): JSX.Element {
                       {c === width - 1 ? (
                         <button
                           type="button"
-                          className="px-1 text-ink-300 hover:text-flag-600"
-                          title="Xóa dòng"
+                          className="px-1 text-ink-300 hover:text-flag-600 disabled:opacity-25"
+                          title={form.rows.length > 1 ? 'Xóa dòng' : 'Bảng phải còn ít nhất một dòng'}
+                          disabled={form.rows.length <= 1}
                           onClick={() => dropRow(r)}
                         >
                           <Trash2 size={11} />

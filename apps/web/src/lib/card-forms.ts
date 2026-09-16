@@ -148,7 +148,10 @@ export interface TableForm {
   label: string;
 }
 
-const DELIM = /^\s*\|?(\s*:?-{1,}:?\s*\|)+\s*:?-{1,}:?\s*\|?\s*$/;
+// Same shape the parser accepts, including the one-column case — a table
+// trimmed down to a single column used to stop being recognised, and the card
+// silently dropped back to raw Markdown mid-edit.
+const DELIM = /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/;
 
 function splitRow(line: string): string[] {
   let t = line.trim();

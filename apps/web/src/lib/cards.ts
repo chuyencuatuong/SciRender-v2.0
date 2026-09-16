@@ -130,69 +130,209 @@ export function toSource(doc: CanvasDoc): string {
 /* ------------------------------------------------------------ new material */
 
 export interface CardTemplate {
+  /** Stable key used for search, recents and tests. */
+  id: string;
   kind: CardKind;
   label: string;
   hint: string;
+  /** Extra words the search box should match, beyond the label. */
+  keywords: string;
   text: string;
 }
 
+/**
+ * Ordered by how often a report actually needs them, not by how the parser is
+ * organised: text and headings first, then the four things a BTL is made of,
+ * then the rest. The menu puts whatever you used recently above all of it.
+ */
 export const CARD_TEMPLATES: CardTemplate[] = [
-  { kind: 'heading', label: 'Đề mục cấp 1', hint: 'CHƯƠNG mới, luôn sang trang', text: '# Tên chương' },
-  { kind: 'heading', label: 'Đề mục cấp 2', hint: 'Mục 1.1', text: '## Tên mục' },
-  { kind: 'heading', label: 'Đề mục cấp 3', hint: 'Mục 1.1.1', text: '### Tên mục nhỏ' },
-  { kind: 'paragraph', label: 'Đoạn văn', hint: 'Văn bản thường', text: 'Nội dung đoạn văn.' },
   {
-    kind: 'equation',
-    label: 'Công thức',
-    hint: 'LaTeX, đánh số tự động',
-    text: '$$\n\\frac{a}{b} = c\n$$ {#eq:ten-nhan}',
+    id: 'paragraph',
+    kind: 'paragraph',
+    label: 'Đoạn văn',
+    hint: 'Văn bản thường',
+    keywords: 'text doan van paragraph chu noi dung',
+    text: 'Nội dung đoạn văn.',
   },
   {
+    id: 'heading-2',
+    kind: 'heading',
+    label: 'Đề mục cấp 2',
+    hint: 'Mục 1.1',
+    keywords: 'heading h2 de muc tieu de muc con',
+    text: '## Tên mục',
+  },
+  {
+    id: 'heading-1',
+    kind: 'heading',
+    label: 'Đề mục cấp 1',
+    hint: 'CHƯƠNG mới, luôn sang trang',
+    keywords: 'heading h1 chuong chapter de muc',
+    text: '# Tên chương',
+  },
+  {
+    id: 'figure',
     kind: 'figure',
     label: 'Hình ảnh',
     hint: 'Từ tab Tài nguyên hoặc dán ảnh',
+    keywords: 'image hinh anh figure picture',
     text: '![Chú thích hình](asset:ten-anh){#fig:ten-nhan width=80%}',
   },
   {
+    id: 'table',
     kind: 'table',
     label: 'Bảng',
     hint: 'Dán từ Excel cũng ra bảng này',
+    keywords: 'table bang excel du lieu grid',
     text: '| Cột A | Cột B | Cột C |\n|:------|------:|:-----:|\n| 1 | 2 | 3 |\n| 4 | 5 | 6 |\n\n: Chú thích bảng {#tbl:ten-nhan}',
   },
   {
+    id: 'equation',
+    kind: 'equation',
+    label: 'Công thức',
+    hint: 'LaTeX, đánh số tự động',
+    keywords: 'equation cong thuc latex math toan',
+    text: '$$\n\\frac{a}{b} = c\n$$ {#eq:ten-nhan}',
+  },
+  {
+    id: 'list',
+    kind: 'list',
+    label: 'Danh sách',
+    hint: 'Gạch đầu dòng',
+    keywords: 'list danh sach bullet gach dau dong',
+    text: '- Mục một\n- Mục hai',
+  },
+  {
+    id: 'diagram',
     kind: 'diagram',
     label: 'Sơ đồ khối',
     hint: 'Mermaid, tự chọn chiều',
+    keywords: 'diagram so do khoi flowchart mermaid',
     text: '```mermaid\nflowchart TB\n  A[Đầu vào] --> B[Xử lý]\n  B --> C[Kết quả]\n```\n\n: Chú thích sơ đồ {#dia:ten-nhan}',
   },
   {
+    id: 'code',
     kind: 'codeBlock',
     label: 'Khối mã',
     hint: 'Có tô màu cú pháp',
+    keywords: 'code khoi ma python source',
     text: '```python\nx = 1\n```\n\n: Chú thích mã nguồn {#lst:ten-nhan}',
   },
-  { kind: 'list', label: 'Danh sách', hint: 'Gạch đầu dòng', text: '- Mục một\n- Mục hai' },
-  { kind: 'blockquote', label: 'Trích dẫn', hint: 'Khối trích', text: '> Nội dung trích dẫn.' },
   {
-    kind: 'callout',
-    label: 'Khung ghi chú',
-    hint: 'note / tip / warning / danger',
-    text: '::: note Tiêu đề\nNội dung ghi chú.\n:::',
+    id: 'heading-3',
+    kind: 'heading',
+    label: 'Đề mục cấp 3',
+    hint: 'Mục 1.1.1',
+    keywords: 'heading h3 de muc nho',
+    text: '### Tên mục nhỏ',
   },
   {
+    id: 'columns',
     kind: 'columns',
     label: 'Hàng hai cột',
     hint: 'Hai khối cạnh nhau',
+    keywords: 'columns hai cot side by side',
     text: '::: cols\nCột trái.\n|||\nCột phải.\n:::',
   },
   {
+    id: 'footnote',
     kind: 'footnote',
     label: 'Chú thích chân trang',
     hint: 'In ở chân trang có tham chiếu',
+    keywords: 'footnote chu thich chan trang',
     text: '[^nhan]: Nội dung chú thích.',
   },
-  { kind: 'thematicBreak', label: 'Đường kẻ ngang', hint: '', text: '---' },
+  {
+    id: 'callout',
+    kind: 'callout',
+    label: 'Khung ghi chú',
+    hint: 'note / tip / warning / danger',
+    keywords: 'callout khung ghi chu note warning',
+    text: '::: note Tiêu đề\nNội dung ghi chú.\n:::',
+  },
+  {
+    id: 'quote',
+    kind: 'blockquote',
+    label: 'Trích dẫn',
+    hint: 'Khối trích',
+    keywords: 'quote trich dan blockquote',
+    text: '> Nội dung trích dẫn.',
+  },
+  {
+    id: 'heading-4',
+    kind: 'heading',
+    label: 'Đề mục cấp 4',
+    hint: 'Mục 1.1.1.1',
+    keywords: 'heading h4 de muc',
+    text: '#### Tên mục',
+  },
+  {
+    id: 'rule',
+    kind: 'thematicBreak',
+    label: 'Đường kẻ ngang',
+    hint: '',
+    keywords: 'rule duong ke ngang hr',
+    text: '---',
+  },
 ];
+
+/** Strips Vietnamese diacritics so "cong thuc" finds "Công thức". */
+export function foldDiacritics(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase();
+}
+
+/**
+ * Ranks block templates against what was typed. Matching is accent-insensitive
+ * and prefix-weighted, so two or three letters are enough to land on the right
+ * block without reading the whole list.
+ */
+export function searchTemplates(query: string, recent: string[] = []): CardTemplate[] {
+  const q = foldDiacritics(query.trim());
+  if (!q) {
+    const pinned = recent
+      .map((id) => CARD_TEMPLATES.find((t) => t.id === id))
+      .filter((t): t is CardTemplate => !!t);
+    const rest = CARD_TEMPLATES.filter((t) => !recent.includes(t.id));
+    return [...pinned, ...rest];
+  }
+  const scored: Array<{ t: CardTemplate; score: number }> = [];
+  for (const t of CARD_TEMPLATES) {
+    const label = foldDiacritics(t.label);
+    const hay = `${label} ${foldDiacritics(t.hint)} ${t.keywords}`;
+    let score = 0;
+    if (label.startsWith(q)) score = 100;
+    else if (label.includes(q)) score = 70;
+    else if (hay.includes(q)) score = 40;
+    else if (q.split(/\s+/).every((w) => hay.includes(w))) score = 20;
+    if (!score) continue;
+    const recentBoost = Math.max(0, 8 - recent.indexOf(t.id)) * (recent.includes(t.id) ? 1 : 0);
+    scored.push({ t, score: score + recentBoost });
+  }
+  return scored.sort((a, b) => b.score - a.score).map((s) => s.t);
+}
+
+/** A quiet colour per block type — enough to scan the column, not a rainbow. */
+export const KIND_TONE: Record<CardKind, string> = {
+  heading: 'bg-deep-50 text-deep-700',
+  paragraph: 'bg-ink-100 text-ink-600',
+  equation: 'bg-violet-50 text-violet-700',
+  figure: 'bg-sky-50 text-sky-700',
+  table: 'bg-emerald-50 text-emerald-700',
+  diagram: 'bg-sky-50 text-sky-700',
+  codeBlock: 'bg-amber-50 text-amber-700',
+  list: 'bg-ink-100 text-ink-600',
+  blockquote: 'bg-ink-100 text-ink-600',
+  callout: 'bg-amber-50 text-amber-700',
+  thematicBreak: 'bg-ink-100 text-ink-500',
+  footnote: 'bg-flag-50 text-flag-600',
+  columns: 'bg-deep-50 text-deep-700',
+  unknown: 'bg-ink-100 text-ink-500',
+};
 
 export const KIND_LABEL: Record<CardKind, string> = {
   heading: 'Đề mục',
