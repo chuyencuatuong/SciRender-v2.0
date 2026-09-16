@@ -193,12 +193,6 @@ importers:
       '@scirender/template-engine':
         specifier: workspace:*
         version: link:../template-engine
-      html2canvas:
-        specifier: 1.4.1
-        version: 1.4.1
-      jspdf:
-        specifier: 2.5.2
-        version: 2.5.2
 
   packages/storage:
     dependencies:
