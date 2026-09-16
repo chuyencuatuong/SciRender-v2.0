@@ -30,10 +30,13 @@ import {
   makeColumns,
   moveCard,
   splitColumns,
+  searchTemplates,
   toCards,
   toSource,
+  CARD_TEMPLATES,
 } from '../apps/web/src/lib/cards.js';
 import { detectPaste } from '../apps/web/src/lib/paste.js';
+import { needsCover, withCover } from '../apps/web/src/lib/cover.js';
 import {
   headingDepth,
   parseCode,
@@ -716,11 +719,71 @@ check('ô chứa | được đọc đúng', tblPipe?.header[1] === 'b|c', JSON.s
 check('ô chứa | được ghi lại có thoát',
   serializeTable(tblPipe as TableForm).includes('b\\|c'));
 
+const oneCol = parseTable('| Chỉ một cột |\n|---|\n| A |\n| B |');
+check('bảng một cột vẫn parse được', !!oneCol && oneCol.header.length === 1 && oneCol.rows.length === 2,
+  JSON.stringify(oneCol));
+check('bảng một cột khứ hồi nguyên vẹn',
+  parseTable(serializeTable(oneCol as TableForm))?.rows.length === 2);
+const oneRow = parseTable('| A | B |\n|---|---|\n| 1 | 2 |');
+check('bảng một dòng dữ liệu vẫn parse được', oneRow?.rows.length === 1);
+
 check('khối không đúng dạng thì biểu mẫu trả null', parseTable('chỉ là đoạn văn') === null);
 check('công thức sai dạng thì biểu mẫu trả null', parseEquation('$x$') === null);
 
 check('đổi cấp đề mục', setHeadingDepth('## Tên', 1) === '# Tên');
 check('đọc cấp đề mục', headingDepth('### A') === 3);
+
+/* ------------------------------------------------------------ trang bìa tự động */
+
+section('Bìa tự động khi đổi template');
+
+const noCover = ['---', 'title: Đề tài X', 'authors:', '  - Trần Nhật Tường', '  - Nguyễn Văn A', '---', '', '# Mở đầu', '', 'Nội dung.'].join('\n');
+
+check('nhận ra tài liệu thiếu khối bìa', needsCover(noCover, HCMUT_BTL));
+check('template không có bìa thì không đòi hỏi gì',
+  !needsCover(noCover, findTemplate('scientific-standard')));
+
+const filled = withCover(noCover, HCMUT_BTL);
+check('thêm được khối cover', /^cover:$/m.test(filled));
+check('giữ nguyên mọi khóa cũ',
+  filled.includes('title: Đề tài X') && filled.includes('- Trần Nhật Tường'));
+check('giữ nguyên phần thân', filled.includes('# Mở đầu') && filled.includes('Nội dung.'));
+check('điền đúng chữ của khoa',
+  filled.includes('Trường Đại học Bách khoa') && filled.includes('Báo cáo bài tập lớn'));
+check('dùng logo có sẵn, không bắt tải lên', filled.includes('logo: asset:logo-bk'));
+check('lấy thành viên từ authors đã khai',
+  filled.includes('- name: Trần Nhật Tường') && filled.includes('- name: Nguyễn Văn A'));
+
+const parsedCover = compile(filled);
+check('front matter sau khi thêm bìa vẫn parse được',
+  !parsedCover.diagnostics.some((d) => d.severity === 'error'),
+  parsedCover.diagnostics.map((d) => d.code).join(','));
+check('bìa dựng ra trang bìa thật', parsedCover.rendered.coverPages.length === 2,
+  String(parsedCover.rendered.coverPages.length));
+
+check('tài liệu đã có bìa thì không đụng vào',
+  withCover(SAMPLE_DOCUMENT, HCMUT_BTL) === SAMPLE_DOCUMENT.replace(/\r\n?/g, '\n'));
+
+const bare = '# Chỉ có tiêu đề\n\nKhông có front matter.';
+const bareFilled = withCover(bare, HCMUT_BTL);
+check('tài liệu không có front matter thì tạo mới', bareFilled.startsWith('---\ntitle: Chỉ có tiêu đề'));
+check('thân tài liệu cũ được giữ lại', bareFilled.includes('Không có front matter.'));
+
+/* ---------------------------------------------------- tìm kiếm loại khối */
+
+section('Tìm loại khối');
+
+check('gõ không dấu vẫn ra đúng khối',
+  searchTemplates('cong thuc')[0]?.id === 'equation',
+  searchTemplates('cong thuc')[0]?.id);
+check('gõ tiếng Anh cũng ra', searchTemplates('table')[0]?.id === 'table');
+check('gõ tắt vẫn ra', searchTemplates('bang')[0]?.id === 'table');
+check('không khớp thì trả về rỗng', searchTemplates('zzzz').length === 0);
+check('không gõ gì thì đủ danh sách',
+  searchTemplates('').length === CARD_TEMPLATES.length);
+check('khối hay dùng được đẩy lên đầu',
+  searchTemplates('', ['code'])[0]?.id === 'code');
+check('đoạn văn đứng đầu danh sách mặc định', CARD_TEMPLATES[0]?.id === 'paragraph');
 
 /* -------------------------------------------------------------- edge cases */
 

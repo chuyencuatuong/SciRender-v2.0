@@ -217,6 +217,29 @@ check('hai phần của bảng nằm trên hai trang liên tiếp',
   !!tableSplit && tableSplit.tailPage === tableSplit.headPage + 1,
   JSON.stringify([tableSplit?.headPage, tableSplit?.tailPage]));
 
+// --- long formulas must fit the column ------------------------------------
+const mathFit = await page.evaluate(() => {
+  const out = [];
+  for (const disp of document.querySelectorAll('.sr-page-body .katex-display')) {
+    const kx = disp.querySelector('.katex');
+    if (!kx) continue;
+    const body = disp.closest('.sr-page-body');
+    const b = body.getBoundingClientRect();
+    const k = kx.getBoundingClientRect();
+    out.push({
+      spill: Math.round(Math.max(k.right - b.right, b.left - k.left)),
+      scaled: (kx.style.transform || '').startsWith('scale('),
+      clipped: Math.round(disp.scrollWidth - disp.clientWidth) > 1 && !kx.style.transform,
+    });
+  }
+  return out;
+});
+check('không công thức nào tràn ra ngoài vùng nội dung',
+  mathFit.every((m) => m.spill <= 1), JSON.stringify(mathFit));
+check('công thức dài được thu vừa cột thay vì bị cắt',
+  mathFit.some((m) => m.scaled) && mathFit.every((m) => !m.clipped),
+  JSON.stringify(mathFit));
+
 const figureFit = await page.evaluate(() => {
   const imgs = Array.from(document.querySelectorAll('.sr-page-body figure img'));
   const body = document.querySelector('.sr-page-body');
@@ -399,6 +422,81 @@ check(
   `${bodySize}px`,
 );
 
+/* ------------------------------------------------------------------ giao diện */
+
+console.log('\nGiao diện');
+
+const headerButtons = await page.evaluate(
+  () => document.querySelectorAll('header.h-12 button, header.h-12 label').length,
+);
+check('thanh trên gom còn tối đa 4 nút', headerButtons <= 4, `buttons=${headerButtons}`);
+
+check(
+  'menu Tệp và Xuất có mặt',
+  (await page.getByRole('button', { name: 'Tệp' }).count()) === 1 &&
+    (await page.getByRole('button', { name: 'Xuất' }).count()) === 1,
+);
+
+await page.getByRole('button', { name: 'Xuất' }).click();
+await page.waitForTimeout(250);
+check(
+  'menu Xuất mở ra đủ ba cách xuất',
+  (await page.locator('[role="menu"] [role="menuitem"]').count()) === 3,
+  String(await page.locator('[role="menu"] [role="menuitem"]').count()),
+);
+await page.keyboard.press('Escape');
+await page.waitForTimeout(200);
+
+const techVisible = async () =>
+  page.evaluate(() => /parser \d/.test(document.querySelector('footer')?.textContent ?? ''));
+check('thanh trạng thái KHÔNG hiện chỉ số kỹ thuật mặc định', !(await techVisible()));
+check(
+  'thanh trạng thái vẫn hiện số trang và hạn mức',
+  await page.evaluate(() => {
+    const t = document.querySelector('footer')?.textContent ?? '';
+    return t.includes('trang') && t.includes('nội dung');
+  }),
+);
+await page.getByRole('button', { name: 'Chi tiết kỹ thuật' }).click();
+await page.waitForTimeout(400);
+check('bật “Chi tiết kỹ thuật” mới hiện thời gian pipeline', await techVisible());
+await page.getByRole('button', { name: 'Chi tiết kỹ thuật' }).click();
+await page.waitForTimeout(400);
+check('tắt lại thì ẩn đi', !(await techVisible()));
+
+// --- search in the insert menu --------------------------------------------
+await page.getByRole('button', { name: /^Thêm khối$/ }).first().click();
+await page.waitForTimeout(300);
+const allBlocks = await page.locator('[role="menu"] [role="menuitem"]').count();
+await page.getByLabel('Tìm loại khối').fill('cong thuc');
+await page.waitForTimeout(250);
+const filtered = await page.locator('[role="menu"] [role="menuitem"]').allTextContents();
+check(
+  'ô tìm kiếm lọc được loại khối, bỏ dấu vẫn ra',
+  filtered.length < allBlocks && filtered[0]?.includes('Công thức'),
+  JSON.stringify(filtered.slice(0, 3)),
+);
+const cardsBeforeEnter = await page.locator('[data-card-index]').count();
+await page.keyboard.press('Enter');
+await page.waitForTimeout(400);
+check(
+  'Enter thêm ngay khối đang chọn',
+  (await page.locator('[data-card-index]').count()) === cardsBeforeEnter + 1,
+);
+await page.getByRole('button', { name: /^Thêm khối$/ }).first().click();
+await page.waitForTimeout(300);
+check(
+  'khối vừa dùng được ghim lên nhóm “Hay dùng”',
+  await page.evaluate(() => {
+    const menu = document.querySelector('[role="menu"]');
+    return (menu?.textContent ?? '').includes('Hay dùng');
+  }),
+);
+await page.keyboard.press('Escape');
+await page.waitForTimeout(200);
+await page.keyboard.press('Control+z');
+await page.waitForTimeout(400);
+
 /* -------------------------------------------------------------- block canvas */
 
 console.log('\nBlock canvas');
@@ -406,10 +504,17 @@ console.log('\nBlock canvas');
 const cardCount = await page.locator('[data-card-index]').count();
 check('tài liệu hiện thành các khối card', cardCount >= 20, `cards=${cardCount}`);
 check(
-  'card có nhãn loại và số dòng',
+  'card có nhãn loại',
   await page.evaluate(() => {
     const h = document.querySelector('[data-card-index] header');
-    return !!h && /dòng \d+/.test(h.textContent ?? '');
+    return !!h && (h.textContent ?? '').trim().length > 0;
+  }),
+);
+check(
+  'nút thao tác trên card ẩn cho tới khi cần',
+  await page.evaluate(() => {
+    const row = document.querySelector('[data-card-index="1"] header > div:last-child');
+    return !!row && getComputedStyle(row).opacity === '0';
   }),
 );
 check('card bảng hiện thành lưới sửa được', (await page.locator('[data-card-index] table input').count()) > 0);
@@ -451,6 +556,57 @@ check(
   'hoàn tác trả lại đúng thứ tự cũ',
   (await page.evaluate(() => document.querySelector('[data-card-index="0"] input')?.value ?? '')) ===
     firstHeadingBefore,
+);
+
+// --- the table grid must never destroy itself ------------------------------
+const tableCardIndex = await page.evaluate(
+  () => [...document.querySelectorAll('[data-card-index]')].findIndex((c) => c.querySelector('table input')),
+);
+const tableCard = page.locator(`[data-card-index="${tableCardIndex}"]`);
+const tableDims = () =>
+  tableCard.evaluate((el) => ({
+    rows: el.querySelectorAll('tbody tr').length,
+    cols: el.querySelectorAll('thead th').length,
+    grid: !!el.querySelector('table input'),
+  }));
+for (let i = 0; i < 8; i++) {
+  const btn = tableCard.locator('button[title="Xóa cột"]:not([disabled])').first();
+  if ((await btn.count()) === 0) break;
+  await btn.click();
+  await page.waitForTimeout(150);
+}
+for (let i = 0; i < 8; i++) {
+  const btn = tableCard.locator('button[title="Xóa dòng"]:not([disabled])').first();
+  if ((await btn.count()) === 0) break;
+  await btn.click();
+  await page.waitForTimeout(150);
+}
+const floor = await tableDims();
+check(
+  'xóa hết dòng/cột vẫn còn một bảng hợp lệ, không rơi về Markdown thô',
+  floor.grid && floor.rows >= 1 && floor.cols >= 1,
+  JSON.stringify(floor),
+);
+for (let i = 0; i < 12; i++) {
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(90);
+}
+await page.waitForTimeout(300);
+
+// --- a plain paste inside a field stays a plain paste ----------------------
+const cardsBeforePlain = await page.locator('[data-card-index]').count();
+await page.locator('[data-card-index="2"] textarea').first().click();
+await page.evaluate(() => {
+  const dt = new DataTransfer();
+  dt.setData('text/plain', 'chuoi dan thu');
+  document.activeElement?.dispatchEvent(
+    new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }),
+  );
+});
+await page.waitForTimeout(400);
+check(
+  'dán chữ vào ô đang gõ dở thì dán thường, không tạo khối mới',
+  (await page.locator('[data-card-index]').count()) === cardsBeforePlain,
 );
 
 // --- source view -----------------------------------------------------------
@@ -583,6 +739,47 @@ await page.keyboard.press('Control+z');
 await page.waitForTimeout(400);
 await page.keyboard.press('Control+Enter');
 await page.waitForTimeout(3000);
+
+/* -------------------------------------------------------- bìa theo template */
+
+console.log('\nBìa tự động');
+
+// Strip the cover, then switch template away and back.
+await page.getByRole('button', { name: 'Xem mã nguồn' }).click();
+await page.waitForTimeout(300);
+const full = await page.evaluate(() => document.querySelector('[role="dialog"] textarea')?.value ?? '');
+const stripped = full.replace(/^cover:\n(?:[ \t]+.*\n|\n)*/m, '');
+await page.locator('[role="dialog"] textarea').fill(stripped);
+await page.getByRole('button', { name: 'Áp dụng' }).click();
+await page.waitForTimeout(700);
+check('bỏ được khối cover để thử', !stripped.includes('\ncover:'));
+
+await page.locator('nav button').nth(4).click();
+await page.waitForTimeout(300);
+const templateSelect = page.locator('select').first();
+await templateSelect.selectOption('scientific-standard');
+await page.waitForTimeout(600);
+await templateSelect.selectOption('hcmut-btl');
+await page.waitForTimeout(900);
+
+await page.getByRole('button', { name: 'Xem mã nguồn' }).click();
+await page.waitForTimeout(400);
+const afterSwitch = await page.evaluate(
+  () => document.querySelector('[role="dialog"] textarea')?.value ?? '',
+);
+await page.keyboard.press('Escape');
+await page.waitForTimeout(250);
+check('đổi sang mẫu BTL tự thêm khối bìa', /^cover:$/m.test(afterSwitch), afterSwitch.slice(0, 80));
+check('bìa mới dùng đúng chữ của khoa', afterSwitch.includes('Trường Đại học Bách khoa'));
+check(
+  'có báo cho người dùng biết bìa vừa được thêm',
+  await page.evaluate(() => document.body.innerText.includes('đã được thêm vào front')),
+);
+
+await page.keyboard.press('Control+Enter');
+await page.waitForTimeout(3500);
+check('trang bìa dựng ra thật', (await page.locator('.sr-page-cover').count()) === 2,
+  String(await page.locator('.sr-page-cover').count()));
 
 /* ----------------------------------------------------------- render on demand */
 

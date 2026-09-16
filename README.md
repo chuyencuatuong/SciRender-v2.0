@@ -216,6 +216,34 @@ trang xem trước cũng vậy.
 
 ---
 
+## Giao diện
+
+Ba khu, mỗi khu một việc:
+
+| Khu | Nội dung |
+|---|---|
+| Thanh trên | tên tài liệu · trạng thái lỗi · **Dựng trang** · menu **Tệp** · menu **Xuất** |
+| Cột giữa | block canvas — tài liệu dưới dạng card |
+| Cột phải | trang A4 thật, đúng thứ sẽ in ra |
+| Thanh dưới | số trang · số từ · hạn mức trang của quy cách · nút **Chi tiết kỹ thuật** |
+
+**Chi tiết kỹ thuật tắt mặc định.** Thời gian từng chặng pipeline, chữ ký đầu vào và thời
+gian dựng trang là thứ để soi khi nghi ngờ, không phải thứ nhìn suốt ngày — bật khi cần,
+lựa chọn được nhớ lại.
+
+**Nút trên thanh header gom còn ba.** Bảy nút cạnh nhau thì không nút nào nổi bật; giờ chỉ
+việc làm liên tục (Dựng trang) là nút, còn lại vào menu Tệp và Xuất. Menu dùng được bằng
+bàn phím: ↑↓ chọn, Enter, Esc.
+
+Chuyển sang mẫu có trang bìa (như `hcmut-btl`) mà tài liệu chưa có khối `cover:` thì khối
+đó được **thêm tự động** với đúng chữ của khoa và logo có sẵn — chỉ thêm khi thiếu, không
+đụng vào bất kỳ khóa nào đã có (P1), và app nói rõ là nó vừa thêm.
+
+Chuyển động: chỉ 140–180ms cho menu, thêm/xóa/đổi chỗ card và thanh chi tiết. Hệ điều hành
+bật "giảm chuyển động" thì tắt hết.
+
+---
+
 ## Block canvas — cột giữa
 
 Tài liệu hiện ra thành một cột **card**, mỗi khối một card: đề mục, đoạn văn, công thức,
@@ -225,7 +253,7 @@ hình, bảng, sơ đồ, khối mã, chú thích chân trang.
 |---|---|
 | Đổi thứ tự | kéo tay nắm ⠿ lên/xuống, hoặc <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> |
 | Xếp hai khối cạnh nhau | kéo một card sang **mép trái/phải** của card khác, hoặc nút ⧉ |
-| Thêm khối | menu **Thêm khối** — 15 loại dựng sẵn |
+| Thêm khối | menu **Thêm khối** — có ô tìm kiếm, gõ không dấu vẫn ra (`cong thuc` → Công thức); khối hay dùng được ghim lên đầu |
 | Nhân bản / xóa | nút trên đầu card, hoặc <kbd>Ctrl</kbd>+<kbd>D</kbd> |
 | Hoàn tác | <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> |
 | Xem Markdown | nút **Xem mã nguồn** — sửa và Áp dụng cũng được |

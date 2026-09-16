@@ -145,6 +145,10 @@ export interface Preferences {
   showDiagnostics: boolean;
   theme: 'light' | 'dark';
   telemetryOptIn: boolean;
+  /** Timings, signature and stage breakdown in the status bar. Off by default. */
+  showTechStats: boolean;
+  /** Block templates used most recently, newest first — drives "Hay dùng". */
+  recentBlocks: string[];
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -154,6 +158,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   showDiagnostics: true,
   theme: 'light',
   telemetryOptIn: false,
+  showTechStats: false,
+  recentBlocks: [],
 };
 
 export function loadPreferences(): Preferences {
