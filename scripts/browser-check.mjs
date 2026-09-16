@@ -34,7 +34,10 @@ function check(name, condition, detail) {
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH || undefined,
 });
-const page = await browser.newPage({ viewport: { width: 1680, height: 1000 } });
+const page = await browser.newPage({
+  viewport: { width: 1680, height: 1000 },
+  acceptDownloads: true,
+});
 
 const consoleErrors = [];
 page.on('console', (m) => {
@@ -427,22 +430,31 @@ check(
 console.log('\nGiao diện');
 
 const headerButtons = await page.evaluate(
-  () => document.querySelectorAll('header.h-12 button, header.h-12 label').length,
+  () => document.querySelectorAll('[data-sr-topbar] button, [data-sr-topbar] label').length,
 );
 check('thanh trên gom còn tối đa 4 nút', headerButtons <= 4, `buttons=${headerButtons}`);
 
 check(
   'menu Tệp và Xuất có mặt',
   (await page.getByRole('button', { name: 'Tệp' }).count()) === 1 &&
-    (await page.getByRole('button', { name: 'Xuất' }).count()) === 1,
+    (await page.getByRole('button', { name: 'Xuất', exact: true }).count()) === 1,
 );
 
-await page.getByRole('button', { name: 'Xuất' }).click();
+// Nút chính của "Xuất" tải PDF thật, nên ở đây chỉ mở phần menu bên cạnh.
+await page.getByLabel('Thêm cách xuất').click();
 await page.waitForTimeout(250);
+const exportItems = await page.locator('[role="menu"] [role="menuitem"]').allTextContents();
 check(
-  'menu Xuất mở ra đủ ba cách xuất',
-  (await page.locator('[role="menu"] [role="menuitem"]').count()) === 3,
-  String(await page.locator('[role="menu"] [role="menuitem"]').count()),
+  'menu Xuất liệt kê đủ các cách xuất',
+  exportItems.length === 5,
+  String(exportItems.length),
+);
+check(
+  'In và Tải PDF là hai mục tách bạch',
+  exportItems.some((t) => t.includes('Tải PDF về máy')) &&
+    exportItems.some((t) => t.trim().startsWith('In')) &&
+    exportItems.some((t) => t.includes('nét cao')),
+  JSON.stringify(exportItems.map((t) => t.split('\n')[0]?.trim())),
 );
 await page.keyboard.press('Escape');
 await page.waitForTimeout(200);
@@ -513,9 +525,19 @@ check(
 check(
   'nút thao tác trên card ẩn cho tới khi cần',
   await page.evaluate(() => {
-    const row = document.querySelector('[data-card-index="1"] header > div:last-child');
-    return !!row && getComputedStyle(row).opacity === '0';
+    const bar = document.querySelector('[data-card-index="1"] header');
+    if (!bar) return false;
+    const cs = getComputedStyle(bar);
+    return cs.opacity === '0' && cs.pointerEvents === 'none';
   }),
+);
+await page.locator('[data-card-index="1"]').hover();
+await page.waitForTimeout(220);
+check(
+  'rê chuột lên khối thì thanh thao tác nổi lên',
+  await page.evaluate(
+    () => getComputedStyle(document.querySelector('[data-card-index="1"] header')).opacity === '1',
+  ),
 );
 check('card bảng hiện thành lưới sửa được', (await page.locator('[data-card-index] table input').count()) > 0);
 check('card công thức có xem trước KaTeX', (await page.locator('[data-card-index] .katex').count()) > 0);
@@ -543,6 +565,8 @@ check(
 const firstHeadingBefore = await page.evaluate(
   () => document.querySelector('[data-card-index="0"] input')?.value ?? '',
 );
+await page.locator('[data-card-index="0"]').hover();
+await page.waitForTimeout(200);
 await page.locator('[data-card-index="0"] button[aria-label^="Xuống"]').click();
 await page.waitForTimeout(400);
 const firstHeadingAfter = await page.evaluate(
@@ -610,7 +634,7 @@ check(
 );
 
 // --- source view -----------------------------------------------------------
-await page.getByRole('button', { name: 'Xem mã nguồn' }).click();
+await page.getByRole('button', { name: 'Mã nguồn' }).click();
 await page.waitForTimeout(300);
 const sourceText = await page.evaluate(
   () => document.querySelector('[role="dialog"] textarea')?.value ?? '',
@@ -656,10 +680,15 @@ await page.waitForTimeout(400);
 await page.locator('[data-card-index="2"] header').click();
 await pasteInto('\\frac{a}{b} = \\sqrt{c}');
 check(
+  // Khối công thức mở ở tab "Xem trước", nên LaTeX gốc nằm trong ô nhập chứ
+  // không nằm trong textContent — phải soi cả value của textarea.
   'Ctrl+V LaTeX tạo khối công thức',
   await page.evaluate(() =>
-    Array.from(document.querySelectorAll('[data-card-index]')).some((c) =>
-      (c.textContent ?? '').includes('\\sqrt{c}'),
+    Array.from(document.querySelectorAll('[data-card-index]')).some(
+      (c) =>
+        (c.textContent ?? '').includes('\\sqrt{c}') ||
+        Array.from(c.querySelectorAll('textarea')).some((t) => t.value.includes('\\sqrt{c}')) ||
+        !!c.querySelector('.katex .sqrt'),
     ),
   ),
 );
@@ -745,7 +774,7 @@ await page.waitForTimeout(3000);
 console.log('\nBìa tự động');
 
 // Strip the cover, then switch template away and back.
-await page.getByRole('button', { name: 'Xem mã nguồn' }).click();
+await page.getByRole('button', { name: 'Mã nguồn' }).click();
 await page.waitForTimeout(300);
 const full = await page.evaluate(() => document.querySelector('[role="dialog"] textarea')?.value ?? '');
 const stripped = full.replace(/^cover:\n(?:[ \t]+.*\n|\n)*/m, '');
@@ -762,7 +791,7 @@ await page.waitForTimeout(600);
 await templateSelect.selectOption('hcmut-btl');
 await page.waitForTimeout(900);
 
-await page.getByRole('button', { name: 'Xem mã nguồn' }).click();
+await page.getByRole('button', { name: 'Mã nguồn' }).click();
 await page.waitForTimeout(400);
 const afterSwitch = await page.evaluate(
   () => document.querySelector('[role="dialog"] textarea')?.value ?? '',
@@ -834,6 +863,143 @@ check(
   JSON.stringify(first) === JSON.stringify(second),
   `${JSON.stringify(first)} vs ${JSON.stringify(second)}`,
 );
+
+/* ------------------------------------------------- thiết kế & khổ màn hình */
+
+console.log('\nThiết kế & khổ màn hình');
+
+const fonts = await page.evaluate(() => {
+  const loaded = Array.from(document.fonts)
+    .filter((f) => f.status === 'loaded')
+    .map((f) => f.family);
+  const probe = document.createElement('span');
+  probe.textContent = 'Đường kính ống nghiệm ẩm ướt';
+  probe.style.cssText = 'position:absolute;left:-9999px;font-size:40px;white-space:nowrap';
+  document.body.appendChild(probe);
+  probe.style.fontFamily = "'Be Vietnam Pro'";
+  const withFont = probe.getBoundingClientRect().width;
+  probe.style.fontFamily = 'monospace';
+  const fallback = probe.getBoundingClientRect().width;
+  probe.remove();
+  return { loaded: Array.from(new Set(loaded)), withFont, fallback };
+});
+check(
+  'ba mặt chữ tự lưu trong app đều nạp được',
+  ['Be Vietnam Pro', 'Literata', 'JetBrains Mono'].every((f) => fonts.loaded.includes(f)),
+  JSON.stringify(fonts.loaded),
+);
+check(
+  'chữ có dấu tiếng Việt dựng bằng mặt chữ thật, không rơi về font hệ thống',
+  Math.abs(fonts.withFont - fonts.fallback) > 4,
+  `${Math.round(fonts.withFont)} vs ${Math.round(fonts.fallback)}`,
+);
+
+const paper = await page.evaluate(() => {
+  const host = document.querySelector('.sr-canvas');
+  const sheet = document.querySelector('.sr-page');
+  if (!host || !sheet) return null;
+  const h = host.getBoundingClientRect();
+  const g = sheet.getBoundingClientRect();
+  return {
+    left: g.left - h.left,
+    right: h.right - g.right,
+    overflow: host.scrollWidth - host.clientWidth,
+    ground: getComputedStyle(host).backgroundColor,
+  };
+});
+check(
+  'tờ A4 nằm chính giữa cột xem trước',
+  !!paper && Math.abs(paper.left - paper.right) <= 2,
+  paper ? `${Math.round(paper.left)} / ${Math.round(paper.right)}` : 'không thấy trang',
+);
+check(
+  'không sinh thanh cuộn ngang khi thu phóng',
+  !!paper && paper.overflow <= 1,
+  String(paper?.overflow),
+);
+check('giấy đặt trên nền xám trung tính', paper?.ground !== 'rgb(255, 255, 255)', paper?.ground);
+
+// --- dưới 1180px: bản in trượt lên thành lớp phủ ---------------------------
+await page.setViewportSize({ width: 1100, height: 900 });
+await page.waitForTimeout(500);
+check(
+  'dưới 1180px có nút chuyển Soạn / Bản in',
+  (await page.getByRole('tab', { name: 'Bản in' }).count()) === 1,
+);
+await page.getByRole('tab', { name: 'Bản in' }).click();
+await page.waitForTimeout(500);
+check(
+  'chuyển sang Bản in thì thấy trang giấy',
+  await page.locator('.sr-page').first().isVisible(),
+);
+check(
+  'bản in che mất thanh công cụ nên có lối quay lại ngay trong đầu bản in',
+  (await page.getByRole('button', { name: 'Soạn thảo' }).count()) === 1,
+);
+await page.getByRole('button', { name: 'Soạn thảo' }).click();
+await page.waitForTimeout(450);
+check(
+  'quay lại được khung soạn thảo',
+  await page.evaluate(() => (document.querySelector('[role="tab"][aria-selected="true"]')?.textContent ?? '') === 'Soạn'),
+);
+
+// --- dưới 1000px: bảng bên nổi lên trên canvas, có lớp mờ ------------------
+await page.setViewportSize({ width: 920, height: 900 });
+await page.waitForTimeout(500);
+await page.getByRole('button', { name: 'Chẩn đoán' }).click();
+await page.waitForTimeout(450);
+const flyout = await page.evaluate(() => {
+  const aside = document.querySelector('aside[data-panel-open="true"]');
+  if (!aside) return null;
+  const scrim = document.querySelector('button[aria-label="Đóng bảng bên"]');
+  return {
+    position: getComputedStyle(aside).position,
+    scrim: !!scrim && getComputedStyle(scrim).opacity === '1',
+  };
+});
+check('dưới 1000px bảng bên nổi lên trên canvas', flyout?.position === 'fixed', JSON.stringify(flyout));
+check('lớp mờ phía sau bảng bên hiện ra', flyout?.scrim === true);
+await page.keyboard.press('Escape');
+await page.locator('button[aria-label="Đóng bảng bên"]').click({ force: true });
+await page.waitForTimeout(350);
+check(
+  'bấm ra ngoài thì bảng bên đóng lại',
+  await page.evaluate(() => !document.querySelector('aside[data-panel-open="true"]')),
+);
+await page.setViewportSize({ width: 1500, height: 940 });
+await page.waitForTimeout(500);
+
+/* ------------------------------------------------------------ tải PDF thật */
+
+console.log('\nTải PDF về máy');
+
+const uiPages = await page.locator('.sr-page').count();
+const [downloaded] = await Promise.all([
+  page.waitForEvent('download', { timeout: 240_000 }),
+  page.getByRole('button', { name: 'Xuất', exact: true }).click(),
+]);
+const pdfPath = await downloaded.path();
+const { readFileSync } = await import('node:fs');
+const pdfBuf = readFileSync(pdfPath);
+const pdfText = pdfBuf.toString('latin1');
+const mediaBoxes = [...pdfText.matchAll(/\/MediaBox\s*\[([^\]]+)\]/g)].map((m) => m[1].trim());
+check(
+  'nút Xuất tải thẳng ra tệp .pdf, không chỉ mở hộp thoại in',
+  downloaded.suggestedFilename().endsWith('.pdf') && pdfText.startsWith('%PDF-'),
+  downloaded.suggestedFilename(),
+);
+check(
+  'tệp PDF có đúng số trang như bản xem trước',
+  mediaBoxes.length === uiPages,
+  `${mediaBoxes.length} vs ${uiPages}`,
+);
+check(
+  'mỗi trang PDF đúng khổ A4',
+  new Set(mediaBoxes).size === 1 &&
+    /^0 0 595\.\d+ 841\.\d+$/.test(mediaBoxes[0] ?? ''),
+  mediaBoxes[0],
+);
+check('tệp PDF không rỗng', pdfBuf.length > 50_000, `${Math.round(pdfBuf.length / 1024)} KB`);
 
 await page.screenshot({ path: 'scripts/screenshot.png', fullPage: false });
 console.log('\nẢnh chụp màn hình: scripts/screenshot.png');

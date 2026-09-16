@@ -35,7 +35,7 @@ pnpm dev               # http://localhost:5173
 pnpm build       # bundle tĩnh vào apps/web/dist
 pnpm preview     # phục vụ bản build tại http://localhost:4173
 pnpm typecheck   # tsc --noEmit cho toàn bộ workspace
-pnpm smoke       # 118 kiểm tra pipeline thuần (không cần trình duyệt)
+pnpm smoke       # 224 kiểm tra pipeline thuần (không cần trình duyệt)
 ```
 
 Kiểm tra tầng cần DOM (phân trang, orphan/widow, KaTeX, Mermaid):
@@ -43,7 +43,7 @@ Kiểm tra tầng cần DOM (phân trang, orphan/widow, KaTeX, Mermaid):
 ```bash
 pnpm exec playwright install chromium   # playwright đã nằm trong devDependencies
 pnpm build && pnpm preview              # cửa sổ 1
-pnpm browser-check                      # cửa sổ 2 — 17 kiểm tra
+pnpm browser-check                      # cửa sổ 2 — 113 kiểm tra
 ```
 
 ---
@@ -125,6 +125,8 @@ trang phần đầu. `useRender` lặp tối đa ba lượt và dừng ngay khi 
 ```
 scirender/
 ├─ apps/web/                  Giao diện (React 18 + Vite + Tailwind) — block canvas
+│  ├─ public/fonts/           3 mặt chữ .woff2 tự lưu, có đủ dấu tiếng Việt
+│  └─ src/styles/fonts.css    @font-face kèm unicode-range (latin / latin-ext / vietnamese)
 ├─ packages/
 │  ├─ ast/                    Kiểu dữ liệu AST, Diagnostic, tiện ích duyệt cây
 │  ├─ parser/                 Scientific Markdown → AST (front matter, khối, nội dòng)
@@ -133,7 +135,7 @@ scirender/
 │  ├─ template-engine/        Descriptor → CSS + số đo; đánh số; phân giải tham chiếu
 │  ├─ layout-engine/          Phân trang, cắt đoạn theo dòng, orphan/widow
 │  ├─ renderer-html/          AST → HTML (thuần, không DOM)
-│  ├─ renderer-pdf/           Luồng in và xuất HTML độc lập
+│  ├─ renderer-pdf/           In, tải PDF (jsPDF + html2canvas), xuất HTML độc lập
 │  ├─ equation-engine/        Bọc KaTeX + đánh số công thức
 │  ├─ figure-engine/          Phân giải `asset:`, kiểm tra hình
 │  ├─ table-engine/           Chuẩn hóa bảng, căn cột
@@ -149,8 +151,10 @@ Vite biên dịch chúng qua alias trong `vite.config.ts`, TypeScript qua `paths
 Khi cần publish riêng (hoặc khi thêm backend Typst ở Phase 3), mỗi package đã có ranh
 giới sẵn để thêm `tsup`.
 
-Kiểm chứng đã chạy trên cây kho này: `pnpm typecheck` sạch, `pnpm smoke` 118/118,
-`pnpm browser-check` 45/45, `pnpm build` thành công.
+Kiểm chứng đã chạy trên cây kho này: `pnpm typecheck` sạch, `pnpm smoke` 224/224,
+`pnpm browser-check` 113/113, `pnpm build` thành công. `browser-check` chạy thật cả việc
+tải PDF: nó bấm nút Xuất, hứng tệp tải về rồi đọc `/MediaBox` để chắc mỗi trang đúng khổ A4
+và đúng số trang như bản xem trước.
 
 ---
 
@@ -222,10 +226,24 @@ Ba khu, mỗi khu một việc:
 
 | Khu | Nội dung |
 |---|---|
-| Thanh trên | tên tài liệu · trạng thái lỗi · **Dựng trang** · menu **Tệp** · menu **Xuất** |
+| Dock trái 56px | bảy bảng bên (dàn ý, chẩn đoán, sức khỏe, tài nguyên, mẫu, thư viện, dữ liệu) |
+| Thanh trên 60px | tên tài liệu · thẻ trạng thái lưu · **Dựng trang** · menu **Tệp** · nút chẻ **Xuất** |
 | Cột giữa | block canvas — tài liệu dưới dạng card |
-| Cột phải | trang A4 thật, đúng thứ sẽ in ra |
+| Cột phải | trang A4 thật trên nền xám, đúng thứ sẽ in ra, kèm đảo thu phóng nổi |
 | Thanh dưới | số trang · số từ · hạn mức trang của quy cách · nút **Chi tiết kỹ thuật** |
+
+**Hệ thiết kế.** Nền ngà, bề mặt trắng nổi bằng bóng đổ hai lớp thay cho khung viền, chỉ
+tuyến hairline `rgba(15,23,42,.07)` ở chỗ thật sự phải chia ranh. Màu vẫn là bảng màu Bách
+khoa: xanh đậm `#0b2c7f`, xanh trời `#1a8fe3`, đỏ `#d62828` dành riêng cho lỗi.
+
+**Ba mặt chữ, cả ba có dấu tiếng Việt, cả ba nằm trong app.** Be Vietnam Pro cho giao diện,
+Literata cho tiêu đề, JetBrains Mono cho mã và số. Chúng được `@font-face` từ
+`public/fonts/` với `unicode-range` tách riêng phần `vietnamese`, nên trình duyệt chỉ tải
+phần chữ cần đến và app không gọi ra mạng lần nào (P5). Cập nhật bằng `pnpm fonts`.
+
+**Khổ màn hình.** Dưới 1180px bản in trượt lên thành lớp phủ, có nút chuyển *Soạn / Bản in*
+ở thanh công cụ và một lối **← Soạn thảo** ngay trong đầu bản in. Dưới 1000px bảng bên nổi
+lên trên canvas kèm lớp mờ, bấm ra ngoài là đóng.
 
 **Chi tiết kỹ thuật tắt mặc định.** Thời gian từng chặng pipeline, chữ ký đầu vào và thời
 gian dựng trang là thứ để soi khi nghi ngờ, không phải thứ nhìn suốt ngày — bật khi cần,
@@ -234,6 +252,17 @@ lựa chọn được nhớ lại.
 **Nút trên thanh header gom còn ba.** Bảy nút cạnh nhau thì không nút nào nổi bật; giờ chỉ
 việc làm liên tục (Dựng trang) là nút, còn lại vào menu Tệp và Xuất. Menu dùng được bằng
 bàn phím: ↑↓ chọn, Enter, Esc.
+
+**In và tải PDF là hai việc khác nhau, nên là hai lệnh khác nhau.**
+
+| Lệnh | Phím | Kết quả |
+|---|---|---|
+| **Tải PDF về máy** (bấm thẳng nút Xuất) | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> | tệp `.pdf` rơi vào thư mục Tải về, khổ A4 và lề đã đúng, không phải chỉnh gì trong hộp thoại. Chữ trong tệp là **ảnh**. |
+| **Tải PDF nét cao** | — | như trên, gấp rưỡi độ nét, tệp nặng và lâu hơn |
+| **In…** | <kbd>Ctrl</kbd>+<kbd>P</kbd> | mở hộp thoại in của trình duyệt; chọn "Save as PDF" nếu cần PDF **chọn được chữ** và tìm kiếm được |
+
+Nút Xuất hiện tiến độ `Đang tạo PDF 7/16` trong lúc dựng, vì mỗi trang phải chụp lại một
+lần — tài liệu 16 trang mất khoảng nửa phút trên máy tầm trung.
 
 Chuyển sang mẫu có trang bìa (như `hcmut-btl`) mà tài liệu chưa có khối `cover:` thì khối
 đó được **thêm tự động** với đúng chữ của khoa và logo có sẵn — chỉ thêm khi thiếu, không
@@ -256,7 +285,7 @@ hình, bảng, sơ đồ, khối mã, chú thích chân trang.
 | Thêm khối | menu **Thêm khối** — có ô tìm kiếm, gõ không dấu vẫn ra (`cong thuc` → Công thức); khối hay dùng được ghim lên đầu |
 | Nhân bản / xóa | nút trên đầu card, hoặc <kbd>Ctrl</kbd>+<kbd>D</kbd> |
 | Hoàn tác | <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> |
-| Xem Markdown | nút **Xem mã nguồn** — sửa và Áp dụng cũng được |
+| Xem Markdown | nút **Mã nguồn** — sửa và Áp dụng cũng được |
 
 **Card là lát cắt của Markdown, không phải một mô hình tài liệu thứ hai.** Mỗi card giữ
 đúng đoạn văn bản mà parser đã đọc, và ghép các card lại thì ra đúng tệp cũ. Nhờ vậy canvas
@@ -293,8 +322,10 @@ Nói thẳng, để khỏi mất thời gian phát hiện lại:
   để vừa, chứ app không tự tách hình.
 - **Chưa import `.docx` / `.bib`.** Nhập chỉ nhận Markdown và bundle của chính SciRender.
 - **Chưa có mục lục cho phụ lục riêng** và chưa có tham chiếu chéo tới số trang.
-- **PDF đi qua hộp thoại in của trình duyệt.** Chọn "Save as PDF", đặt lề = None và tắt
-  "Headers and footers" để khớp đúng bản xem trước.
+- **PDF tải thẳng về máy là ảnh, không phải chữ.** Mỗi trang được chụp lại rồi đặt vào
+  trang A4 của jsPDF, nên bố cục khớp tuyệt đối với bản xem trước nhưng không bôi đen hay
+  tìm kiếm chữ trong tệp được, và tệp nặng hơn. Cần PDF chọn được chữ thì dùng **In…** rồi
+  chọn "Save as PDF" (đặt lề = None, tắt "Headers and footers").
 - Dữ liệu nằm trong IndexedDB của **một trình duyệt trên một máy**. Xóa dữ liệu duyệt web
   là mất. Dùng nút **Bundle** để sao lưu.
 

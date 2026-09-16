@@ -119,3 +119,6 @@ function escapeAttr(s: string): string {
 }
 
 export { compilePrintCss };
+
+export { downloadPdf, toMm, slug } from './pdf.js';
+export type { PdfOptions, PdfResult } from './pdf.js';

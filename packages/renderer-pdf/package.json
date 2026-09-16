@@ -10,7 +10,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@scirender/ast": "workspace:*",
     "@scirender/template-engine": "workspace:*",
-    "@scirender/ast": "workspace:*"
+    "html2canvas": "1.4.1",
+    "jspdf": "2.5.2"
   }
 }

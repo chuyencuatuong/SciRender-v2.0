@@ -13,7 +13,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "pnpm -r exec node -e \"const fs=require('fs');for(const p of ['node_modules','dist'])fs.rmSync(p,{recursive:true,force:true})\" && node -e \"require('fs').rmSync('node_modules',{recursive:true,force:true})\"",
     "smoke": "node scripts/run-smoke.mjs",
-    "browser-check": "node scripts/browser-check.mjs"
+    "browser-check": "node scripts/browser-check.mjs",
+    "fonts": "node scripts/sync-fonts.mjs"
   },
   "devDependencies": {
     "esbuild": "0.24.0",
