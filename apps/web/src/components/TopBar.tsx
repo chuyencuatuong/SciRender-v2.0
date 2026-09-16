@@ -12,12 +12,27 @@ import {
   TriangleAlert,
   Upload,
 } from 'lucide-react';
-import { exportStandaloneHtml, printDocument, slug } from '@scirender/renderer-pdf';
+import {
+  downloadPdf,
+  downloadPdfServer,
+  exportStandaloneHtml,
+  printDocument,
+  slug,
+} from '@scirender/renderer-pdf';
 import { importBundle, exportBundle } from '@scirender/storage';
 import { track } from '@scirender/telemetry';
 import type { RenderState } from '~/hooks/useRender';
 import { Menu, SplitMenu } from '~/components/ui/Menu';
 import { useStore } from '~/state/store';
+import { readAppFontsCss, readKatexCss } from '~/lib/export-fonts';
+
+/**
+ * URL của @scirender/pdf-server (biến VITE_PDF_SERVER_URL, đặt trong
+ * apps/web/.env — xem .env.example). Không cấu hình thì mục "Tải PDF (chữ
+ * thật)" ẩn đi, chỉ còn bản ảnh ngoại tuyến và In… → Save as PDF.
+ */
+const PDF_SERVER_URL = (import.meta.env.VITE_PDF_SERVER_URL as string | undefined)?.trim();
+const PDF_SERVER_TOKEN = (import.meta.env.VITE_PDF_SERVER_TOKEN as string | undefined)?.trim();
 
 interface Props {
   render: RenderState;
@@ -36,6 +51,8 @@ export function TopBar({ render }: Props): JSX.Element {
   const source = useStore((s) => s.source);
   const renderedSource = useStore((s) => s.renderedSource);
   const [busy, setBusy] = useState(false);
+  const [pdf, setPdf] = useState<{ done: number; total: number } | null>(null);
+  const [pdfServerStage, setPdfServerStage] = useState<string | null>(null);
   const importRef = useRef<HTMLInputElement | null>(null);
 
   const stale = source !== renderedSource;
@@ -57,25 +74,67 @@ export function TopBar({ render }: Props): JSX.Element {
     });
   };
 
-  const onExportPdf = (): void => {
+  const onDownloadPdf = async (scale: number): Promise<void> => {
     if (!result || !render.pages.length) return;
-    track('export.pdf', { pages: render.pages.length, mode: 'browser-print' });
-    printDocument({
-      pages: pageHtml,
-      template: result.template,
-      footers,
-      documentTitle: result.document.meta.title || title,
-    });
+    setPdf({ done: 0, total: render.pages.length });
+    try {
+      const out = await downloadPdf({
+        pages: pageHtml,
+        template: result.template,
+        footers,
+        documentTitle: result.document.meta.title || title,
+        scale,
+        onProgress: (done, total) => setPdf({ done, total }),
+      });
+      track('export.pdf', { pages: out.pages, bytes: out.bytes, scale });
+    } catch (err) {
+      window.alert(`Không tạo được tệp PDF: ${(err as Error).message}`);
+    } finally {
+      setPdf(null);
+    }
   };
 
-  const onExportHtml = (): void => {
+  const onDownloadPdfServer = async (): Promise<void> => {
+    if (!result || !render.pages.length) return;
+    if (!PDF_SERVER_URL) {
+      window.alert(
+        'Chưa cấu hình máy chủ xuất PDF (VITE_PDF_SERVER_URL). Dùng "Tải PDF (ngoại tuyến, ảnh)" hoặc "In… → Save as PDF" thay thế.',
+      );
+      return;
+    }
+    setPdfServerStage('Đang chuẩn bị phông chữ…');
+    try {
+      const [katexCss, fontsCss] = await Promise.all([readKatexCss(), readAppFontsCss()]);
+      setPdfServerStage('Đang dựng PDF trên máy chủ…');
+      const out = await downloadPdfServer({
+        pages: pageHtml,
+        template: result.template,
+        footers,
+        documentTitle: result.document.meta.title || title,
+        katexCss,
+        extraCss: fontsCss,
+        lang: result.document.meta.language,
+        endpoint: PDF_SERVER_URL,
+        token: PDF_SERVER_TOKEN,
+      });
+      track('export.pdf-server', { pages: out.pages, bytes: out.bytes });
+    } catch (err) {
+      window.alert((err as Error).message);
+    } finally {
+      setPdfServerStage(null);
+    }
+  };
+
+  const onExportHtml = async (): Promise<void> => {
     if (!result) return;
+    const [katexCss, fontsCss] = await Promise.all([readKatexCss(), readAppFontsCss()]);
     const html = exportStandaloneHtml({
       pages: pageHtml.length ? pageHtml : result.blocks,
       template: result.template,
       footers,
       documentTitle: result.document.meta.title || title,
-      katexCss: readKatexCss(),
+      katexCss,
+      extraCss: fontsCss,
       lang: result.document.meta.language,
     });
     download(`${slug(title)}.html`, new Blob([html], { type: 'text/html;charset=utf-8' }));
@@ -112,18 +171,23 @@ export function TopBar({ render }: Props): JSX.Element {
   };
 
   // Ctrl+P in / Ctrl+Shift+P tải PDF — hai việc khác nhau nên hai phím khác nhau.
+  // Ctrl+Shift+P ưu tiên PDF chữ thật (máy chủ) khi đã cấu hình, còn không thì
+  // rơi về bản ảnh ngoại tuyến cũ — không để phím tắt im lặng không làm gì.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'p') return;
       e.preventDefault();
-      if (e.shiftKey) onExportPdf();
-      else onPrint();
+      if (e.shiftKey) {
+        if (PDF_SERVER_URL) void onDownloadPdfServer();
+        else void onDownloadPdf(2);
+      } else onPrint();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
 
   const noPages = !render.pages.length;
+  const pdfBusy = !!pdf || !!pdfServerStage;
 
   return (
     <header
@@ -212,29 +276,59 @@ export function TopBar({ render }: Props): JSX.Element {
           ]}
         />
 
-        {/* PDF được xuất qua pipeline print của trình duyệt để giữ text/vector thay vì raster hóa HTML. */}
+        {/* In và Tải PDF là hai việc khác nhau, nên là hai mục khác nhau chứ
+            không phải một nút "In / PDF" mập mờ như trước. Tải PDF (chữ thật)
+            là mặc định khi có máy chủ; bản ảnh cũ vẫn còn cho lúc không có mạng. */}
         <SplitMenu
-          label="Xuất"
-          icon={<Download size={14} />}
-          onPrimary={onExportPdf}
-          primaryTitle="Xuất PDF có thể chọn/tìm chữ (Ctrl + Shift + P)"
-          disabled={noPages}
-          width={306}
+          label={
+            pdfServerStage
+              ? pdfServerStage
+              : pdf
+                ? `Đang tạo PDF ${pdf.done}/${pdf.total}`
+                : 'Xuất'
+          }
+          icon={pdfBusy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+          onPrimary={() => void (PDF_SERVER_URL ? onDownloadPdfServer() : onDownloadPdf(2))}
+          primaryTitle={
+            PDF_SERVER_URL
+              ? 'Tải PDF chữ thật, chọn/tìm được (Ctrl + Shift + P)'
+              : 'Tải tệp PDF về máy — chữ là ảnh (Ctrl + Shift + P)'
+          }
+          disabled={noPages || pdfBusy}
+          width={320}
           items={[
             {
-              id: 'pdf',
-              label: 'Xuất PDF',
-              description: 'Mở trình PDF của trình duyệt; chữ, liên kết và công thức vẫn là nội dung thật.',
+              id: 'pdf-server',
+              label: 'Tải PDF (chữ thật)',
+              description: PDF_SERVER_URL
+                ? 'Chữ chọn/tìm được, giống Word. Cần mạng.'
+                : 'Chưa cấu hình máy chủ xuất PDF (VITE_PDF_SERVER_URL).',
               icon: <Download size={13} />,
               hint: '⌘⇧P',
-              disabled: noPages,
-              onSelect: onExportPdf,
+              disabled: noPages || pdfBusy || !PDF_SERVER_URL,
+              onSelect: () => void onDownloadPdfServer(),
+            },
+            {
+              id: 'pdf-image',
+              label: 'Tải PDF (ngoại tuyến, ảnh)',
+              description: 'Không cần mạng, có tệp ngay. Chữ trong tệp là ảnh.',
+              icon: <Download size={13} />,
+              disabled: noPages || pdfBusy,
+              onSelect: () => void onDownloadPdf(2),
+            },
+            {
+              id: 'pdf-image-hi',
+              label: 'Tải PDF ngoại tuyến, nét cao',
+              description: 'Gấp rưỡi độ nét, tệp nặng hơn và lâu hơn. Vẫn là ảnh.',
+              icon: <Download size={13} />,
+              disabled: noPages || pdfBusy,
+              onSelect: () => void onDownloadPdf(3),
             },
             'separator',
             {
               id: 'print',
               label: 'In…',
-              description: 'Mở hộp thoại in để chọn máy in hoặc PDF.',
+              description: 'Mở hộp thoại in. Chọn “Save as PDF” nếu muốn chữ chọn được.',
               icon: <Printer size={13} />,
               hint: '⌘P',
               disabled: noPages,
@@ -247,7 +341,7 @@ export function TopBar({ render }: Props): JSX.Element {
               icon: <FileCode2 size={13} />,
               hint: '⌘E',
               disabled: !result,
-              onSelect: onExportHtml,
+              onSelect: () => void onExportHtml(),
             },
             {
               id: 'bundle2',
@@ -309,21 +403,4 @@ function download(filename: string, blob: Blob): void {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
-/** Pulls the already-loaded KaTeX stylesheet out of the page for HTML export. */
-function readKatexCss(): string {
-  let css = '';
-  for (const sheet of Array.from(document.styleSheets)) {
-    try {
-      const rules = sheet.cssRules;
-      if (!rules) continue;
-      let text = '';
-      for (const rule of Array.from(rules)) text += rule.cssText + '\n';
-      if (text.includes('.katex')) css += text;
-    } catch {
-      /* cross-origin stylesheet — skip */
-    }
-  }
-  return css;
 }
