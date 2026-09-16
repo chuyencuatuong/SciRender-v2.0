@@ -15,7 +15,7 @@ services:
     healthCheckPath: /health
     envVars:
       - key: ALLOWED_ORIGIN
-        value: https://your-username.github.io
+        value: https://chuyencuatuong.github.io
       - key: EXPORT_TOKEN
         generateValue: true
       - key: MAX_CONCURRENT_RENDERS
