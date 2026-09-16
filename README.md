@@ -135,7 +135,7 @@ scirender/
 │  ├─ template-engine/        Descriptor → CSS + số đo; đánh số; phân giải tham chiếu
 │  ├─ layout-engine/          Phân trang, cắt đoạn theo dòng, orphan/widow
 │  ├─ renderer-html/          AST → HTML (thuần, không DOM)
-│  ├─ renderer-pdf/           In / xuất PDF qua native browser print, xuất HTML độc lập
+│  ├─ renderer-pdf/           In, tải PDF (jsPDF + html2canvas), xuất HTML độc lập
 │  ├─ equation-engine/        Bọc KaTeX + đánh số công thức
 │  ├─ figure-engine/          Phân giải `asset:`, kiểm tra hình
 │  ├─ table-engine/           Chuẩn hóa bảng, căn cột
@@ -322,10 +322,10 @@ Nói thẳng, để khỏi mất thời gian phát hiện lại:
   để vừa, chứ app không tự tách hình.
 - **Chưa import `.docx` / `.bib`.** Nhập chỉ nhận Markdown và bundle của chính SciRender.
 - **Chưa có mục lục cho phụ lục riêng** và chưa có tham chiếu chéo tới số trang.
-- **Xuất PDF dùng native print engine của trình duyệt.** SciRender đưa đúng các trang đã
-  phân vào DOM + print CSS và để trình duyệt tạo PDF, vì vậy văn bản có text layer, có thể
-  bôi đen / Ctrl+F và các thành phần vector có thể được giữ nguyên. Trình duyệt vẫn quyết
-  định hộp thoại lưu và đích PDF; chọn **Save as PDF** trong hộp thoại in để tải tệp.
+- **PDF tải thẳng về máy là ảnh, không phải chữ.** Mỗi trang được chụp lại rồi đặt vào
+  trang A4 của jsPDF, nên bố cục khớp tuyệt đối với bản xem trước nhưng không bôi đen hay
+  tìm kiếm chữ trong tệp được, và tệp nặng hơn. Cần PDF chọn được chữ thì dùng **In…** rồi
+  chọn "Save as PDF" (đặt lề = None, tắt "Headers and footers").
 - Dữ liệu nằm trong IndexedDB của **một trình duyệt trên một máy**. Xóa dữ liệu duyệt web
   là mất. Dùng nút **Bundle** để sao lưu.
 

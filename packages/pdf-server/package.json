@@ -1,0 +1,28 @@
+{
+  "name": "@scirender/pdf-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Máy chủ xuất PDF chữ thật cho SciRender — nhận HTML đã dựng sẵn, in bằng Chromium headless (page.pdf), trả về tệp PDF chọn/tìm được chữ. Không lưu trữ gì, không có database — chạy xong một yêu cầu là quên (P1: không giữ nội dung tài liệu người dùng lâu hơn mức cần để xuất).",
+  "main": "src/server.ts",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "cors": "2.8.5",
+    "express": "4.21.1",
+    "playwright": "1.48.2"
+  },
+  "devDependencies": {
+    "@types/cors": "2.8.17",
+    "@types/express": "4.17.21",
+    "@types/node": "22.9.0",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}

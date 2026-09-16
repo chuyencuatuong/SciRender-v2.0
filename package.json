@@ -10,7 +10,7 @@
     "dev": "pnpm --filter @scirender/web dev",
     "build": "pnpm --filter @scirender/web build",
     "preview": "pnpm --filter @scirender/web preview",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && pnpm --filter @scirender/pdf-server typecheck",
     "clean": "pnpm -r exec node -e \"const fs=require('fs');for(const p of ['node_modules','dist'])fs.rmSync(p,{recursive:true,force:true})\" && node -e \"require('fs').rmSync('node_modules',{recursive:true,force:true})\"",
     "smoke": "node scripts/run-smoke.mjs",
     "browser-check": "node scripts/browser-check.mjs",

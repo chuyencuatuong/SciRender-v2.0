@@ -1,0 +1,22 @@
+# Bản thiết kế triển khai máy chủ xuất PDF lên Render.com (miễn phí ở mức
+# nhỏ — máy chủ ngủ sau 15 phút không dùng và mất khoảng 30-60 giây để thức
+# dậy ở lần gọi đầu). Trên Render: New → Blueprint → chọn kho GitHub này →
+# Render tự đọc tệp này. Sau khi có, dán URL dịch vụ (dạng
+# https://scirender-pdf-server.onrender.com/export-pdf) vào biến
+# VITE_PDF_SERVER_URL của app web (xem apps/web/.env.example) và đặt
+# EXPORT_TOKEN trùng ở cả hai phía.
+services:
+  - type: web
+    name: scirender-pdf-server
+    env: docker
+    dockerfilePath: ./packages/pdf-server/Dockerfile
+    dockerContext: ./packages/pdf-server
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ALLOWED_ORIGIN
+        value: https://your-username.github.io
+      - key: EXPORT_TOKEN
+        generateValue: true
+      - key: MAX_CONCURRENT_RENDERS
+        value: '2'
