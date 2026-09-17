@@ -6,11 +6,13 @@ import {
   Library,
   ListTree,
   Stethoscope,
+  Tag,
 } from 'lucide-react';
 import { useStore, type PanelId } from '~/state/store';
 
-const ITEMS: Array<{ id: PanelId; label: string; icon: typeof ListTree }> = [
+export const ITEMS: Array<{ id: PanelId; label: string; icon: typeof ListTree }> = [
   { id: 'outline', label: 'Dàn ý', icon: ListTree },
+  { id: 'objects', label: 'Đối tượng', icon: Tag },
   { id: 'diagnostics', label: 'Chẩn đoán', icon: Stethoscope },
   { id: 'health', label: 'Sức khỏe tài liệu', icon: Gauge },
   { id: 'assets', label: 'Tài nguyên', icon: Image },

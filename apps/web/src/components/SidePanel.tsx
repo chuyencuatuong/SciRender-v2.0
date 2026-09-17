@@ -3,6 +3,7 @@ import { AssetsPanel } from './panels/AssetsPanel';
 import { DiagnosticsPanel } from './panels/DiagnosticsPanel';
 import { HealthPanel } from './panels/HealthPanel';
 import { LibraryPanel } from './panels/LibraryPanel';
+import { ObjectsPanel } from './panels/ObjectsPanel';
 import { OutlinePanel } from './panels/OutlinePanel';
 import { ResearchPanel } from './panels/ResearchPanel';
 import { TemplatePanel } from './panels/TemplatePanel';
@@ -41,6 +42,7 @@ export function SidePanel({ render, floating }: Props): JSX.Element {
         }
       >
         {panel === 'outline' && <OutlinePanel render={render} />}
+        {panel === 'objects' && <ObjectsPanel render={render} />}
         {panel === 'diagnostics' && <DiagnosticsPanel render={render} />}
         {panel === 'health' && <HealthPanel result={render.result} />}
         {panel === 'assets' && <AssetsPanel />}

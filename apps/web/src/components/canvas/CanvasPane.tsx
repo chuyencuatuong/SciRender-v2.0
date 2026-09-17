@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Braces, Columns2, FileText, Redo2, Undo2 } from 'lucide-react';
 import { CARD_IN, useReducedMotion } from '~/lib/motion';
 import {
+  CARD_TEMPLATES,
   detectKind,
   makeColumns,
   moveCard,
@@ -15,6 +16,7 @@ import {
 } from '~/lib/cards';
 import { detectPaste } from '~/lib/paste';
 import { BadgeCheck, X } from 'lucide-react';
+import type { RenderState } from '~/hooks/useRender';
 import { useStore } from '~/state/store';
 import { CardShell, type DropZone } from './CardShell';
 import { InsertMenu } from './InsertMenu';
@@ -32,6 +34,9 @@ export interface ViewSwitch {
 interface Props {
   /** Shown only below the split breakpoint, where the two panes share the width. */
   viewSwitch: ViewSwitch | null;
+  /** Last explicit render, if any — its labelled objects feed the `@`-mention
+   * popover (Hạng mục 1). The heavy pipeline itself is never re-run for this. */
+  render: RenderState;
 }
 
 interface Drag {
@@ -48,14 +53,17 @@ interface Drag {
  * reads, and "Xem mã nguồn" shows exactly that text. This is what keeps the
  * canvas from drifting away from what gets printed (P1, P3).
  */
-export function CanvasPane({ viewSwitch }: Props): JSX.Element {
+export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   const source = useStore((s) => s.source);
   const docId = useStore((s) => s.docId);
   const setSource = useStore((s) => s.setSource);
   const addAssets = useStore((s) => s.addAssets);
   const gotoLine = useStore((s) => s.gotoLine);
   const coverAdded = useStore((s) => s.coverAdded);
+  const insertBlockRequest = useStore((s) => s.insertBlockRequest);
+  const noteBlockUsed = useStore((s) => s.noteBlockUsed);
   const [coverNoticeSeen, setCoverNoticeSeen] = useState<number | null>(null);
+  const labels = render.result?.document.labels;
 
   const [doc, setDoc] = useState<CanvasDoc>(() => toCards(source));
   const [selected, setSelected] = useState(0);
@@ -79,6 +87,7 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
   const undoStack = useRef<CanvasDoc[]>([]);
   const redoStack = useRef<CanvasDoc[]>([]);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const insertBlockSeen = useRef(insertBlockRequest?.nonce ?? 0);
 
   // Split view: two independently-scrolled panes of the SAME document, one
   // above the other — for keeping an eye on two places in a long report at
@@ -162,6 +171,22 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
     setSelected(index);
     if (label) setRecognised({ id: card.id, label, raw: text });
   };
+
+  // The Command Palette cannot call `insertAt` directly — it lives outside
+  // this component — so it asks through the store instead, the same way
+  // TopBar's Ctrl+P asks the render effect to fire again (a nonce, bumped by
+  // the requester, watched here). Reusing `CARD_TEMPLATES` keeps this the
+  // exact same insert `InsertMenu` already does — never a second list (P4).
+  useEffect(() => {
+    const nonce = insertBlockRequest?.nonce ?? 0;
+    if (nonce === insertBlockSeen.current) return;
+    insertBlockSeen.current = nonce;
+    const tpl = CARD_TEMPLATES.find((t) => t.id === insertBlockRequest?.templateId);
+    if (!tpl) return;
+    noteBlockUsed(tpl.id);
+    insertAt(doc.cards.length, tpl.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insertBlockRequest?.nonce]);
 
   const removeAt = (index: number): void => {
     setCards(doc.cards.filter((_, i) => i !== index));
@@ -441,6 +466,7 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
                 selected={selected === index}
                 dropZone={drag?.over === index ? drag.zone : null}
                 recognised={recognised?.id === card.id ? recognised.label : null}
+                labels={labels}
                 onSelect={() => setSelected(index)}
                 onChange={(text) => updateCard(index, text)}
                 onMove={(delta) => moveBy(index, delta)}

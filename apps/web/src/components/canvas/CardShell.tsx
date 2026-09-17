@@ -8,6 +8,7 @@ import {
   Rows2,
   Trash2,
 } from 'lucide-react';
+import type { LabelRecord } from '@scirender/ast';
 import { detectKind, KIND_LABEL, splitColumns, type Card } from '~/lib/cards';
 import { CardEditor } from './CardEditors';
 
@@ -20,6 +21,8 @@ interface Props {
   selected: boolean;
   dropZone: DropZone | null;
   recognised: string | null;
+  /** The document's labelled objects — see `EditorProps.labels`. */
+  labels?: Record<string, LabelRecord>;
   onSelect: () => void;
   onChange: (text: string) => void;
   onMove: (delta: number) => void;
@@ -180,6 +183,7 @@ export function CardShell(props: Props): JSX.Element {
                 <CardEditor
                   kind={detectKind(part)}
                   text={part}
+                  labels={props.labels}
                   onChange={(next) => {
                     const pair = columns.slice() as [string, string];
                     pair[i] = next;
@@ -190,7 +194,7 @@ export function CardShell(props: Props): JSX.Element {
             ))}
           </div>
         ) : (
-          <CardEditor kind={card.kind} text={card.text} onChange={props.onChange} />
+          <CardEditor kind={card.kind} text={card.text} labels={props.labels} onChange={props.onChange} />
         )}
       </div>
     </article>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpToLine, Plus, Trash2 } from 'lucide-react';
+import type { LabelRecord } from '@scirender/ast';
 import { renderMath } from '@scirender/equation-engine';
 import { TABLE_MERGE_MARKER } from '@scirender/parser';
 import type { CardKind } from '~/lib/cards';
@@ -26,6 +27,9 @@ export interface EditorProps {
   kind: CardKind;
   text: string;
   onChange: (text: string) => void;
+  /** The document's labelled objects — threaded down to `AutoTextarea` for the
+   * `@`-mention popover (Hạng mục 1). Absent while nothing has been rendered yet. */
+  labels?: Record<string, LabelRecord>;
 }
 
 /**
@@ -55,13 +59,14 @@ export function CardEditor(props: EditorProps): JSX.Element {
   }
 }
 
-function RawEditor({ text, onChange, kind }: EditorProps): JSX.Element {
+function RawEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element {
   return (
     <AutoTextarea
       value={text}
       onChange={onChange}
       ariaLabel={`Nội dung khối ${kind}`}
-      placeholder="Nội dung…"
+      placeholder="Nội dung… (gõ @ để chèn tham chiếu, / để chèn nhanh khối khác)"
+      labels={labels}
     />
   );
 }
@@ -117,11 +122,11 @@ function HeadingEditor({ text, onChange }: EditorProps): JSX.Element {
 
 /* -------------------------------------------------------------- equation */
 
-function EquationEditor({ text, onChange, kind }: EditorProps): JSX.Element {
+function EquationEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element {
   const form = parseEquation(text);
   const [tab, setTab] = useState<'code' | 'preview'>('preview');
   const preview = useMemo(() => (form ? renderMath(form.tex, true) : null), [form?.tex]);
-  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} />;
+  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} />;
 
   return (
     <div className="overflow-hidden rounded-[12px] bg-ink-50">
@@ -180,9 +185,9 @@ const LANGS = [
   'javascript', 'typescript', 'bash', 'sql', 'json', 'yaml', 'xml', 'r', 'verilog', 'latex',
 ];
 
-function CodeEditor({ text, onChange, kind }: EditorProps): JSX.Element {
+function CodeEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element {
   const form = parseCode(text);
-  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} />;
+  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} />;
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -227,9 +232,9 @@ const DIRECTIONS: Array<[string, string]> = [
   ['RL', 'ngang ngược (RL)'],
 ];
 
-function DiagramEditor({ text, onChange, kind }: EditorProps): JSX.Element {
+function DiagramEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element {
   const form = parseDiagram(text);
-  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} />;
+  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} />;
   return (
     <div className="space-y-2">
       <select
@@ -264,11 +269,11 @@ function DiagramEditor({ text, onChange, kind }: EditorProps): JSX.Element {
 
 /* ----------------------------------------------------------------- figure */
 
-function FigureEditor({ text, onChange, kind }: EditorProps): JSX.Element {
+function FigureEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element {
   const form = parseFigure(text);
   const assets = useStore((s) => s.assets);
   const assetMap = useStore((s) => s.assetMap);
-  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} />;
+  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} />;
 
   const src = form.src.startsWith('asset:') ? assetMap[form.src.slice(6)] : form.src;
   return (
@@ -329,9 +334,9 @@ const ALIGNS: Array<[CellAlign, string]> = [
   ['right', '⇥'],
 ];
 
-function TableEditor({ text, onChange, kind }: EditorProps): JSX.Element {
+function TableEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element {
   const form = parseTable(text);
-  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} />;
+  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} />;
   const width = form.header.length;
 
   const push = (next: TableForm): void => onChange(serializeTable(next));

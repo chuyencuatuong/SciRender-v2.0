@@ -42,8 +42,10 @@ export function TopBar({ render }: Props): JSX.Element {
   const renderedSource = useStore((s) => s.renderedSource);
   const theme = useStore((s) => s.prefs.theme);
   const setPref = useStore((s) => s.setPref);
+  const printNonce = useStore((s) => s.printNonce);
   const [busy, setBusy] = useState(false);
   const importRef = useRef<HTMLInputElement | null>(null);
+  const printNonceSeen = useRef(printNonce);
 
   const stale = source !== renderedSource;
   const result = render.result;
@@ -136,6 +138,17 @@ export function TopBar({ render }: Props): JSX.Element {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
+
+  // Anything outside this component — the Command Palette, say — asks for
+  // "In / Lưu PDF" the same way: bump `printNonce` in the store. That keeps
+  // the print-dialog flow (and its once-only hint) in this one place (P4)
+  // instead of a second copy living wherever else wants to trigger it.
+  useEffect(() => {
+    if (printNonce === printNonceSeen.current) return;
+    printNonceSeen.current = printNonce;
+    onPrint();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printNonce]);
 
   const noPages = !render.pages.length;
 

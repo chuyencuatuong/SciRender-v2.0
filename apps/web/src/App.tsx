@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { CommandPalette } from '~/components/CommandPalette';
 import { TopBar } from '~/components/TopBar';
 import { SideRail } from '~/components/SideRail';
 import { SidePanel } from '~/components/SidePanel';
@@ -119,7 +120,7 @@ export function App(): JSX.Element {
             className="flex min-w-0 flex-1 flex-col bg-ink-50"
             style={overlayPreview ? undefined : { width: `${prefs.editorWidth}%`, flex: '0 0 auto' }}
           >
-            <CanvasPane viewSwitch={overlayPreview ? { view, setView } : null} />
+            <CanvasPane render={render} viewSwitch={overlayPreview ? { view, setView } : null} />
           </div>
 
           {overlayPreview ? null : (
@@ -151,6 +152,7 @@ export function App(): JSX.Element {
       </div>
 
       <StatusBar render={render} />
+      <CommandPalette render={render} />
     </div>
   );
 }

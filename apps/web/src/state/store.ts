@@ -23,7 +23,15 @@ import { needsCover, withCover } from '~/lib/cover';
 import { BUILTIN_ASSETS } from '~/lib/builtin-assets';
 import { SAMPLE_DOCUMENT, EMPTY_DOCUMENT } from '~/lib/sample';
 
-export type PanelId = 'outline' | 'diagnostics' | 'health' | 'assets' | 'template' | 'library' | 'research';
+export type PanelId =
+  | 'outline'
+  | 'objects'
+  | 'diagnostics'
+  | 'health'
+  | 'assets'
+  | 'template'
+  | 'library'
+  | 'research';
 
 /** Toàn bộ bảng màu (Tailwind + `--sr-*`) đọc theo `data-theme` trên `<html>` —
  * xem `index.css`/`tailwind.config.js`. Đặt ở đây (không phải component) vì cần
@@ -64,6 +72,11 @@ export interface AppState {
   gotoLine: { line: number; nonce: number } | null;
   /** Timestamp of the last automatic cover insertion — the canvas announces it. */
   coverAdded: number | null;
+  /** Bumped to ask TopBar's print flow to run — see `requestPrint`. */
+  printNonce: number;
+  /** Set by the Command Palette; `CanvasPane` owns the actual insert (its
+   * card array is local state, not in this store) and watches the nonce. */
+  insertBlockRequest: { templateId: string; nonce: number } | null;
 
   init: () => Promise<void>;
   setSource: (source: string) => void;
@@ -87,6 +100,25 @@ export interface AppState {
   /** Remembers which block template was just inserted, for "Hay dùng". */
   noteBlockUsed: (id: string) => void;
   refreshLibrary: () => Promise<void>;
+  /** Asks TopBar to run its print flow (Ctrl+P and the toolbar button do the
+   * same) — from anywhere, e.g. the Command Palette, without a second copy
+   * of `onPrint`'s print-dialog logic (P4). */
+  requestPrint: () => void;
+  /** Asks `CanvasPane` to append one block, by `CardTemplate` id — what the
+   * Command Palette's "Chèn khối" actions call. */
+  requestInsertBlock: (templateId: string) => void;
+  /**
+   * Renames a labelled object's id in the Markdown source itself (P1: the
+   * source stays the only truth, nothing is renamed only "in the UI").
+   * Rewrites the `{#kind:old}` definition on the object's own line and every
+   * `@kind:old` reference elsewhere — both always written with the full
+   * "kind:id" form the parser produces once the label is registered
+   * (`normalised` in the numbering pass), so a plain literal swap is safe.
+   * Returns false (and changes nothing) when the definition could not be
+   * found on its own line, so the caller can tell the user rather than
+   * silently leave references pointing at a name nothing defines.
+   */
+  renameLabel: (oldFull: string, newFull: string, definitionLine: number) => boolean;
 }
 
 let revokeAssets: (() => void) | null = null;
@@ -101,6 +133,11 @@ function titleFromSource(source: string): string {
   const h = /^#\s+(.+)$/m.exec(source);
   if (h) return (h[1] ?? '').trim();
   return 'Tài liệu chưa đặt tên';
+}
+
+/** Escapes a literal string for use inside a `new RegExp(...)`. */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -124,6 +161,8 @@ export const useStore = create<AppState>((set, get) => ({
   storageError: null,
   gotoLine: null,
   coverAdded: null,
+  printNonce: 0,
+  insertBlockRequest: null,
 
   async init() {
     const prefs = loadPreferences();
@@ -361,5 +400,63 @@ export const useStore = create<AppState>((set, get) => ({
     } catch {
       /* storage unavailable — library stays as-is */
     }
+  },
+
+  requestPrint() {
+    set((s) => ({ printNonce: s.printNonce + 1 }));
+  },
+
+  requestInsertBlock(templateId) {
+    set((s) => ({
+      insertBlockRequest: { templateId, nonce: (s.insertBlockRequest?.nonce ?? 0) + 1 },
+    }));
+  },
+
+  renameLabel(oldFull, newFull, definitionLine) {
+    const oldId = oldFull.slice(oldFull.indexOf(':') + 1);
+    const newId = newFull.slice(newFull.indexOf(':') + 1);
+    const lines = get().source.split('\n');
+    const at = definitionLine - 1;
+    const line = lines[at];
+    if (line === undefined) return false;
+
+    // The definition may have been typed with the kind prefix ("#fig:setup")
+    // or without it ("#setup" — numbering.ts adds the prefix implicitly for
+    // the node's own kind). Try the form actually on the line; if neither is
+    // there, stop rather than rename the references to a name the object
+    // itself still doesn't carry (P1).
+    const attrsRe = (token: string): RegExp => new RegExp(`#${escapeRegExp(token)}(?=[\\s}]|$)`);
+    let nextLine: string | null = null;
+    if (attrsRe(oldFull).test(line)) {
+      nextLine = line.replace(attrsRe(oldFull), `#${newFull}`);
+    } else if (attrsRe(oldId).test(line)) {
+      nextLine = line.replace(attrsRe(oldId), `#${newId}`);
+    }
+    if (nextLine === null) return false;
+    lines[at] = nextLine;
+
+    // `@kind:id` cross-references are always written in full — the parser
+    // only recognises that form (see REF_KINDS in the inline parser) — so a
+    // literal, word-boundary-guarded swap is safe everywhere else.
+    const refRe = new RegExp(`@${escapeRegExp(oldFull)}(?![\\w:-])`, 'g');
+    const next = lines.join('\n').replace(refRe, `@${newFull}`);
+
+    // Renaming is an occasional, explicit action — not a keystroke — so it
+    // re-renders right away instead of leaving the panel showing the old
+    // name until the next "Dựng trang" (the same choice `setTemplateId` and
+    // `setOverrides` already make, for the same reason; P6).
+    set((s) => ({
+      source: next,
+      renderedSource: next,
+      renderNonce: s.renderNonce + 1,
+      title: titleFromSource(next),
+      dirty: true,
+    }));
+    if (saveTimer) window.clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(() => {
+      void get().save();
+    }, 900);
+    track('label.rename', { kind: oldFull.slice(0, oldFull.indexOf(':')) });
+    return true;
   },
 }));
