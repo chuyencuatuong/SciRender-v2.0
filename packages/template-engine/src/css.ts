@@ -327,14 +327,56 @@ ${
 .sr-doc .sr-colrow .sr-col > :last-child{margin-bottom:0;}
 
 /* -------------------------------------------------- references & crossrefs */
-.sr-doc .sr-reference-list{list-style:none;padding-left:0;margin:0;}
-.sr-doc .sr-reference-item{
-  display:grid;grid-template-columns:2.6em 1fr;gap:.2em;margin:0 0 6pt;
-  text-align:justify;text-indent:0;
+.sr-doc .sr-reference-list{
+  display:block;
+  width:100%;
+  max-width:100%;
+  list-style:none;
+  padding-left:0;
+  margin:0;
 }
-/* Author-year lists carry no numeric marker, so they use a hanging indent. */
+/* Keep bibliography entries to exactly two grid columns. The content
+   column must be min-width:0 so long unbroken tokens cannot force an
+   implicit grid column and collapse the text width. */
+.sr-doc .sr-bibliography-item,.sr-doc .sr-reference-item{
+  display:grid;
+  grid-template-columns:2.5rem minmax(0,1fr);
+  column-gap:.5rem;
+  width:100%;
+  max-width:100%;
+  box-sizing:border-box;
+  margin:0 0 6pt;
+  text-align:justify;
+  text-indent:0;
+  align-items:start;
+}
+.sr-doc .sr-bibliography-item-label,.sr-doc .sr-reference-item-label{
+  grid-column:1;
+  min-width:0;
+  font-weight:500;
+  white-space:nowrap;
+}
+.sr-doc .sr-bibliography-item-content,.sr-doc .sr-reference-item-content{
+  grid-column:2;
+  min-width:0;
+  width:100%;
+  max-width:100%;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+/* Author-year lists carry no numeric marker, so they use the traditional
+   hanging indent and the same full-width content safeguards. */
 .sr-doc .sr-reference-item.sr-reference-hanging{
-  display:block;padding-left:2em;text-indent:-2em;
+  display:block;
+  width:100%;
+  max-width:100%;
+  padding-left:2.5rem;
+  text-indent:-2.5rem;
+}
+.sr-doc .sr-reference-item.sr-reference-hanging .sr-reference-item-content{
+  display:inline;
+  width:auto;
+  max-width:none;
 }
 .sr-doc .sr-citation,.sr-doc .sr-crossref{color:var(--sr-accent);white-space:nowrap;}
 

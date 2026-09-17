@@ -215,13 +215,16 @@ function renderReferences(doc: DocumentNode, t: TemplateDescriptor): string[] {
         const u = safeUrl(e.url);
         if (u) body += ` ${u}`;
       }
-      const numberedPrefix = authorYearStyle || t.citation.references === 'ieee' ? '' : `<span>[${i + 1}]</span>`;
+      const numberedPrefix = authorYearStyle || t.citation.references === 'ieee'
+        ? ''
+        : `<span class="sr-bibliography-item-label sr-reference-item-label">[${i + 1}]</span>`;
       const backLink = back
         ? `<a class="sr-reference-back" href="#${escapeAttr(back)}" title="Quay lại vị trí trích dẫn">↩</a>`
         : '';
-      return `<li id="${escapeAttr(anchor)}" class="sr-reference-item${
+      const contentClass = 'sr-bibliography-item-content sr-reference-item-content';
+      return `<li id="${escapeAttr(anchor)}" class="sr-bibliography-item sr-reference-item${
         authorYearStyle ? ' sr-reference-hanging' : ''
-      }">${numberedPrefix}<span>${escapeHtml(body)}</span>${backLink}</li>`;
+      }">${numberedPrefix}<span class="${contentClass}">${escapeHtml(body)}${backLink}</span></li>`;
     })
     .filter(Boolean);
 

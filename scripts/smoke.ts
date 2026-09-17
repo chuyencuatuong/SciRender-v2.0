@@ -954,3 +954,4 @@ if (failures) {
   process.exit(1);
 }
 console.log('Toàn bộ kiểm tra đạt.');
+
