@@ -54,13 +54,21 @@ export function printDocument(options: PrintOptions): void {
   };
   window.addEventListener('afterprint', cleanup);
 
-  // Give the browser one frame to apply the print stylesheet before opening the
-  // dialog; otherwise Chromium occasionally measures the pre-print layout.
-  window.requestAnimationFrame(() => {
+  // Chờ mọi phông chữ (kể cả các @font-face vừa được browser tải/parse cho
+  // nội dung mới chèn vào #sr-print-root) báo "ready" trước khi mở hộp thoại
+  // in — nếu không, Chromium có thể rasterize bằng phông thay thế cho phần
+  // chưa tải xong (chữ trông đúng trên màn hình nhưng sai trong PDF xuất ra).
+  // Cùng lý do máy chủ PDF (server.ts) đợi `document.fonts.ready` trước khi in.
+  const ready = (document.fonts?.ready ?? Promise.resolve()).catch(() => undefined);
+  void ready.then(() => {
+    // Cho browser thêm một khung hình để áp dụng stylesheet in; nếu không
+    // Chromium đôi lúc đo layout theo trạng thái trước khi in.
     window.requestAnimationFrame(() => {
-      window.print();
-      // Safari never fires afterprint in some configurations.
-      window.setTimeout(cleanup, 1500);
+      window.requestAnimationFrame(() => {
+        window.print();
+        // Safari never fires afterprint in some configurations.
+        window.setTimeout(cleanup, 1500);
+      });
     });
   });
 }

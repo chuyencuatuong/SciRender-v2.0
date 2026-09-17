@@ -140,6 +140,10 @@ export interface LayoutSpec {
   tableOrphans: number;
   /** Split a long list between items instead of pushing it whole. */
   splitLists: boolean;
+  /** Carry a long fenced code block over a page break, line numbers continuing on the next page. */
+  splitCode: boolean;
+  /** Minimum source lines kept on each side of a code-block split. */
+  codeOrphans: number;
   /** Expected body-page range, checked after pagination. Null = no check. */
   pageBudget: PageBudget | null;
   showPageNumbers: boolean;

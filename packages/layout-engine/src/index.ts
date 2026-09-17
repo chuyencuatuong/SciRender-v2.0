@@ -1,11 +1,13 @@
 import type { ResolvedTemplate } from '@scirender/template-engine';
 import {
+  isCode,
   isList,
   isSplittable,
   isTable,
   lineBoxes,
   offsetAtLineStart,
   snapToWord,
+  splitCodeBlock,
   splitElementAt,
   splitList,
   splitTable,
@@ -27,6 +29,10 @@ export interface PaginateOptions {
   splitTables: boolean;
   tableOrphans: number;
   splitLists: boolean;
+  /** Carry a long fenced code block over a page break instead of moving it whole. */
+  splitCode: boolean;
+  /** Minimum source lines kept on each side of a code-block split. */
+  codeOrphans: number;
   continuedLabel: string;
 }
 
@@ -61,6 +67,8 @@ export function optionsFromTemplate(t: ResolvedTemplate): PaginateOptions {
     splitTables: d.layout.splitTables,
     tableOrphans: d.layout.tableOrphans,
     splitLists: d.layout.splitLists,
+    splitCode: d.layout.splitCode,
+    codeOrphans: d.layout.codeOrphans,
     continuedLabel: d.labels.continued,
   };
 }
@@ -451,6 +459,9 @@ function trySplitStructure(
   }
   if (options.splitLists && isList(block)) {
     return splitList(block, limit, 1);
+  }
+  if (options.splitCode && isCode(block)) {
+    return splitCodeBlock(block, limit, Math.max(1, options.codeOrphans), options.continuedLabel);
   }
   return null;
 }

@@ -104,6 +104,7 @@ export function isBlock(node: AnyNode): node is BlockNode {
     node.type === 'callout' ||
     node.type === 'columns' ||
     node.type === 'thematicBreak' ||
+    node.type === 'pageBreak' ||
     node.type === 'unknownBlock'
   );
 }

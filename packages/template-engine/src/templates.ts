@@ -131,6 +131,8 @@ export const HCMUT_BTL: TemplateDescriptor = {
     splitTables: true,
     tableOrphans: 2,
     splitLists: true,
+    splitCode: true,
+    codeOrphans: 2,
     // Điều 1.2.2: phần nội dung 15–30 trang.
     pageBudget: { min: 15, max: 30 },
     showPageNumbers: true,
@@ -300,6 +302,8 @@ export const SCIENTIFIC_STANDARD: TemplateDescriptor = {
     splitTables: true,
     tableOrphans: 2,
     splitLists: true,
+    splitCode: true,
+    codeOrphans: 2,
     pageBudget: null,
     showPageNumbers: true,
     pageNumberPosition: 'footer-center',

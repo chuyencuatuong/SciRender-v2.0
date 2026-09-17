@@ -308,6 +308,9 @@ ${
 }
 .sr-doc .sr-callout-title{font-weight:700;margin:0 0 .3em;}
 .sr-doc hr{border:0;border-top:1px solid var(--sr-rule);margin:12pt 0;}
+/* A manual page break carries no ink of its own — it only ever tells
+   paginate() (via data-sr-break="page") to start a fresh page before it. */
+.sr-doc [data-sr-type="pageBreak"]{display:none;margin:0;padding:0;}
 
 /* ------------------------------------------------- side-by-side block row */
 .sr-doc .sr-colrow{

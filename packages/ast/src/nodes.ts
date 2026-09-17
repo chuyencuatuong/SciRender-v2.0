@@ -161,6 +161,17 @@ export interface FigureNode extends NodeBase {
 
 export interface TableCell {
   children: InlineNode[];
+  /** How many rows this cell visually spans downward, itself included. `1`
+   * (or `undefined`) means no span. Set only by the parser, from a body cell
+   * written as `^^` directly below it — never user-settable any other way. */
+  rowspan?: number;
+  /** True when this slot is covered by a `rowspan` cell from a row above —
+   * the renderer must skip it (no `<td>`) exactly as plain HTML rowspan
+   * requires; the grid stays rectangular (every row still has as many cells
+   * as the header) so nothing downstream — padding, the ragged-row
+   * diagnostic, the layout engine's row-based table split — needs to know
+   * spans exist at all. */
+  covered?: boolean;
 }
 
 export interface TableNode extends NodeBase {
@@ -231,6 +242,14 @@ export interface ThematicBreakNode extends NodeBase {
   type: 'thematicBreak';
 }
 
+/** A forced page break: `:::pagebreak:::` on its own line. Carries no content —
+ * it exists only to tell the layout engine "start a fresh page here", the same
+ * way a chapter heading's `pageBreakBefore` style does (P1: never resized or
+ * reflowed away, it always lands on a page boundary). */
+export interface PageBreakNode extends NodeBase {
+  type: 'pageBreak';
+}
+
 /** Emitted when the parser refuses to guess. P6: never silently dropped. */
 export interface UnknownBlockNode extends NodeBase {
   type: 'unknownBlock';
@@ -251,6 +270,7 @@ export type BlockNode =
   | CalloutNode
   | ColumnsNode
   | ThematicBreakNode
+  | PageBreakNode
   | UnknownBlockNode;
 
 export type AnyNode = BlockNode | InlineNode | ListItemNode | DocumentNode;

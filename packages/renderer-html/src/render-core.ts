@@ -181,7 +181,15 @@ export function renderBlock(
       const body = `<tbody>${norm.rows
         .map(
           (r) =>
-            `<tr>${r.map((c, i) => cellHtml('td', c, norm.align[i] ?? 'default', t)).join('')}</tr>`,
+            // A cell `covered` by a rowspan from above gets no <td> at all —
+            // the spanning cell above already reaches down over this slot,
+            // exactly as plain HTML rowspan requires. The alignment lookup
+            // must stay keyed on the ORIGINAL column index, so it is read
+            // before filtering, not after (a filtered index would drift left
+            // by one for every merged column to its left).
+            `<tr>${r
+              .map((c, i) => (c.covered ? '' : cellHtml('td', c, norm.align[i] ?? 'default', t)))
+              .join('')}</tr>`,
         )
         .join('')}</tbody>`;
       const cap = captionHtml(
@@ -278,6 +286,13 @@ export function renderBlock(
     }
     case 'thematicBreak':
       return `<hr${attrsOf(node)}>`;
+    case 'pageBreak':
+      // Zero-height on purpose (see .sr-doc [data-sr-type="pageBreak"] in the
+      // template CSS) — it never occupies space itself. `data-sr-break="page"`
+      // is the one thing that matters: it is the exact attribute `paginate()`
+      // already honors for a chapter heading's forced break (P4: one
+      // mechanism, not a parallel one just for this).
+      return `<div${attrsOf(node)} data-sr-break="page" aria-hidden="true"></div>`;
     case 'unknownBlock':
       return `<div class="sr-unknown"${attrsOf(node)}>${escapeHtml(node.reason)}\n${escapeHtml(
         node.raw,
@@ -294,5 +309,6 @@ function cellHtml(
   t: TemplateDescriptor,
 ): string {
   const style = alignStyle(align);
-  return `<${tag}${style ? ` style="${escapeAttr(style)}"` : ''}>${inline(cell.children, t)}</${tag}>`;
+  const span = cell.rowspan && cell.rowspan > 1 ? ` rowspan="${cell.rowspan}"` : '';
+  return `<${tag}${span}${style ? ` style="${escapeAttr(style)}"` : ''}>${inline(cell.children, t)}</${tag}>`;
 }

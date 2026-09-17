@@ -30,6 +30,14 @@ export interface BlockParseState {
 const RE_HEADING = /^(#{1,6})\s+(.*)$/;
 const RE_FENCE = /^(```|~~~)\s*([A-Za-z0-9_+-]*)\s*$/;
 const RE_THEMATIC = /^ {0,3}((\*\s*){3,}|(-\s*){3,}|(_\s*){3,})$/;
+/** A forced page break, written as a single self-closing directive line so it
+ * never needs a matching close on the next line (unlike `::: note` … `:::`). */
+const RE_PAGEBREAK = /^:::\s*pagebreak\s*:::$/i;
+/** A table body cell written as exactly this merges into the cell above it
+ * (see the `^^` handling in `readTable`). Exported so the block-canvas editor
+ * can offer a "merge with cell above" button that writes the same marker,
+ * instead of the two sides drifting apart on what the syntax actually is. */
+export const TABLE_MERGE_MARKER = '^^';
 const RE_BULLET = /^(\s*)([-*+])\s+(.*)$/;
 const RE_ORDERED = /^(\s*)(\d{1,9})[.)]\s+(.*)$/;
 const RE_CAPTION = /^:\s+(.*)$/;
@@ -196,6 +204,14 @@ export function parseBlocks(lines: SrcLine[], st: BlockParseState): BlockNode[] 
         position: pos,
         children: parseBlocks(inner, st),
       });
+      continue;
+    }
+
+    // ------------------------------------------------------------ page break
+    if (RE_PAGEBREAK.test(t.trim())) {
+      const pos = span(line, line);
+      out.push({ type: 'pageBreak', id: nid('pageBreak', pos, st), position: pos });
+      i++;
       continue;
     }
 
@@ -509,6 +525,14 @@ function readTable(
     return 'default';
   });
 
+  // `^^` in a body cell means "same as the cell above" (the MultiMarkdown
+  // ditto convention) — it merges vertically into the nearest real cell above
+  // it in the same column, growing that cell's `rowspan` by one and leaving
+  // this slot `covered` (no ink, no <td> at render time). `columnOwner` tracks
+  // which cell currently owns each column, so a run of several `^^` rows all
+  // extend the SAME top cell rather than chaining off one another.
+  const columnOwner: (TableCell | null)[] = new Array(headerCells.length).fill(null);
+
   const rows: TableCell[][] = [];
   let j = i + 2;
   while (j < lines.length && (lines[j] as SrcLine).text.trim().includes('|') && !isBlank(lines[j])) {
@@ -525,9 +549,17 @@ function readTable(
       });
     }
     rows.push(
-      Array.from({ length: headerCells.length }, (_, k) => ({
-        children: inlineOf(cells[k] ?? '', cur, st),
-      })),
+      Array.from({ length: headerCells.length }, (_, k) => {
+        const raw = (cells[k] ?? '').trim();
+        const owner = columnOwner[k];
+        if (raw === TABLE_MERGE_MARKER && owner) {
+          owner.rowspan = (owner.rowspan ?? 1) + 1;
+          return { children: [], covered: true };
+        }
+        const cell: TableCell = { children: inlineOf(cells[k] ?? '', cur, st) };
+        columnOwner[k] = cell;
+        return cell;
+      }),
     );
     j++;
   }

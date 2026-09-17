@@ -243,6 +243,31 @@ function captionOf(wrapper: Element): { el: Element; above: boolean } | null {
  * continuation. Returns null when neither side would keep `minRows` rows —
  * a table that would leave a single orphan row behind is moved whole instead.
  */
+/**
+ * For each body row, whether the table may be cut right after it — false when
+ * a `rowspan` cell starting at or before that row still reaches into a later
+ * row. A covered slot (see `TableCell.covered`) renders no `<td>` at all, so
+ * this walks column occupancy the same way a browser lays the grid out: a row
+ * short a cell in some column is exactly a row a span from above still owns.
+ */
+function computeRowSafety(rows: HTMLTableRowElement[], columns: number): boolean[] {
+  const occupancy = new Array<number>(columns).fill(0);
+  return rows.map((row) => {
+    const cells = Array.from(row.cells);
+    let cellIndex = 0;
+    for (let col = 0; col < columns; col++) {
+      if (occupancy[col] as number > 0) {
+        (occupancy[col] as number)--;
+        continue;
+      }
+      const cell = cells[cellIndex++];
+      const span = cell ? Math.max(1, Number.parseInt(cell.getAttribute('rowspan') ?? '1', 10) || 1) : 1;
+      if (span > 1) occupancy[col] = span - 1;
+    }
+    return occupancy.every((v) => v === 0);
+  });
+}
+
 export function splitTable(
   wrapper: Element,
   availableBottom: number,
@@ -257,10 +282,25 @@ export function splitTable(
   );
   if (rows.length < minRows * 2) return null;
 
-  let fit = 0;
+  const columns = table.querySelector('thead tr')?.children.length ?? (rows[0]?.cells.length ?? 0);
+  const safeAfter = computeRowSafety(rows, columns);
+
+  let naturalFit = 0;
   for (const row of rows) {
-    if (row.getBoundingClientRect().bottom <= availableBottom + 0.5) fit++;
+    if (row.getBoundingClientRect().bottom <= availableBottom + 0.5) naturalFit++;
     else break;
+  }
+
+  // The largest row count that both fits the remaining space AND lands on a
+  // boundary no rowspan crosses — never merely the tallest prefix that fits,
+  // now that a cell can reach past its own row (P1: a cut must never slice a
+  // cell's identity in two).
+  let fit = 0;
+  for (let k = naturalFit; k >= 1; k--) {
+    if (safeAfter[k - 1]) {
+      fit = k;
+      break;
+    }
   }
   if (fit < minRows || rows.length - fit < minRows) return null;
 
@@ -333,6 +373,158 @@ export function splitList(
     const start = Number(list.getAttribute('start') ?? '1') || 1;
     tail.setAttribute('start', String(start + fit));
   }
+  for (const el of Array.from(tail.querySelectorAll('[data-sr-id]'))) {
+    el.removeAttribute('data-sr-id');
+  }
+  tail.removeAttribute('data-sr-id');
+  head.setAttribute('data-sr-split', 'head');
+  tail.setAttribute('data-sr-split', 'tail');
+  return [head, tail];
+}
+
+export function isCode(el: Element): boolean {
+  return el.getAttribute('data-sr-type') === 'codeBlock' && !!el.querySelector('pre > code');
+}
+
+/**
+ * Splits a fenced code block between two source lines. The gutter's line
+ * numbers carry over unchanged (21, 22, … on the continuation, never
+ * restarting at 1), and the caption is marked "(tiếp theo)" the same way
+ * `splitTable` marks a carried-over table.
+ *
+ * The cut point is found from the *source* text, never from rendered line
+ * boxes: a line the template wraps (`code.wrap`) renders as more than one
+ * visual row, which would throw a visual-line count off by exactly the
+ * amount that matters — a source-line boundary is the one thing that stays
+ * correct whether or not lines wrap. Fit is found by actually rendering each
+ * candidate line count and reading its height back (same principle as
+ * `splitTable`'s row scan); height is monotonic in line count, so a binary
+ * search converges in O(log n) reflows instead of one per line.
+ */
+/** Removes a single leading "\n" from the first non-empty text node of `root`, in document order. */
+function trimLeadingNewline(root: Element): void {
+  const visit = (node: Node): boolean => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const value = node.nodeValue ?? '';
+      if (value.length === 0) return false;
+      if (value[0] === '\n') node.nodeValue = value.slice(1);
+      return true;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return false;
+    for (const child of Array.from(node.childNodes)) {
+      if (visit(child)) return true;
+    }
+    return false;
+  };
+  visit(root);
+}
+
+export function splitCodeBlock(
+  wrapper: Element,
+  availableBottom: number,
+  minLines: number,
+  continuedLabel: string,
+): [Element, Element] | null {
+  const pre = wrapper.querySelector('pre');
+  const code = pre?.querySelector('code');
+  if (!pre || !code) return null;
+
+  const sourceLines = (code.textContent ?? '').split('\n');
+  const total = sourceLines.length;
+  if (total < minLines * 2) return null;
+
+  // Offset of the character right after line n's own content — deliberately
+  // NOT counting the newline that follows it. That separator belongs to
+  // neither side on its own (splitting text always drops the one character
+  // at the cut), so it is stripped from the tail's leading edge below
+  // instead of being left dangling on the head's trailing edge.
+  const offsetAfterLine = (n: number): number =>
+    sourceLines.slice(0, n).reduce((sum, l) => sum + l.length, 0) + Math.max(0, n - 1);
+
+  const gutter = wrapper.querySelector('.sr-code-gutter');
+  const gutterLines = gutter ? (gutter.textContent ?? '').split('\n') : null;
+
+  const parent = wrapper.parentElement;
+  if (!parent) return null;
+
+  /** Renders the wrapper keeping only the first `n` code lines; returns its bottom, or null if unmeasurable. */
+  const bottomWith = (n: number): number | null => {
+    const parts = splitElementAt(code, offsetAfterLine(n));
+    if (!parts) return null;
+    const clone = wrapper.cloneNode(true) as Element;
+    const cloneCode = clone.querySelector('pre > code');
+    if (!cloneCode?.parentNode) return null;
+    cloneCode.parentNode.replaceChild(parts[0], cloneCode);
+    if (gutterLines) {
+      const cloneGutter = clone.querySelector('.sr-code-gutter');
+      if (cloneGutter) cloneGutter.textContent = gutterLines.slice(0, n).join('\n');
+    }
+    parent.insertBefore(clone, wrapper);
+    // getBoundingClientRect() stops at the border box — it excludes margin.
+    // `parent` (the column box) has overflow:hidden, which establishes a new
+    // block formatting context and therefore *traps* this wrapper's own
+    // bottom margin as part of the column's scrollHeight instead of letting
+    // it collapse away — exactly the quantity `column.overflows()` checks
+    // against. Omitting it here made the probe measure ~10pt short and
+    // accept splits that still overflowed once actually applied.
+    const marginBottom = parseFloat(getComputedStyle(clone).marginBottom) || 0;
+    const bottom = clone.getBoundingClientRect().bottom + marginBottom;
+    clone.remove();
+    return bottom;
+  };
+
+  const rangeLo = minLines;
+  const rangeHi = total - minLines;
+  if (rangeLo > rangeHi) return null;
+  const floorBottom = bottomWith(rangeLo);
+  if (floorBottom === null || floorBottom > availableBottom + 0.5) return null;
+
+  let lo = rangeLo;
+  let hi = rangeHi;
+  while (lo < hi) {
+    const mid = lo + 1 + Math.floor((hi - lo) / 2); // biased high: find the largest n that fits
+    const bottom = bottomWith(mid);
+    if (bottom !== null && bottom <= availableBottom + 0.5) lo = mid;
+    else hi = mid - 1;
+  }
+  const fit = lo;
+  if (fit < minLines || total - fit < minLines) return null;
+
+  const parts = splitElementAt(code, offsetAfterLine(fit));
+  if (!parts) return null;
+  const [codeHead, codeTail] = parts;
+  // The separator newline between line `fit` and `fit + 1` was excluded from
+  // the head (see offsetAfterLine above), so it survives as a leading
+  // character on the tail — strip it so the tail starts clean at line
+  // `fit + 1` instead of with a blank first line.
+  trimLeadingNewline(codeTail);
+
+  const head = wrapper.cloneNode(true) as Element;
+  const tail = wrapper.cloneNode(true) as Element;
+  const swap = (clone: Element, replacement: Element): boolean => {
+    const target = clone.querySelector('pre > code');
+    if (!target?.parentNode) return false;
+    target.parentNode.replaceChild(replacement, target);
+    return true;
+  };
+  if (!swap(head, codeHead) || !swap(tail, codeTail)) return null;
+
+  if (gutterLines) {
+    const headGutter = head.querySelector('.sr-code-gutter');
+    const tailGutter = tail.querySelector('.sr-code-gutter');
+    if (headGutter) headGutter.textContent = gutterLines.slice(0, fit).join('\n');
+    if (tailGutter) tailGutter.textContent = gutterLines.slice(fit).join('\n');
+  }
+
+  const cap = captionOf(wrapper);
+  const headCap = captionOf(head);
+  const tailCap = captionOf(tail);
+  if (cap?.above) {
+    if (tailCap) tailCap.el.textContent = `${tailCap.el.textContent} (${continuedLabel})`;
+  } else if (cap) {
+    headCap?.el.remove();
+  }
+
   for (const el of Array.from(tail.querySelectorAll('[data-sr-id]'))) {
     el.removeAttribute('data-sr-id');
   }
