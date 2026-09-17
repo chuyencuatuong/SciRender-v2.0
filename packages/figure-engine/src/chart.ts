@@ -4,6 +4,8 @@ export type RegressionKind = 'none' | 'linear' | 'quadratic';
 export interface NumericChartPoint {
   x: number;
   y: number;
+  /** Optional symmetric Y error for this point. Rendered as an I-shaped error bar. */
+  yError?: number;
 }
 
 export interface BarChartPoint {
@@ -23,6 +25,8 @@ export interface SvgChartOptions {
   regressionEquation?: string;
   r2?: number;
   regressionPredict?: (x: number) => number;
+  /** Symmetric Y error per point. A single fixed value can be expanded by the caller. */
+  yErrors?: Array<number | null | undefined>;
   points?: NumericChartPoint[];
   bars?: BarChartPoint[];
 }
@@ -65,7 +69,12 @@ export function renderChartSvg(options: SvgChartOptions): string {
       ? sampleRegressionPath(xRange.min, xRange.max, options.regressionPredict, 100)
       : [];
   const scaledY = regressionSamples.map((p) => p.y).filter(Number.isFinite);
-  const allY = scaledY.length ? [...ys, ...scaledY] : ys;
+  const errorExtents = points.flatMap((point, index) => {
+    const rawError = point.yError ?? options.yErrors?.[index];
+    const error = Number.isFinite(rawError) ? Math.abs(rawError as number) : 0;
+    return [point.y - error, point.y + error];
+  });
+  const allY = scaledY.length ? [...ys, ...errorExtents, ...scaledY] : [...ys, ...errorExtents];
   const yRange = niceRange(Math.min(...allY), Math.max(...allY));
   const xTicks = ticks(xRange.min, xRange.max, xRange.step);
   const yTicks = ticks(yRange.min, yRange.max, yRange.step);
@@ -79,6 +88,14 @@ export function renderChartSvg(options: SvgChartOptions): string {
   if (options.kind === 'line') {
     const ordered = [...points].sort((a, b) => a.x - b.x);
     parts.push(`<path d="${polylinePath(ordered, sx, sy)}" fill="none" stroke="${COLORS.accent}" stroke-width="2"/>`);
+  }
+
+  const pointErrors = points.map((point, index) => {
+    const rawError = point.yError ?? options.yErrors?.[index];
+    return Number.isFinite(rawError) ? Math.abs(rawError as number) : 0;
+  });
+  if (pointErrors.some((error) => error > 0)) {
+    parts.push(errorBars(points, pointErrors, sx, sy));
   }
 
   parts.push(
@@ -164,6 +181,29 @@ function axis(plot: { x: number; y: number; w: number; h: number }): string {
     `<line x1="${fmt(plot.x)}" y1="${fmt(plot.y + plot.h)}" x2="${fmt(plot.x + plot.w)}" y2="${fmt(plot.y + plot.h)}" stroke="${COLORS.ink}" stroke-width="1.2"/>`,
     `<line x1="${fmt(plot.x)}" y1="${fmt(plot.y)}" x2="${fmt(plot.x)}" y2="${fmt(plot.y + plot.h)}" stroke="${COLORS.ink}" stroke-width="1.2"/>`,
   ].join('');
+}
+
+function errorBars(
+  points: NumericChartPoint[],
+  errors: number[],
+  sx: (x: number) => number,
+  sy: (y: number) => number,
+): string {
+  const capHalfWidth = 3;
+  return points
+    .map((point, index) => {
+      const error = errors[index] ?? 0;
+      if (!(error > 0)) return '';
+      const x = sx(point.x);
+      const yTop = sy(point.y + error);
+      const yBottom = sy(point.y - error);
+      return [
+        `<line x1="${fmt(x)}" y1="${fmt(yTop)}" x2="${fmt(x)}" y2="${fmt(yBottom)}" stroke="${COLORS.ink}" stroke-width="1.2"/>`,
+        `<line x1="${fmt(x - capHalfWidth)}" y1="${fmt(yTop)}" x2="${fmt(x + capHalfWidth)}" y2="${fmt(yTop)}" stroke="${COLORS.ink}" stroke-width="1.2" stroke-linecap="square"/>`,
+        `<line x1="${fmt(x - capHalfWidth)}" y1="${fmt(yBottom)}" x2="${fmt(x + capHalfWidth)}" y2="${fmt(yBottom)}" stroke="${COLORS.ink}" stroke-width="1.2" stroke-linecap="square"/>`,
+      ].join('');
+    })
+    .join('');
 }
 
 function gridLines(

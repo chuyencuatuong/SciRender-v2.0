@@ -770,6 +770,38 @@ const quadSvg = renderChartSvg({
 });
 const quadPath = /<path d="([^"]+)" fill="none" stroke="#b42318"/.exec(quadSvg)?.[1] ?? '';
 check('hồi quy bậc 2 dùng path cong lấy mẫu dày', quadPath.startsWith('M') && (quadPath.match(/L/g) ?? []).length >= 99 && !/<line[^>]+stroke="#b42318"/.test(quadSvg));
+const errorBarSvg = renderChartSvg({
+  kind: 'scatter',
+  points: [
+    { x: 0, y: 10, yError: 100 },
+    { x: 1, y: 20, yError: 100 },
+  ],
+  showGrid: true,
+  xLabel: 'X',
+  yLabel: 'Y',
+});
+const errorBarLines = [...errorBarSvg.matchAll(/<line[^>]*stroke="#111827"[^>]*stroke-linecap="square"[^>]*>/g)];
+check('error bars có 2 nắp ngang cho mỗi điểm', errorBarLines.length === 4, String(errorBarLines.length));
+check('error bar đúng độ rộng khoảng 6px', errorBarLines.every((m) => {
+  const tag = m[0];
+  const x1 = Number(/x1="([^"]+)"/.exec(tag)?.[1]);
+  const x2 = Number(/x2="([^"]+)"/.exec(tag)?.[1]);
+  return Number.isFinite(x1) && Number.isFinite(x2) && Math.abs(x2 - x1 - 6) < 0.01;
+}));
+const capY = errorBarLines.flatMap((m) => {
+  const y = Number(/y1="([^"]+)"/.exec(m[0])?.[1]);
+  return Number.isFinite(y) ? [y] : [];
+});
+const verticalErrorLines = [...errorBarSvg.matchAll(/<line[^>]*stroke="#111827"[^>]*stroke-width="1.2"[^>]*\/>/g)]
+  .map((m) => m[0])
+  .filter((tag) => {
+    const x1 = /x1="([^"]+)"/.exec(tag)?.[1];
+    const x2 = /x2="([^"]+)"/.exec(tag)?.[1];
+    const y1 = Number(/y1="([^"]+)"/.exec(tag)?.[1]);
+    const y2 = Number(/y2="([^"]+)"/.exec(tag)?.[1]);
+    return x1 === x2 && capY.some((y) => Math.abs(y - y1) < 0.01 || Math.abs(y - y2) < 0.01);
+  });
+check('auto range bao hàm toàn bộ thanh sai số', verticalErrorLines.length >= 2);
 const assetFigure = serializeFigure({ alt: 'Đặc tuyến V-A', src: 'asset:chart-ohm', label: 'fig:ohm', width: '100%' });
 check('figure chart dùng asset reference gọn', assetFigure === '![Đặc tuyến V-A](asset:chart-ohm){#fig:ohm width=100%}' && assetFigure.length < 100);
 const barSvg = renderChartSvg({ kind: 'bar', bars: [{ label: 'A', y: 2 }, { label: 'B', y: 5 }], xLabel: 'Mẫu', yLabel: 'Giá trị' });
