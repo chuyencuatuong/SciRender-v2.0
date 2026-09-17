@@ -25,6 +25,17 @@ import { SAMPLE_DOCUMENT, EMPTY_DOCUMENT } from '~/lib/sample';
 
 export type PanelId = 'outline' | 'diagnostics' | 'health' | 'assets' | 'template' | 'library' | 'research';
 
+/** Toàn bộ bảng màu (Tailwind + `--sr-*`) đọc theo `data-theme` trên `<html>` —
+ * xem `index.css`/`tailwind.config.js`. Đặt ở đây (không phải component) vì cần
+ * áp dụng cả lúc khởi động lẫn mỗi lần đổi. */
+function applyTheme(theme: Preferences['theme']): void {
+  try {
+    document.documentElement.dataset.theme = theme;
+  } catch {
+    /* SSR/test env không có document — bỏ qua, không phải việc phải chặn app */
+  }
+}
+
 export interface AppState {
   ready: boolean;
   docId: string;
@@ -117,6 +128,7 @@ export const useStore = create<AppState>((set, get) => ({
   async init() {
     const prefs = loadPreferences();
     initTelemetry(prefs.telemetryOptIn);
+    applyTheme(prefs.theme);
     set({ prefs });
     try {
       const library = await listDocuments();
@@ -210,6 +222,7 @@ export const useStore = create<AppState>((set, get) => ({
     set({ prefs });
     savePreferences(prefs);
     if (key === 'telemetryOptIn') setTelemetryEnabled(Boolean(value));
+    if (key === 'theme') applyTheme(value as Preferences['theme']);
   },
 
   async save() {

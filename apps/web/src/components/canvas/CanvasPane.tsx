@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Braces, FileText, Redo2, Rows2, Undo2 } from 'lucide-react';
+import { Braces, Columns2, FileText, Redo2, Undo2 } from 'lucide-react';
 import { CARD_IN, useReducedMotion } from '~/lib/motion';
 import {
   detectKind,
@@ -343,20 +343,21 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
 
   // Dragging the divider between the two split panes — the same bespoke
   // mousemove/mouseup pattern App.tsx uses for the editor/preview divider,
-  // just resizing vertically (top-pane height %) instead of horizontally.
+  // resizing horizontally (left-pane width %) — left/right, like VS Code's
+  // default split, rather than the earlier top/bottom stack.
   useEffect(() => {
     if (!splitDragging) return;
     const onMove = (e: MouseEvent): void => {
       const box = splitBoxRef.current;
       if (!box) return;
       const rect = box.getBoundingClientRect();
-      const pct = ((e.clientY - rect.top) / rect.height) * 100;
+      const pct = ((e.clientX - rect.left) / rect.width) * 100;
       setSplitPct(Math.min(80, Math.max(20, pct)));
     };
     const onUp = (): void => setSplitDragging(false);
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-    document.body.style.cursor = 'ns-resize';
+    document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
     return () => {
       window.removeEventListener('mousemove', onMove);
@@ -372,7 +373,10 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
   // one shared document (P1: the canvas is a view, never a second copy).
   const renderPane = (ref: React.RefObject<HTMLDivElement>): JSX.Element => (
     <div ref={ref} className="sr-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-28 pt-6">
-      <div className="mx-auto max-w-[660px]">
+      {/* 660 -> 720px: dòng chữ vẫn trong khoảng đọc thoải mái (~85-90 ký tự),
+          chỉ nới thêm một chút để cột soạn thảo bớt trông "trống" trên màn
+          rộng khi không chia đôi — không kéo full-width vì hại khả năng đọc. */}
+      <div className="mx-auto max-w-[720px]">
         <AnimatePresence>
           {coverAdded && coverAdded !== coverNoticeSeen ? (
             <motion.div
@@ -400,7 +404,7 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
                   type="button"
                   aria-label="Ẩn thông báo"
                   onClick={() => setCoverNoticeSeen(coverAdded)}
-                  className="grid h-5 w-5 shrink-0 place-items-center rounded text-deep-500 hover:bg-white"
+                  className="grid h-5 w-5 shrink-0 place-items-center rounded text-deep-500 hover:bg-[var(--sr-surface)]"
                 >
                   <X size={12} />
                 </button>
@@ -478,13 +482,13 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
 
   return (
     <>
-      <div className="flex h-11 shrink-0 items-center gap-1.5 overflow-hidden border-b border-black/[0.045] px-3">
+      <div className="flex h-11 shrink-0 items-center gap-1.5 overflow-hidden border-b border-ink-900/[0.045] px-3">
         <InsertMenu onInsert={(tpl) => insertAt(doc.cards.length, tpl.text)} />
         <button
           type="button"
           onClick={() => setShowFront(true)}
           title="Thông tin tài liệu — tên nhóm, GVHD, MSSV"
-          className="inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] text-ink-500 transition hover:bg-black/[0.04] hover:text-ink-900"
+          className="inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] text-ink-500 transition hover:bg-ink-900/[0.04] hover:text-ink-900"
         >
           <FileText size={13} strokeWidth={1.5} /> Thông tin
         </button>
@@ -492,7 +496,7 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
           type="button"
           onClick={() => setShowSource(true)}
           title="Xem mã nguồn Markdown của tài liệu"
-          className="inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] text-ink-500 transition hover:bg-black/[0.04] hover:text-ink-900"
+          className="inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] text-ink-500 transition hover:bg-ink-900/[0.04] hover:text-ink-900"
         >
           <Braces size={13} strokeWidth={1.5} /> Mã nguồn
         </button>
@@ -504,10 +508,10 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
           className={`inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] transition ${
             splitView
               ? 'bg-deep-50 text-deep-700'
-              : 'text-ink-500 hover:bg-black/[0.04] hover:text-ink-900'
+              : 'text-ink-500 hover:bg-ink-900/[0.04] hover:text-ink-900'
           }`}
         >
-          <Rows2 size={13} strokeWidth={1.5} /> Chia đôi
+          <Columns2 size={13} strokeWidth={1.5} /> Chia đôi
         </button>
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -515,7 +519,7 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
             <div
               role="tablist"
               aria-label="Khung nhìn"
-              className="mr-1 flex h-[28px] items-center gap-0.5 rounded-[9px] bg-black/[0.05] px-[3px]"
+              className="mr-1 flex h-[28px] items-center gap-0.5 rounded-[9px] bg-ink-900/[0.05] px-[3px]"
             >
               {(['canvas', 'preview'] as const).map((v) => (
                 <button
@@ -525,7 +529,7 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
                   onClick={() => viewSwitch.setView(v)}
                   className={`h-[22px] rounded-[7px] px-2.5 text-[11.5px] transition ${
                     viewSwitch.view === v
-                      ? 'bg-white font-medium text-deep-600 shadow-[0_1px_2px_rgba(15,23,42,.08)]'
+                      ? 'bg-[var(--sr-surface)] font-medium text-deep-600 shadow-[0_1px_2px_rgb(var(--ink-900)/0.08)]'
                       : 'text-ink-500'
                   }`}
                 >
@@ -539,7 +543,7 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
             title="Hoàn tác (Ctrl+Z)"
             aria-label="Hoàn tác"
             onClick={undo}
-            className="grid h-[26px] w-[26px] place-items-center rounded-[7px] text-ink-400 transition hover:bg-black/[0.04] hover:text-deep-600"
+            className="grid h-[26px] w-[26px] place-items-center rounded-[7px] text-ink-400 transition hover:bg-ink-900/[0.04] hover:text-deep-600"
           >
             <Undo2 size={13} strokeWidth={1.5} />
           </button>
@@ -548,7 +552,7 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
             title="Làm lại (Ctrl+Y)"
             aria-label="Làm lại"
             onClick={redo}
-            className="grid h-[26px] w-[26px] place-items-center rounded-[7px] text-ink-400 transition hover:bg-black/[0.04] hover:text-deep-600"
+            className="grid h-[26px] w-[26px] place-items-center rounded-[7px] text-ink-400 transition hover:bg-ink-900/[0.04] hover:text-deep-600"
           >
             <Redo2 size={13} strokeWidth={1.5} />
           </button>
@@ -559,18 +563,18 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
       </div>
 
       {splitView ? (
-        <div ref={splitBoxRef} className="flex min-h-0 flex-1 flex-col">
-          <div style={{ height: `${splitPct}%` }} className="flex min-h-0 flex-col">
+        <div ref={splitBoxRef} className="flex min-h-0 flex-1 flex-row">
+          <div style={{ width: `${splitPct}%` }} className="flex min-h-0 flex-col">
             {renderPane(listRef)}
           </div>
           <div
             role="separator"
-            aria-orientation="horizontal"
-            aria-label="Kéo để đổi chiều cao hai khung"
+            aria-orientation="vertical"
+            aria-label="Kéo để đổi chiều rộng hai khung"
             onMouseDown={() => setSplitDragging(true)}
-            className="h-[5px] shrink-0 cursor-ns-resize border-y border-black/[0.06] bg-black/[0.03] hover:bg-deep-100"
+            className="w-[5px] shrink-0 cursor-col-resize border-x border-ink-900/[0.06] bg-ink-900/[0.03] hover:bg-deep-100"
           />
-          <div style={{ height: `${100 - splitPct}%` }} className="flex min-h-0 flex-col">
+          <div style={{ width: `${100 - splitPct}%` }} className="flex min-h-0 flex-col">
             {renderPane(listRef2)}
           </div>
         </div>

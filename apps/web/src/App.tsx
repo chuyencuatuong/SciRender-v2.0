@@ -137,7 +137,7 @@ export function App(): JSX.Element {
           <div
             className={
               overlayPreview
-                ? `absolute bottom-0 right-0 top-0 z-[38] flex w-[min(560px,92vw)] flex-col shadow-[-24px_0_48px_-24px_rgba(11,22,45,.28)] transition-transform duration-300 ${
+                ? `absolute bottom-0 right-0 top-0 z-[38] flex w-[min(560px,92vw)] flex-col shadow-[-24px_0_48px_-24px_rgb(var(--ink-900)/0.28)] transition-transform duration-300 ${
                     view === 'preview'
                       ? 'translate-x-0'
                       : 'pointer-events-none translate-x-full'

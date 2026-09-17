@@ -1,38 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
-  Download,
   FileCode2,
   FilePlus2,
   Loader2,
+  Moon,
   Package,
   Play,
   Printer,
   Save,
+  Sun,
   TriangleAlert,
   Upload,
 } from 'lucide-react';
-import {
-  downloadPdf,
-  downloadPdfServer,
-  exportStandaloneHtml,
-  printDocument,
-  slug,
-} from '@scirender/renderer-pdf';
+import { exportStandaloneHtml, printDocument, slug } from '@scirender/renderer-pdf';
 import { importBundle, exportBundle } from '@scirender/storage';
 import { track } from '@scirender/telemetry';
 import type { RenderState } from '~/hooks/useRender';
-import { Menu, SplitMenu } from '~/components/ui/Menu';
+import { Menu } from '~/components/ui/Menu';
 import { useStore } from '~/state/store';
 import { readAppFontsCss, readKatexCss } from '~/lib/export-fonts';
-
-/**
- * URL của @scirender/pdf-server (biến VITE_PDF_SERVER_URL, đặt trong
- * apps/web/.env — xem .env.example). Không cấu hình thì mục "Tải PDF (chữ
- * thật)" ẩn đi, chỉ còn bản ảnh ngoại tuyến và In… → Save as PDF.
- */
-const PDF_SERVER_URL = (import.meta.env.VITE_PDF_SERVER_URL as string | undefined)?.trim();
-const PDF_SERVER_TOKEN = (import.meta.env.VITE_PDF_SERVER_TOKEN as string | undefined)?.trim();
 
 /** Đánh dấu đã hiện lời nhắc "chọn Save as PDF" một lần trên máy này (P5-friendly, không cần server). */
 const PRINT_HINT_SEEN_KEY = 'sr:print-hint-seen';
@@ -53,9 +40,9 @@ export function TopBar({ render }: Props): JSX.Element {
   const requestRender = useStore((s) => s.render);
   const source = useStore((s) => s.source);
   const renderedSource = useStore((s) => s.renderedSource);
+  const theme = useStore((s) => s.prefs.theme);
+  const setPref = useStore((s) => s.setPref);
   const [busy, setBusy] = useState(false);
-  const [pdf, setPdf] = useState<{ done: number; total: number } | null>(null);
-  const [pdfServerStage, setPdfServerStage] = useState<string | null>(null);
   const importRef = useRef<HTMLInputElement | null>(null);
 
   const stale = source !== renderedSource;
@@ -91,57 +78,6 @@ export function TopBar({ render }: Props): JSX.Element {
       footers,
       documentTitle: result.document.meta.title || title,
     });
-  };
-
-  const onDownloadPdf = async (scale: number): Promise<void> => {
-    if (!result || !render.pages.length) return;
-    setPdf({ done: 0, total: render.pages.length });
-    try {
-      const out = await downloadPdf({
-        pages: pageHtml,
-        template: result.template,
-        footers,
-        documentTitle: result.document.meta.title || title,
-        scale,
-        onProgress: (done, total) => setPdf({ done, total }),
-      });
-      track('export.pdf', { pages: out.pages, bytes: out.bytes, scale });
-    } catch (err) {
-      window.alert(`Không tạo được tệp PDF: ${(err as Error).message}`);
-    } finally {
-      setPdf(null);
-    }
-  };
-
-  const onDownloadPdfServer = async (): Promise<void> => {
-    if (!result || !render.pages.length) return;
-    if (!PDF_SERVER_URL) {
-      window.alert(
-        'Chưa cấu hình máy chủ xuất PDF (VITE_PDF_SERVER_URL). Dùng "Tải PDF (ngoại tuyến, ảnh)" hoặc "In… → Save as PDF" thay thế.',
-      );
-      return;
-    }
-    setPdfServerStage('Đang chuẩn bị phông chữ…');
-    try {
-      const [katexCss, fontsCss] = await Promise.all([readKatexCss(), readAppFontsCss()]);
-      setPdfServerStage('Đang dựng PDF trên máy chủ…');
-      const out = await downloadPdfServer({
-        pages: pageHtml,
-        template: result.template,
-        footers,
-        documentTitle: result.document.meta.title || title,
-        katexCss,
-        extraCss: fontsCss,
-        lang: result.document.meta.language,
-        endpoint: PDF_SERVER_URL,
-        token: PDF_SERVER_TOKEN,
-      });
-      track('export.pdf-server', { pages: out.pages, bytes: out.bytes });
-    } catch (err) {
-      window.alert((err as Error).message);
-    } finally {
-      setPdfServerStage(null);
-    }
   };
 
   const onExportHtml = async (): Promise<void> => {
@@ -189,35 +125,30 @@ export function TopBar({ render }: Props): JSX.Element {
     }
   };
 
-  // Ctrl+P in / Ctrl+Shift+P tải PDF — hai việc khác nhau nên hai phím khác nhau.
-  // Ctrl+Shift+P ưu tiên PDF chữ thật (máy chủ) khi đã cấu hình, còn không thì
-  // rơi về bản ảnh ngoại tuyến cũ — không để phím tắt im lặng không làm gì.
+  // Ctrl+P luôn là In / Lưu PDF — không còn lối tải PDF riêng để hai phím tắt
+  // phải phân biệt nữa (bỏ hẳn Ctrl+Shift+P, xem Đợt 8).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'p') return;
       e.preventDefault();
-      if (e.shiftKey) {
-        if (PDF_SERVER_URL) void onDownloadPdfServer();
-        else void onDownloadPdf(2);
-      } else onPrint();
+      onPrint();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
 
   const noPages = !render.pages.length;
-  const pdfBusy = !!pdf || !!pdfServerStage;
 
   return (
     <header
       data-sr-topbar
-      className="sr-frost relative z-50 flex h-[60px] shrink-0 items-center gap-3 border-b border-black/[0.05] pl-2.5 pr-3.5"
+      className="sr-frost relative z-50 flex h-[60px] shrink-0 items-center gap-3 border-b border-ink-900/[0.05] pl-2.5 pr-3.5"
     >
       <div className="flex shrink-0 items-baseline gap-2 pl-1">
         <span className="font-serif text-[20px] font-normal tracking-[-0.015em] text-ink-900">
           Sci<i className="font-light not-italic text-deep-600">Render</i>
         </span>
-        <span className="hidden -translate-y-px rounded-full px-[5px] py-px font-mono text-[9.5px] tracking-wide text-ink-400 ring-1 ring-black/[0.07] sm:inline">
+        <span className="hidden -translate-y-px rounded-full px-[5px] py-px font-mono text-[9.5px] tracking-wide text-ink-400 ring-1 ring-ink-900/[0.07] sm:inline">
           v2.4
         </span>
       </div>
@@ -292,85 +223,44 @@ export function TopBar({ render }: Props): JSX.Element {
               disabled: busy,
               onSelect: () => void onExportBundle(),
             },
-          ]}
-        />
-
-        {/* In và Tải PDF là hai việc khác nhau, nên là hai mục khác nhau chứ
-            không phải một nút "In / PDF" mập mờ như trước.
-            Nút chính (bấm thẳng) là "In…" — luôn cho chữ thật, không cần
-            server, không cần mạng; chỉ có một bước thủ công là chọn "Save
-            as PDF" ở hộp thoại in (đã có lời nhắc một lần, xem onPrint).
-            Tải PDF qua máy chủ / bản ảnh vẫn còn, xếp làm lựa chọn phụ trong
-            menu cho ai không muốn tự chọn Destination. */}
-        <SplitMenu
-          label={
-            pdfServerStage
-              ? pdfServerStage
-              : pdf
-                ? `Đang tạo PDF ${pdf.done}/${pdf.total}`
-                : 'In / Lưu PDF'
-          }
-          icon={pdfBusy ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />}
-          onPrimary={onPrint}
-          primaryTitle='Mở hộp thoại in — chọn "Save as PDF" để lưu PDF chữ thật (Ctrl + P)'
-          disabled={noPages || pdfBusy}
-          width={320}
-          items={[
-            {
-              id: 'print',
-              label: 'In… (khuyến nghị)',
-              description: 'Mở hộp thoại in trình duyệt. Chọn "Save as PDF" ở Destination — chữ thật, không cần mạng.',
-              icon: <Printer size={13} />,
-              hint: '⌘P',
-              disabled: noPages,
-              onSelect: onPrint,
-            },
-            'separator',
-            {
-              id: 'pdf-server',
-              label: 'Tải PDF qua máy chủ (chữ thật)',
-              description: PDF_SERVER_URL
-                ? 'Tự tải file về, không cần tự chọn Destination. Chữ chọn/tìm được. Cần mạng.'
-                : 'Chưa cấu hình máy chủ xuất PDF (VITE_PDF_SERVER_URL).',
-              icon: <Download size={13} />,
-              hint: '⌘⇧P',
-              disabled: noPages || pdfBusy || !PDF_SERVER_URL,
-              onSelect: () => void onDownloadPdfServer(),
-            },
-            {
-              id: 'pdf-image',
-              label: 'Tải PDF (ngoại tuyến, ảnh)',
-              description: 'Không cần mạng, có tệp ngay. Chữ trong tệp là ảnh.',
-              icon: <Download size={13} />,
-              disabled: noPages || pdfBusy,
-              onSelect: () => void onDownloadPdf(2),
-            },
-            {
-              id: 'pdf-image-hi',
-              label: 'Tải PDF ngoại tuyến, nét cao',
-              description: 'Gấp rưỡi độ nét, tệp nặng hơn và lâu hơn. Vẫn là ảnh.',
-              icon: <Download size={13} />,
-              disabled: noPages || pdfBusy,
-              onSelect: () => void onDownloadPdf(3),
-            },
-            'separator',
             {
               id: 'html',
               label: 'Tệp HTML độc lập',
               icon: <FileCode2 size={13} />,
-              hint: '⌘E',
               disabled: !result,
               onSelect: () => void onExportHtml(),
             },
-            {
-              id: 'bundle2',
-              label: 'Bundle sao lưu',
-              icon: <Package size={13} />,
-              disabled: busy,
-              onSelect: () => void onExportBundle(),
-            },
           ]}
         />
+
+        {/* Một nút duy nhất — không còn menu chẻ với các lối tải PDF ảnh
+            (qua máy chủ / ngoại tuyến). "In…" luôn cho chữ thật, không cần
+            server, không cần mạng; chỉ có một bước thủ công là chọn "Save
+            as PDF" ở hộp thoại in (đã có lời nhắc một lần, xem onPrint). */}
+        <button
+          className="sr-btn-render"
+          onClick={onPrint}
+          disabled={noPages}
+          title='Mở hộp thoại in — chọn "Save as PDF" để lưu PDF chữ thật (Ctrl + P)'
+        >
+          <Printer size={14} />
+          <span className="hidden sm:inline">In / Lưu PDF</span>
+        </button>
+
+        <span aria-hidden="true" className="mx-0.5 h-5 w-px bg-ink-900/[0.07]" />
+
+        {/* Sáng/Tối — chỉ đổi data-theme trên <html>, không đụng tới trang in
+            (trang A4 luôn trắng, xem index.css). Lưu lại nên mở app lần sau
+            vẫn giữ đúng lựa chọn (xem storage.loadPreferences). */}
+        <button
+          type="button"
+          className="sr-rail-btn !h-[34px] !w-[34px]"
+          onClick={() => setPref('theme', theme === 'dark' ? 'light' : 'dark')}
+          title={theme === 'dark' ? 'Chuyển sang nền Sáng' : 'Chuyển sang nền Tối'}
+          aria-label="Đổi nền sáng/tối"
+        >
+          {theme === 'dark' ? <Sun size={16} strokeWidth={1.8} /> : <Moon size={16} strokeWidth={1.8} />}
+        </button>
 
         <input
           ref={importRef}
@@ -390,7 +280,7 @@ export function TopBar({ render }: Props): JSX.Element {
 
 function SaveState({ dirty, savedAt }: { dirty: boolean; savedAt: number | null }): JSX.Element {
   const base =
-    'inline-flex h-[25px] shrink-0 items-center gap-1.5 rounded-full bg-white px-2.5 text-[11px] shadow-card';
+    'inline-flex h-[25px] shrink-0 items-center gap-1.5 rounded-full bg-[var(--sr-surface)] px-2.5 text-[11px] shadow-card';
   if (dirty) {
     return (
       <span className={`${base} text-ink-500`}>

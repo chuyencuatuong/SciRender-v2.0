@@ -85,13 +85,13 @@ export function SplitMenu({
   const ctl = useMenuControl(items);
   return (
     <div ref={ctl.hostRef} className="relative">
-      <div className="flex items-stretch overflow-hidden rounded-[9px] shadow-[0_1px_2px_rgba(11,44,127,.35),0_6px_16px_-6px_rgba(11,44,127,.5)]">
+      <div className="flex items-stretch overflow-hidden rounded-[9px] shadow-[0_1px_2px_rgb(var(--deep-600)/0.35),0_6px_16px_-6px_rgb(var(--deep-600)/0.5)]">
         <button
           type="button"
           onClick={onPrimary}
           disabled={disabled}
           title={primaryTitle}
-          className="inline-flex h-[34px] items-center gap-1.5 bg-gradient-to-b from-[#14409f] to-deep-600 px-3 text-[12.5px] font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+          className="inline-flex h-[34px] items-center gap-1.5 bg-gradient-to-b from-deep-500 to-deep-600 px-3 text-[12.5px] font-medium text-white transition hover:brightness-110 disabled:opacity-50"
         >
           {icon}
           <span className="hidden sm:inline">{label}</span>
@@ -103,7 +103,7 @@ export function SplitMenu({
           aria-expanded={ctl.open}
           aria-label="Thêm cách xuất"
           onClick={ctl.toggle}
-          className="inline-flex h-[34px] items-center border-l border-white/25 bg-gradient-to-b from-[#14409f] to-deep-600 px-2 text-white transition hover:brightness-110"
+          className="inline-flex h-[34px] items-center border-l border-white/25 bg-gradient-to-b from-deep-500 to-deep-600 px-2 text-white transition hover:brightness-110"
         >
           <ChevronDown
             size={13}
@@ -214,7 +214,7 @@ function MenuList({
         >
           {items.map((item, i) => {
             if (item === 'separator') {
-              return <div key={`sep-${i}`} className="my-1 h-px bg-black/[0.06]" />;
+              return <div key={`sep-${i}`} className="my-1 h-px bg-ink-900/[0.06]" />;
             }
             if (!item.disabled) cursor++;
             const isActive = !item.disabled && cursor === ctl.active;

@@ -83,8 +83,8 @@ export function InsertMenu({ onInsert, label = 'Thêm khối', compact = false }
         aria-haspopup="menu"
         className={
           compact
-            ? 'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-[9px] bg-black/[0.045] px-2.5 py-[5px] text-[11.5px] text-ink-600 transition hover:bg-sky-500/10 hover:text-deep-700'
-            : 'inline-flex h-[27px] shrink-0 items-center gap-1 whitespace-nowrap rounded-[8px] bg-white px-2.5 text-[12px] font-medium text-deep-700 shadow-card transition hover:text-deep-600'
+            ? 'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-[9px] bg-ink-900/[0.045] px-2.5 py-[5px] text-[11.5px] text-ink-600 transition hover:bg-sky-500/10 hover:text-deep-700'
+            : 'inline-flex h-[27px] shrink-0 items-center gap-1 whitespace-nowrap rounded-[8px] bg-[var(--sr-surface)] px-2.5 text-[12px] font-medium text-deep-700 shadow-card transition hover:text-deep-600'
         }
       >
         <Plus size={13} /> {label}

@@ -13,6 +13,7 @@ interface Props {
 }
 
 const ZOOM_STEPS = [0.4, 0.5, 0.65, 0.75, 0.85, 1, 1.15, 1.35, 1.6];
+const MAX_FIT_ZOOM = ZOOM_STEPS[ZOOM_STEPS.length - 1] ?? 1.6;
 
 const KIND_LABEL: Record<PageKind, string> = {
   cover: 'Bìa',
@@ -65,7 +66,11 @@ export function PreviewPane({ render, onBack = null }: Props): JSX.Element {
     if (!host || !page) return;
     const natural = page.getBoundingClientRect().width / (prefs.zoom || 1);
     if (!natural) return;
-    const next = Math.min(1, Math.max(0.3, (host.clientWidth - 72) / natural));
+    // Trần cũ là 1 (100%) — trên màn rộng, cột xem trước thường rộng hơn khổ
+    // A4 thật ở 100%, nên trang bị kẹt nhỏ giữa một cột rộng hơn nhiều, để lại
+    // khoảng xám thừa hai bên. Cho leo tới đúng mức cao nhất của ZOOM_STEPS để
+    // trang luôn lấp gần hết chiều rộng cột thay vì lơ lửng giữa khoảng trống.
+    const next = Math.min(MAX_FIT_ZOOM, Math.max(0.3, (host.clientWidth - 72) / natural));
     if (Math.abs(next - prefs.zoom) > 0.005) setPref('zoom', Math.round(next * 100) / 100);
   }, [prefs.zoom, setPref]);
 
@@ -84,14 +89,14 @@ export function PreviewPane({ render, onBack = null }: Props): JSX.Element {
 
   return (
     <>
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-black/[0.045] bg-ink-50 px-4">
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-ink-900/[0.045] bg-ink-50 px-4">
         {/* Số trang nằm ở đảo thu phóng dưới chân giấy, nên ở đây chỉ còn
             trạng thái: thanh này trả lời "bản in đã mới chưa", không đếm. */}
         {onBack ? (
           <button
             type="button"
             onClick={onBack}
-            className="-ml-1.5 inline-flex h-[27px] items-center gap-1 whitespace-nowrap rounded-[8px] px-2 text-[12px] font-medium text-ink-600 transition hover:bg-black/[0.04] hover:text-deep-600"
+            className="-ml-1.5 inline-flex h-[27px] items-center gap-1 whitespace-nowrap rounded-[8px] px-2 text-[12px] font-medium text-ink-600 transition hover:bg-ink-900/[0.04] hover:text-deep-600"
           >
             <ChevronLeft size={14} strokeWidth={1.8} /> Soạn thảo
           </button>
@@ -174,7 +179,7 @@ export function PreviewPane({ render, onBack = null }: Props): JSX.Element {
           <span className="px-2 text-[11px] text-ink-500">
             {pages.length ? `${pages.length} trang` : '—'}
           </span>
-          <span className="mx-1 h-4 w-px bg-black/[0.07]" />
+          <span className="mx-1 h-4 w-px bg-ink-900/[0.07]" />
           <button
             onClick={() => stepZoom(-1)}
             title="Thu nhỏ"
@@ -194,7 +199,7 @@ export function PreviewPane({ render, onBack = null }: Props): JSX.Element {
           >
             <Plus size={14} strokeWidth={1.8} />
           </button>
-          <span className="mx-1 h-4 w-px bg-black/[0.07]" />
+          <span className="mx-1 h-4 w-px bg-ink-900/[0.07]" />
           <button
             onClick={() => {
               setManualZoom(false);

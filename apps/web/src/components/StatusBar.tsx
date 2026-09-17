@@ -36,7 +36,7 @@ export function StatusBar({ render }: Props): JSX.Element {
           : 'đạt';
 
   return (
-    <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-ink-200 bg-white px-3 text-[11px] text-ink-500">
+    <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-ink-200 bg-[var(--sr-surface)] px-3 text-[11px] text-ink-500">
       {result ? (
         <>
           <span className="flex items-center gap-1 font-medium text-ink-700">

@@ -36,7 +36,7 @@ export function FrontMatterDialog({ value, onClose, onApply }: Props): JSX.Eleme
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex h-full max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-ink-200 bg-white shadow-xl">
+      <div className="flex h-full max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-ink-200 bg-[var(--sr-surface)] shadow-xl">
         <header className="flex h-11 shrink-0 items-center gap-2 border-b border-ink-200 px-3">
           <span className="text-[13px] font-semibold text-ink-800">Thông tin tài liệu</span>
           <span className="text-[11.5px] text-ink-500">

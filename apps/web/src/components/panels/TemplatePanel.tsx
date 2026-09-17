@@ -541,7 +541,7 @@ function Toggle({
       className={`relative h-5 w-9 rounded-full transition ${checked ? 'bg-deep-600' : 'bg-ink-300'}`}
     >
       <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-[var(--sr-surface)] transition-all ${
           checked ? 'left-[18px]' : 'left-0.5'
         }`}
       />

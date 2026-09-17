@@ -133,7 +133,7 @@ function EquationEditor({ text, onChange, kind }: EditorProps): JSX.Element {
             aria-selected={tab === k}
             onClick={() => setTab(k)}
             className={`h-6 rounded-t-[7px] px-2.5 font-mono text-[11px] tracking-[0.02em] transition ${
-              tab === k ? 'bg-white/90 text-deep-600' : 'text-ink-400 hover:text-ink-700'
+              tab === k ? 'bg-[rgb(var(--ink-50)/0.9)] text-deep-600' : 'text-ink-400 hover:text-ink-700'
             }`}
           >
             {k === 'code' ? 'LaTeX' : 'Xem trước'}
@@ -376,14 +376,14 @@ function TableEditor({ text, onChange, kind }: EditorProps): JSX.Element {
           <thead>
             <tr>
               {form.header.map((h, c) => (
-                <th key={c} className="border-b border-black/[0.08] bg-ink-50 p-0 align-top first:rounded-tl-[8px] last:rounded-tr-[8px]">
+                <th key={c} className="border-b border-ink-900/[0.08] bg-ink-50 p-0 align-top first:rounded-tl-[8px] last:rounded-tr-[8px]">
                   <input
                     className="w-full min-w-[80px] bg-transparent px-1.5 py-1 font-semibold outline-none"
                     value={h}
                     aria-label={`Tiêu đề cột ${c + 1}`}
                     onChange={(e) => setCell(-1, c, e.target.value)}
                   />
-                  <div className="flex items-center justify-between border-t border-black/[0.06] px-1 py-0.5">
+                  <div className="flex items-center justify-between border-t border-ink-900/[0.06] px-1 py-0.5">
                     <select
                       className="bg-transparent text-[10px] text-ink-500 outline-none"
                       value={form.align[c] ?? 'default'}
@@ -420,7 +420,7 @@ function TableEditor({ text, onChange, kind }: EditorProps): JSX.Element {
                 {Array.from({ length: width }, (_, c) => {
                   const merged = (row[c] ?? '') === TABLE_MERGE_MARKER;
                   return (
-                  <td key={c} className="border-b border-black/[0.045] p-0 align-top">
+                  <td key={c} className="border-b border-ink-900/[0.045] p-0 align-top">
                     <div className="flex items-center">
                       {r > 0 ? (
                         <button
@@ -495,7 +495,7 @@ function MiniBtn({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-[7px] bg-black/[0.04] px-2 py-1 text-[11px] text-ink-600 transition hover:bg-sky-500/10 hover:text-deep-600"
+      className="inline-flex items-center gap-1 rounded-[7px] bg-ink-900/[0.04] px-2 py-1 text-[11px] text-ink-600 transition hover:bg-sky-500/10 hover:text-deep-600"
     >
       {children}
     </button>

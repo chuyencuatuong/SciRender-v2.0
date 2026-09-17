@@ -32,10 +32,10 @@ export function SidePanel({ render, floating }: Props): JSX.Element {
         aria-hidden={!open}
         className={
           floating
-            ? `fixed bottom-[30px] left-[56px] top-[60px] z-[41] w-[min(300px,84vw)] flex-col rounded-r-2xl bg-white shadow-pop transition duration-200 ${
+            ? `fixed bottom-[30px] left-[56px] top-[60px] z-[41] w-[min(300px,84vw)] flex-col rounded-r-2xl bg-[var(--sr-surface)] shadow-pop transition duration-200 ${
                 open ? 'flex translate-x-0 opacity-100' : 'pointer-events-none flex -translate-x-2 opacity-0'
               }`
-            : `flex w-[272px] shrink-0 flex-col border-r border-black/[0.06] bg-ink-50 transition-[margin-left,opacity] duration-300 ${
+            : `flex w-[272px] shrink-0 flex-col border-r border-ink-900/[0.06] bg-ink-50 transition-[margin-left,opacity] duration-300 ${
                 open ? 'ml-0 opacity-100' : 'pointer-events-none -ml-[272px] opacity-0'
               }`
         }
@@ -62,7 +62,7 @@ export function SidePanel({ render, floating }: Props): JSX.Element {
           onClick={() => setPanelOpen(!open)}
           aria-label={open ? 'Thu gọn bảng bên' : 'Mở bảng bên'}
           style={{ left: open ? 'calc(56px + 272px)' : '56px' }}
-          className="absolute top-1/2 z-[45] grid h-11 w-[18px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-[9px] bg-white text-ink-400 shadow-card transition-[left,color] duration-300 hover:text-deep-600"
+          className="absolute top-1/2 z-[45] grid h-11 w-[18px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-[9px] bg-[var(--sr-surface)] text-ink-400 shadow-card transition-[left,color] duration-300 hover:text-deep-600"
         >
           <ChevronLeft
             size={12}

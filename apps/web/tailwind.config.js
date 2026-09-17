@@ -1,61 +1,46 @@
+/**
+ * Đợt 8 — mỗi màu tra qua biến CSS `--<family>-<bậc>` (RGB cách nhau bởi
+ * dấu cách, khai theo `[data-theme]` trong index.css) thay vì hex cứng, để
+ * toàn bộ 300+ chỗ dùng `bg-ink-50`, `text-deep-600`,... tự đổi màu theo
+ * Sáng/Tối mà không phải sửa từng nơi. `<alpha-value>` là điểm mấu chốt: nó
+ * cho phép cú pháp Tailwind `bg-ink-900/10` hoạt động bình thường.
+ * @param {string} name
+ * @returns {(opts: { opacityValue?: string }) => string}
+ */
+function themedColor(name) {
+  return ({ opacityValue }) =>
+    opacityValue === undefined
+      ? `rgb(var(--${name}) / 1)`
+      : `rgb(var(--${name}) / ${opacityValue})`;
+}
+
+function themedScale(family) {
+  const steps = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
+  return Object.fromEntries(steps.map((s) => [s, themedColor(`${family}-${s}`)]));
+}
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
+  darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
-        // Bảng màu lấy từ logo Bách khoa: xanh đậm, xanh trời, cùng một sắc đỏ
-        // dành riêng cho cảnh báo. Trắng là nền.
-        deep: {
-          50: '#eef2fb',
-          100: '#d6e0f5',
-          200: '#adc0ea',
-          300: '#7d99db',
-          400: '#4a6ec7',
-          500: '#274bab',
-          600: '#0b2c7f',
-          700: '#092467',
-          800: '#071b4d',
-          900: '#051337',
-        },
-        sky: {
-          50: '#ecf6fe',
-          100: '#d2eafd',
-          200: '#a5d4fa',
-          300: '#6fbaf3',
-          400: '#3ea1ea',
-          500: '#1a8fe3',
-          600: '#0f72bd',
-          700: '#0d5a95',
-          800: '#0c4874',
-          900: '#0a3a5e',
-        },
-        flag: {
-          50: '#fdecec',
-          100: '#fad5d5',
-          200: '#f4adad',
-          300: '#ec7d7d',
-          400: '#e04f4f',
-          500: '#d62828',
-          600: '#b41f1f',
-          700: '#8f1919',
-          800: '#6d1414',
-          900: '#4f0f0f',
-        },
-        // Trung tính lệch nhẹ về xanh của Bách khoa, để xám không bị "chết"
-        ink: {
-          50: '#f8f9fa',
-          100: '#f1f2f5',
-          200: '#e4e6ec',
-          300: '#c3c7d0',
-          400: '#9ba1ad',
-          500: '#6b7280',
-          600: '#525866',
-          700: '#3c414d',
-          800: '#272b34',
-          900: '#16181d',
-          950: '#0b0d11',
-        },
+        // Bảng màu lấy từ logo Bách khoa: xanh đậm (deep), xanh trời (sky),
+        // cùng một sắc đỏ dành riêng cho cảnh báo (flag) — giữ nguyên sắc,
+        // đổi độ sáng theo từng bậc để vừa dịu mắt vừa đạt tương phản WCAG AA
+        // ở cả hai nền (xem Đợt 8, /tmp/gen_palette3.py).
+        deep: themedScale('deep'),
+        sky: themedScale('sky'),
+        flag: themedScale('flag'),
+        // Trung tính ấm (thay xám xanh cũ) — nền "giấy ngà" đỡ chói hơn xám lạnh.
+        ink: themedScale('ink'),
+        // Cảnh báo/thành công vốn dùng thẳng amber/emerald mặc định của
+        // Tailwind (hex cứng) — không đổi theo Tối nên chữ vàng/xanh lá gần
+        // như biến mất trên nền tối. Định nghĩa lại toàn bộ thang để ăn theo
+        // biến CSS như các màu thương hiệu.
+        amber: themedScale('amber'),
+        emerald: themedScale('emerald'),
       },
       fontFamily: {
         // Cả ba mặt chữ đều có bộ dấu tiếng Việt và nằm trong app (xem fonts.css)

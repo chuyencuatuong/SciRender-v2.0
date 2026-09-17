@@ -22,7 +22,7 @@ const ICONS: Record<Severity, typeof AlertCircle> = {
 const TILE: Record<Severity, string> = {
   error: 'bg-flag-50 text-flag-600',
   warning: 'bg-amber-50 text-amber-700',
-  info: 'bg-amber-50 text-[#d9a100] sr-glow-hint',
+  info: 'bg-amber-50 text-amber-600 sr-glow-hint',
 };
 
 export function DiagnosticsPanel({ render }: Props): JSX.Element {
@@ -63,7 +63,7 @@ export function DiagnosticsPanel({ render }: Props): JSX.Element {
               <button
                 key={`${w.code}-${i}`}
                 onClick={() => w.line && requestGotoLine(w.line)}
-                className="flex w-full gap-2.5 rounded-[11px] px-2.5 py-[11px] text-left transition hover:bg-white hover:shadow-card"
+                className="flex w-full gap-2.5 rounded-[11px] px-2.5 py-[11px] text-left transition hover:bg-[var(--sr-surface)] hover:shadow-card"
               >
                 <span className="mt-px grid h-6 w-6 shrink-0 place-items-center rounded-[8px] bg-sky-500/10 text-deep-600">
                   <LayoutPanelTop size={13} strokeWidth={1.6} />
@@ -106,7 +106,7 @@ function DiagnosticRow({
   return (
     <button
       onClick={() => onGoto(d.position.start.line)}
-      className="flex w-full gap-2.5 rounded-[11px] px-2.5 py-[11px] text-left transition hover:bg-white hover:shadow-card"
+      className="flex w-full gap-2.5 rounded-[11px] px-2.5 py-[11px] text-left transition hover:bg-[var(--sr-surface)] hover:shadow-card"
     >
       <span className={`mt-px grid h-6 w-6 shrink-0 place-items-center rounded-[8px] ${TILE[d.severity]}`}>
         <Icon size={13} strokeWidth={1.6} />
@@ -120,7 +120,7 @@ function DiagnosticRow({
         </span>
         <span className="block text-[12px] leading-[1.45] text-ink-700">{d.message}</span>
         {d.hint ? (
-          <span className="mt-1.5 block rounded-[7px] bg-black/[0.03] px-2 py-1.5 text-[11.5px] leading-[1.45] text-ink-500">
+          <span className="mt-1.5 block rounded-[7px] bg-ink-900/[0.03] px-2 py-1.5 text-[11.5px] leading-[1.45] text-ink-500">
             {d.hint}
           </span>
         ) : null}

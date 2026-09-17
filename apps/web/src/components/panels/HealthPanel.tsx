@@ -44,7 +44,7 @@ export function HealthPanel({ result }: Props): JSX.Element {
       </div>
 
       <div className="sr-scroll min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-        <div className="mb-3 flex items-center gap-4 rounded-[14px] bg-white p-4 shadow-card">
+        <div className="mb-3 flex items-center gap-4 rounded-[14px] bg-[var(--sr-surface)] p-4 shadow-card">
           <ScoreRing score={health.score} />
           <div className="min-w-0">
             <h3 className="m-0 text-[12.5px] font-medium text-ink-900">
@@ -70,7 +70,7 @@ export function HealthPanel({ result }: Props): JSX.Element {
                   {d.score}/{d.max}
                 </span>
               </div>
-              <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-black/[0.07]">
+              <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-ink-900/[0.07]">
                 <motion.div
                   className={`h-full rounded-full ${
                     d.score / d.max >= 0.8
@@ -92,10 +92,10 @@ export function HealthPanel({ result }: Props): JSX.Element {
         {health.suggestions.length > 0 ? (
           <div className="px-1 pt-3">
             <div className="mb-1.5 flex items-center gap-1.5 px-1.5 text-[10px] font-medium uppercase tracking-[0.09em] text-ink-400">
-              <Lightbulb size={11} strokeWidth={1.5} className="sr-glow-hint text-[#d9a100]" /> Gợi ý cải thiện
+              <Lightbulb size={11} strokeWidth={1.5} className="sr-glow-hint text-amber-600" /> Gợi ý cải thiện
             </div>
             {health.suggestions.map((sg) => (
-              <div key={sg.id} className="mb-1.5 rounded-[11px] bg-white p-2.5 shadow-card">
+              <div key={sg.id} className="mb-1.5 rounded-[11px] bg-[var(--sr-surface)] p-2.5 shadow-card">
                 <div className="flex items-start gap-1.5">
                   <span className={`sr-chip shrink-0 ${PRIORITY_TONE[sg.priority] ?? ''}`}>
                     {sg.priority === 'high' ? 'Cao' : sg.priority === 'medium' ? 'Vừa' : 'Thấp'}
@@ -163,12 +163,12 @@ function ScoreRing({ score }: { score: number }): JSX.Element {
       <svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true">
         <defs>
           <linearGradient id="sr-health-ring" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#1a8fe3" />
-            <stop offset="60%" stopColor="#0b2c7f" />
-            <stop offset="100%" stopColor="#092467" />
+            <stop offset="0%" stopColor="rgb(var(--sky-500))" />
+            <stop offset="60%" stopColor="rgb(var(--deep-600))" />
+            <stop offset="100%" stopColor="rgb(var(--deep-700))" />
           </linearGradient>
         </defs>
-        <circle cx="42" cy="42" r={R} fill="none" stroke="rgba(15,23,42,.07)" strokeWidth="6" />
+        <circle cx="42" cy="42" r={R} fill="none" stroke="rgb(var(--ink-900) / 0.07)" strokeWidth="6" />
         <circle
           cx="42"
           cy="42"

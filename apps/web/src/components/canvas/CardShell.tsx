@@ -86,7 +86,7 @@ export function CardShell(props: Props): JSX.Element {
       }}
       onMouseDown={props.onSelect}
       className={`group relative rounded-[12px] px-3.5 py-2 transition-[background,box-shadow] duration-200 ${
-        selected ? 'bg-white shadow-card' : 'hover:bg-white/70'
+        selected ? 'bg-[var(--sr-surface)] shadow-card' : 'hover:bg-[rgb(var(--ink-50)/0.7)]'
       } ${dropZone ? ZONE_RING[dropZone] : ''}`}
     >
       {/* Thanh chỉ dấu bên trái thay cho cái khung: khối phẳng lì cho tới khi
@@ -101,11 +101,11 @@ export function CardShell(props: Props): JSX.Element {
       <header className="pointer-events-none absolute -top-3 right-2 z-20 flex h-[30px] items-center gap-px rounded-full px-1 opacity-0 transition-[opacity,transform] duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[on=true]:pointer-events-auto data-[on=true]:opacity-100"
         data-on={selected}
         style={{
-          background: 'rgba(255,255,255,.92)',
+          background: 'rgb(var(--ink-50) / 0.92)',
           backdropFilter: 'blur(10px)',
           WebkitBackdropFilter: 'blur(10px)',
           boxShadow:
-            '0 1px 2px rgba(15,23,42,.05), 0 8px 16px -6px rgba(15,23,42,.10), 0 24px 48px -16px rgba(15,23,42,.14)',
+            '0 1px 2px rgb(var(--ink-900) / 0.05), 0 8px 16px -6px rgb(var(--ink-900) / 0.1), 0 24px 48px -16px rgb(var(--ink-900) / 0.14)',
         }}
       >
         <span
@@ -119,9 +119,9 @@ export function CardShell(props: Props): JSX.Element {
         >
           <GripVertical size={13} />
         </span>
-        <span className="mx-0.5 h-[15px] w-px bg-black/[0.07]" />
+        <span className="mx-0.5 h-[15px] w-px bg-ink-900/[0.07]" />
         <span className="px-1.5 text-[11.5px] text-ink-500">{KIND_LABEL[card.kind]}</span>
-        <span className="mx-0.5 h-[15px] w-px bg-black/[0.07]" />
+        <span className="mx-0.5 h-[15px] w-px bg-ink-900/[0.07]" />
 
         {props.recognised ? (
           <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-deep-700">

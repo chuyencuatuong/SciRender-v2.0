@@ -50,7 +50,7 @@ export function SourceDialog({ source, onClose, onApply }: Props): JSX.Element {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex h-full max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-ink-200 bg-white shadow-xl">
+      <div className="flex h-full max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-ink-200 bg-[var(--sr-surface)] shadow-xl">
         <header className="flex h-11 shrink-0 items-center gap-2 border-b border-ink-200 px-3">
           <span className="text-[13px] font-semibold text-ink-800">Mã nguồn Markdown</span>
           <span className="text-[11.5px] text-ink-500">
@@ -88,7 +88,7 @@ export function SourceDialog({ source, onClose, onApply }: Props): JSX.Element {
           value={text}
           spellCheck={false}
           onChange={(e) => setText(e.target.value)}
-          className="sr-scroll min-h-0 flex-1 resize-none border-0 bg-white p-3 font-mono text-[12px] leading-[1.55] text-ink-800 outline-none"
+          className="sr-scroll min-h-0 flex-1 resize-none border-0 bg-[var(--sr-surface)] p-3 font-mono text-[12px] leading-[1.55] text-ink-800 outline-none"
         />
 
         <footer className="flex h-8 shrink-0 items-center gap-2 border-t border-ink-200 bg-ink-50/60 px-3 text-[11px] text-ink-500">

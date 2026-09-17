@@ -99,7 +99,7 @@ export function OutlinePanel({ render }: Props): JSX.Element {
 
 function Stat({ label, value }: { label: string; value: number }): JSX.Element {
   return (
-    <div className="bg-white px-3 py-1.5">
+    <div className="bg-[var(--sr-surface)] px-3 py-1.5">
       <span className="text-ink-400">{label}: </span>
       <span className="font-medium text-ink-700">{value}</span>
     </div>
