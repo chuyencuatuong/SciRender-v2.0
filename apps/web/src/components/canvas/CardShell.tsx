@@ -9,7 +9,7 @@ import {
   Trash2,
   LineChart,
 } from 'lucide-react';
-import type { LabelRecord } from '@scirender/ast';
+import type { BibEntry, LabelRecord } from '@scirender/ast';
 import { detectKind, KIND_LABEL, splitColumns, type Card } from '~/lib/cards';
 import { CardEditor } from './CardEditors';
 
@@ -24,6 +24,7 @@ interface Props {
   recognised: string | null;
   /** The document's labelled objects — see `EditorProps.labels`. */
   labels?: Record<string, LabelRecord>;
+  bibliography?: BibEntry[];
   onSelect: () => void;
   onChange: (text: string) => void;
   onMove: (delta: number) => void;
@@ -191,6 +192,7 @@ export function CardShell(props: Props): JSX.Element {
                   kind={detectKind(part)}
                   text={part}
                   labels={props.labels}
+                  bibliography={props.bibliography}
                   onChange={(next) => {
                     const pair = columns.slice() as [string, string];
                     pair[i] = next;
@@ -201,7 +203,7 @@ export function CardShell(props: Props): JSX.Element {
             ))}
           </div>
         ) : (
-          <CardEditor kind={card.kind} text={card.text} labels={props.labels} onChange={props.onChange} />
+          <CardEditor kind={card.kind} text={card.text} labels={props.labels} bibliography={props.bibliography} onChange={props.onChange} />
         )}
       </div>
     </article>

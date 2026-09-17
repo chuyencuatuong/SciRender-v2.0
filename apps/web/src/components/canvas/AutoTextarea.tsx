@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { LabelRecord } from '@scirender/ast';
+import type { BibEntry, LabelRecord } from '@scirender/ast';
 import { caretViewportPosition } from '~/lib/caret';
 import { foldDiacritics, searchTemplates, type CardTemplate } from '~/lib/cards';
 import { REF_KIND_ICON, REF_KIND_LABEL } from '~/lib/refs';
@@ -19,10 +19,12 @@ interface Props {
    * the trigger simply never fires).
    */
   labels?: Record<string, LabelRecord>;
+  bibliography?: BibEntry[];
 }
 
 type Trigger =
   | { kind: 'mention'; start: number; query: string }
+  | { kind: 'citation'; start: number; query: string }
   | { kind: 'slash'; start: number; query: string };
 
 interface Item {
@@ -35,19 +37,35 @@ interface Item {
 
 const MAX_TRIGGER_QUERY = 40;
 
+// Keeps the most recently focused scientific text editor addressable when the
+// user clicks the References panel. We deliberately do not clear it on blur:
+// clicking the side panel should still insert into the caret location the user
+// just left.
+let lastActiveTextarea: HTMLTextAreaElement | null = null;
+
 /** Finds an in-progress `@label` or start-of-line `/command` at the caret. */
 function detectTrigger(value: string, cursor: number): Trigger | null {
   const lineStart = value.lastIndexOf('\n', cursor - 1) + 1;
   const lineSoFar = value.slice(lineStart, cursor);
+
   if (/^\/[\w-]{0,40}$/.test(lineSoFar)) {
     return { kind: 'slash', start: lineStart, query: lineSoFar.slice(1) };
   }
+
+  const cite = lineSoFar.lastIndexOf('[@');
+  if (cite !== -1) {
+    const tail = lineSoFar.slice(cite + 2);
+    if (!/[\s\]]/.test(tail) && tail.length <= MAX_TRIGGER_QUERY) {
+      return { kind: 'citation', start: lineStart + cite, query: tail };
+    }
+  }
+
   let i = cursor - 1;
   while (i >= lineStart) {
     const ch = value[i];
     if (ch === '@') {
       const before = value[i - 1];
-      if (before !== undefined && /[\w]/.test(before)) return null; // "email@..." — not a trigger
+      if (before !== undefined && /[\w]/.test(before)) return null;
       const query = value.slice(i + 1, cursor);
       if (query.length > MAX_TRIGGER_QUERY) return null;
       return { kind: 'mention', start: i, query };
@@ -67,6 +85,7 @@ export function AutoTextarea({
   minRows = 1,
   ariaLabel,
   labels,
+  bibliography,
 }: Props): JSX.Element {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -75,6 +94,8 @@ export function AutoTextarea({
   const [active, setActive] = useState(0);
   const recentBlocks = useStore((s) => s.prefs.recentBlocks);
   const noteBlockUsed = useStore((s) => s.noteBlockUsed);
+  const citationInsertRequest = useStore((s) => s.citationInsertRequest);
+  const citationSeen = useRef(citationInsertRequest?.nonce ?? 0);
 
   useEffect(() => {
     const el = ref.current;
@@ -90,6 +111,24 @@ export function AutoTextarea({
     pendingCaret.current = null;
   }, [value]);
 
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (citationInsertRequest?.nonce === citationSeen.current) return;
+    citationSeen.current = citationInsertRequest?.nonce ?? citationSeen.current;
+    if (!citationInsertRequest || lastActiveTextarea !== el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const next = value.slice(0, start) + citationInsertRequest.text + value.slice(end);
+    pendingCaret.current = start + citationInsertRequest.text.length;
+    onChange(next);
+    setTrigger(null);
+  }, [citationInsertRequest?.nonce]);
+
+  useEffect(() => () => {
+    if (lastActiveTextarea === ref.current) lastActiveTextarea = null;
+  }, []);
+
   const sync = (el: HTMLTextAreaElement): void => {
     if (el.selectionStart !== el.selectionEnd) {
       setTrigger(null);
@@ -101,6 +140,25 @@ export function AutoTextarea({
   };
 
   /* --------------------------------------------------------- candidates */
+
+  const citationCandidates = useMemo(() => {
+    if (trigger?.kind !== 'citation' || !bibliography) return [];
+    const q = foldDiacritics(trigger.query);
+    const scored: Array<{ entry: BibEntry; score: number }> = [];
+    for (const entry of bibliography) {
+      const key = foldDiacritics(entry.key);
+      const title = foldDiacritics(entry.title ?? '');
+      const authors = foldDiacritics(entry.authors ?? '');
+      let score = 0;
+      if (!q) score = 40;
+      else if (key.startsWith(q)) score = 100;
+      else if (key.includes(q)) score = 80;
+      else if (title.includes(q)) score = 60;
+      else if (authors.includes(q)) score = 40;
+      if (score) scored.push({ entry, score });
+    }
+    return scored.sort((a, b) => b.score - a.score).map((x) => x.entry).slice(0, 30);
+  }, [trigger, bibliography]);
 
   const mentionCandidates = useMemo(() => {
     if (trigger?.kind !== 'mention' || !labels) return [];
@@ -129,6 +187,15 @@ export function AutoTextarea({
 
   /* -------------------------------------------------------------- commit */
 
+  const insertCitation = (entry: BibEntry): void => {
+    if (trigger?.kind !== 'citation') return;
+    const text = `[@${entry.key}]`;
+    const next = value.slice(0, trigger.start) + text + value.slice(trigger.start + 2 + trigger.query.length);
+    pendingCaret.current = trigger.start + text.length;
+    onChange(next);
+    setTrigger(null);
+  };
+
   const insertMention = (rec: LabelRecord): void => {
     if (trigger?.kind !== 'mention') return;
     const el = ref.current;
@@ -149,6 +216,15 @@ export function AutoTextarea({
   };
 
   const items: Item[] = useMemo(() => {
+    if (trigger?.kind === 'citation') {
+      return citationCandidates.map((entry) => ({
+        key: entry.key,
+        title: entry.key,
+        subtitle: `${entry.authors ?? 'Không rõ tác giả'}${entry.year ? ` · ${entry.year}` : ''}`,
+        icon: <span className="font-mono text-[10px] text-deep-600">[@]</span>,
+        onSelect: () => insertCitation(entry),
+      }));
+    }
     if (trigger?.kind === 'mention') {
       return mentionCandidates.map((rec) => {
         const Icon = REF_KIND_ICON[rec.kind];
@@ -172,7 +248,7 @@ export function AutoTextarea({
     }
     return [];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trigger, mentionCandidates, slashCandidates]);
+  }, [trigger, citationCandidates, mentionCandidates, slashCandidates]);
 
   useEffect(() => {
     if (active >= items.length) setActive(0);
@@ -255,7 +331,8 @@ export function AutoTextarea({
         onKeyUp={(e) => {
           if (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End') sync(e.currentTarget);
         }}
-        onClick={(e) => sync(e.currentTarget)}
+        onFocus={(e) => { lastActiveTextarea = e.currentTarget; sync(e.currentTarget); }}
+        onClick={(e) => { lastActiveTextarea = e.currentTarget; sync(e.currentTarget); }}
         onBlur={() => setTrigger(null)}
         className={`w-full resize-none border-0 bg-transparent p-0 text-[13px] leading-[1.55] text-ink-800 outline-none placeholder:text-ink-400 ${
           mono ? 'font-mono text-[12px]' : ''
@@ -267,14 +344,18 @@ export function AutoTextarea({
             <div
               ref={popoverRef}
               role="listbox"
-              aria-label={trigger?.kind === 'mention' ? 'Chèn tham chiếu' : 'Chèn nhanh'}
+              aria-label={trigger?.kind === 'citation' ? 'Chèn trích dẫn' : trigger?.kind === 'mention' ? 'Chèn tham chiếu' : 'Chèn nhanh'}
               className="sr-menu fixed z-[70] w-[260px] overflow-hidden"
               style={{ left: point.left, top: point.top + point.lineHeight + 4 }}
             >
               <div className="sr-scroll max-h-[280px] overflow-y-auto py-1">
                 {items.length === 0 ? (
                   <div className="px-3 py-3 text-center text-[11.5px] text-ink-400">
-                    {trigger?.kind === 'mention'
+                    {trigger?.kind === 'citation'
+                      ? bibliography && bibliography.length === 0
+                        ? 'Chưa có tài liệu tham khảo.'
+                        : 'Không khớp citation key.'
+                      : trigger?.kind === 'mention'
                       ? labels && Object.keys(labels).length === 0
                         ? 'Tài liệu chưa có đối tượng nào có nhãn.'
                         : 'Không khớp nhãn nào.'

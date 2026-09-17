@@ -6,6 +6,7 @@ import { LibraryPanel } from './panels/LibraryPanel';
 import { ObjectsPanel } from './panels/ObjectsPanel';
 import { OutlinePanel } from './panels/OutlinePanel';
 import { ResearchPanel } from './panels/ResearchPanel';
+import { CitationPanel } from './panels/CitationPanel';
 import { TemplatePanel } from './panels/TemplatePanel';
 import type { RenderState } from '~/hooks/useRender';
 import { useStore } from '~/state/store';
@@ -49,6 +50,7 @@ export function SidePanel({ render, floating }: Props): JSX.Element {
         {panel === 'template' && <TemplatePanel result={render.result} />}
         {panel === 'library' && <LibraryPanel />}
         {panel === 'research' && <ResearchPanel />}
+        {panel === 'references' && <CitationPanel render={render} />}
       </aside>
 
       {floating ? (

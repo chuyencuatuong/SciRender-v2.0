@@ -1,5 +1,6 @@
 import {
   FlaskConical,
+  BookOpenText,
   Gauge,
   Image,
   LayoutTemplate,
@@ -19,6 +20,7 @@ export const ITEMS: Array<{ id: PanelId; label: string; icon: typeof ListTree }>
   { id: 'template', label: 'Mẫu trình bày', icon: LayoutTemplate },
   { id: 'library', label: 'Thư viện', icon: Library },
   { id: 'research', label: 'Dữ liệu nghiên cứu', icon: FlaskConical },
+  { id: 'references', label: 'Tài liệu tham khảo', icon: BookOpenText },
 ];
 
 /**

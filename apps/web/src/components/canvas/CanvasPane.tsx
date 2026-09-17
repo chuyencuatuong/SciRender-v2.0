@@ -64,6 +64,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   const gotoLine = useStore((s) => s.gotoLine);
   const coverAdded = useStore((s) => s.coverAdded);
   const insertBlockRequest = useStore((s) => s.insertBlockRequest);
+  const citationInsertRequest = useStore((s) => s.citationInsertRequest);
   const noteBlockUsed = useStore((s) => s.noteBlockUsed);
   const [coverNoticeSeen, setCoverNoticeSeen] = useState<number | null>(null);
   const labels = render.result?.document.labels;
@@ -92,6 +93,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   const redoStack = useRef<CanvasDoc[]>([]);
   const listRef = useRef<HTMLDivElement | null>(null);
   const insertBlockSeen = useRef(insertBlockRequest?.nonce ?? 0);
+  const citationInsertSeen = useRef(citationInsertRequest?.nonce ?? 0);
 
   // Split view: two independently-scrolled panes of the SAME document, one
   // above the other — for keeping an eye on two places in a long report at
@@ -205,6 +207,15 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     insertAt(doc.cards.length, tpl.text);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insertBlockRequest?.nonce]);
+
+  useEffect(() => {
+    const nonce = citationInsertRequest?.nonce ?? 0;
+    if (nonce === citationInsertSeen.current) return;
+    citationInsertSeen.current = nonce;
+    // The focused AutoTextarea owns the actual selection/caret and consumes the
+    // request. We still bump the request globally so a side panel can insert
+    // without owning another copy of editor state.
+  }, [citationInsertRequest?.nonce]);
 
   const removeAt = (index: number): void => {
     setCards(doc.cards.filter((_, i) => i !== index));
@@ -485,6 +496,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
                 dropZone={drag?.over === index ? drag.zone : null}
                 recognised={recognised?.id === card.id ? recognised.label : null}
                 labels={labels}
+                bibliography={render.result?.document.meta.bibliography}
                 onSelect={() => setSelected(index)}
                 onChange={(text) => updateCard(index, text)}
                 onMove={(delta) => moveBy(index, delta)}

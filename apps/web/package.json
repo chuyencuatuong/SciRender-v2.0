@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@scirender/ast": "workspace:*",
+    "@scirender/citation-engine": "workspace:*",
     "@scirender/intelligence": "workspace:*",
     "@scirender/layout-engine": "workspace:*",
     "@scirender/parser": "workspace:*",

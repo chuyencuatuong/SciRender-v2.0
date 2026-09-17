@@ -18,6 +18,7 @@ import {
   type StoredDocument,
 } from '@scirender/storage';
 import { initTelemetry, setEnabled as setTelemetryEnabled, track } from '@scirender/telemetry';
+import { mergeBibliographyFrontMatter, parseBibTeX } from '@scirender/citation-engine';
 import { findTemplate, type TemplateOverrides } from '@scirender/template-engine';
 import { needsCover, withCover } from '~/lib/cover';
 import { BUILTIN_ASSETS } from '~/lib/builtin-assets';
@@ -31,7 +32,8 @@ export type PanelId =
   | 'assets'
   | 'template'
   | 'library'
-  | 'research';
+  | 'research'
+  | 'references';
 
 /** Toàn bộ bảng màu (Tailwind + `--sr-*`) đọc theo `data-theme` trên `<html>` —
  * xem `index.css`/`tailwind.config.js`. Đặt ở đây (không phải component) vì cần
@@ -77,6 +79,7 @@ export interface AppState {
   /** Set by the Command Palette; `CanvasPane` owns the actual insert (its
    * card array is local state, not in this store) and watches the nonce. */
   insertBlockRequest: { templateId: string; nonce: number } | null;
+  citationInsertRequest: { text: string; nonce: number } | null;
 
   init: () => Promise<void>;
   setSource: (source: string) => void;
@@ -109,6 +112,8 @@ export interface AppState {
   /** Asks `CanvasPane` to append one block, by `CardTemplate` id — what the
    * Command Palette's "Chèn khối" actions call. */
   requestInsertBlock: (templateId: string) => void;
+  requestCitationInsert: (keys: string[]) => void;
+  importBibTeX: (text: string) => { added: number; updated: number; total: number; errors: string[]; warnings: string[] };
   /**
    * Renames a labelled object's id in the Markdown source itself (P1: the
    * source stays the only truth, nothing is renamed only "in the UI").
@@ -165,6 +170,7 @@ export const useStore = create<AppState>((set, get) => ({
   coverAdded: null,
   printNonce: 0,
   insertBlockRequest: null,
+  citationInsertRequest: null,
 
   async init() {
     const prefs = loadPreferences();
@@ -440,6 +446,39 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => ({
       insertBlockRequest: { templateId, nonce: (s.insertBlockRequest?.nonce ?? 0) + 1 },
     }));
+  },
+
+  requestCitationInsert(keys) {
+    const clean = [...new Set(keys)].filter(Boolean);
+    if (!clean.length) return;
+    set((s) => ({
+      citationInsertRequest: {
+        text: `[@${clean.join('; @')}]`,
+        nonce: (s.citationInsertRequest?.nonce ?? 0) + 1,
+      },
+    }));
+  },
+
+  importBibTeX(text) {
+    const parsed = parseBibTeX(text);
+    if (!parsed.entries.length) return { added: 0, updated: 0, total: 0, errors: parsed.errors, warnings: parsed.warnings };
+    const previous = new Set<string>();
+    const existing = /^---\s*\n([\s\S]*?)\n---/.exec(get().source)?.[1] ?? '';
+    for (const m of existing.matchAll(/^\s+-\s+key:\s+["']?([^"'\s]+)["']?\s*$/gm)) previous.add(m[1]!);
+    const next = mergeBibliographyFrontMatter(get().source, parsed.entries);
+    const added = parsed.entries.filter((e) => !previous.has(e.key)).length;
+    const updated = parsed.entries.length - added;
+    set((s) => ({
+      source: next,
+      renderedSource: next,
+      renderNonce: s.renderNonce + 1,
+      title: titleFromSource(next),
+      dirty: true,
+    }));
+    if (saveTimer) window.clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(() => { void get().save(); }, 500);
+    track('citation.import', { entries: parsed.entries.length, added, updated });
+    return { added, updated, total: parsed.entries.length, errors: parsed.errors, warnings: parsed.warnings };
   },
 
   renameLabel(oldFull, newFull, definitionLine) {

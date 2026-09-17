@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpToLine, Plus, Trash2 } from 'lucide-react';
-import type { LabelRecord } from '@scirender/ast';
+import type { BibEntry, LabelRecord } from '@scirender/ast';
 import { renderMath } from '@scirender/equation-engine';
 import { evaluateGrid } from '@scirender/table-engine';
 import { TABLE_MERGE_MARKER } from '@scirender/parser';
@@ -31,6 +31,7 @@ export interface EditorProps {
   /** The document's labelled objects — threaded down to `AutoTextarea` for the
    * `@`-mention popover (Hạng mục 1). Absent while nothing has been rendered yet. */
   labels?: Record<string, LabelRecord>;
+  bibliography?: BibEntry[];
 }
 
 /**
@@ -60,14 +61,15 @@ export function CardEditor(props: EditorProps): JSX.Element {
   }
 }
 
-function RawEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element {
+function RawEditor({ text, onChange, kind, labels, bibliography }: EditorProps): JSX.Element {
   return (
     <AutoTextarea
       value={text}
       onChange={onChange}
       ariaLabel={`Nội dung khối ${kind}`}
-      placeholder="Nội dung… (gõ @ để chèn tham chiếu, / để chèn nhanh khối khác)"
+      placeholder="Nội dung… (gõ @ để chèn tham chiếu, [@ để chèn trích dẫn, / để chèn nhanh khối khác)"
       labels={labels}
+      bibliography={bibliography}
     />
   );
 }
@@ -123,11 +125,11 @@ function HeadingEditor({ text, onChange }: EditorProps): JSX.Element {
 
 /* -------------------------------------------------------------- equation */
 
-function EquationEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element {
+function EquationEditor({ text, onChange, kind, labels, bibliography }: EditorProps): JSX.Element {
   const form = parseEquation(text);
   const [tab, setTab] = useState<'code' | 'preview'>('preview');
   const preview = useMemo(() => (form ? renderMath(form.tex, true) : null), [form?.tex]);
-  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} />;
+  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} bibliography={bibliography} />;
 
   return (
     <div className="overflow-hidden rounded-[12px] bg-ink-50">
@@ -156,6 +158,7 @@ function EquationEditor({ text, onChange, kind, labels }: EditorProps): JSX.Elem
             value={form.tex}
             mono
             ariaLabel="Mã LaTeX"
+            bibliography={bibliography}
             onChange={(tex) => onChange(serializeEquation({ ...form, tex }))}
           />
         ) : (
@@ -186,9 +189,9 @@ const LANGS = [
   'javascript', 'typescript', 'bash', 'sql', 'json', 'yaml', 'xml', 'r', 'verilog', 'latex',
 ];
 
-function CodeEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element {
+function CodeEditor({ text, onChange, kind, labels, bibliography }: EditorProps): JSX.Element {
   const form = parseCode(text);
-  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} />;
+  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} bibliography={bibliography} />;
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -210,6 +213,7 @@ function CodeEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element 
           value={form.code}
           mono
           ariaLabel="Mã nguồn"
+          bibliography={bibliography}
           onChange={(code) => onChange(serializeCode({ ...form, code }))}
         />
       </div>
@@ -233,9 +237,9 @@ const DIRECTIONS: Array<[string, string]> = [
   ['RL', 'ngang ngược (RL)'],
 ];
 
-function DiagramEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element {
+function DiagramEditor({ text, onChange, kind, labels, bibliography }: EditorProps): JSX.Element {
   const form = parseDiagram(text);
-  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} />;
+  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} bibliography={bibliography} />;
   return (
     <div className="space-y-2">
       <select
@@ -255,6 +259,7 @@ function DiagramEditor({ text, onChange, kind, labels }: EditorProps): JSX.Eleme
           value={form.source}
           mono
           ariaLabel="Mã Mermaid"
+          bibliography={bibliography}
           onChange={(source) => onChange(serializeDiagram({ ...form, source }))}
         />
       </div>
@@ -270,11 +275,11 @@ function DiagramEditor({ text, onChange, kind, labels }: EditorProps): JSX.Eleme
 
 /* ----------------------------------------------------------------- figure */
 
-function FigureEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element {
+function FigureEditor({ text, onChange, kind, labels, bibliography }: EditorProps): JSX.Element {
   const form = parseFigure(text);
   const assets = useStore((s) => s.assets);
   const assetMap = useStore((s) => s.assetMap);
-  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} />;
+  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} bibliography={bibliography} />;
 
   const src = form.src.startsWith('asset:') ? assetMap[form.src.slice(6)] : form.src;
   return (
@@ -336,9 +341,9 @@ const ALIGNS: Array<[CellAlign, string]> = [
   ['decimal', '1.2'],
 ];
 
-function TableEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element {
+function TableEditor({ text, onChange, kind, labels, bibliography }: EditorProps): JSX.Element {
   const form = parseTable(text);
-  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} />;
+  if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} bibliography={bibliography} />;
   const width = form.header.length;
   const evaluated = evaluateGrid({ header: form.header, rows: form.rows });
 
