@@ -18,6 +18,10 @@ export function ChartDialog({ form, defaultLabel, onClose, onCreate }: Props): J
   const [regressionKind, setRegressionKind] = useState<RegressionKind>('none');
   const [showGrid, setShowGrid] = useState(true);
   const [showR2, setShowR2] = useState(true);
+  const [showErrorBars, setShowErrorBars] = useState(false);
+  const [errorMode, setErrorMode] = useState<'column' | 'fixed'>('column');
+  const [errorIndex, setErrorIndex] = useState(form.header.length > 1 ? Math.min(2, form.header.length - 1) : 0);
+  const [fixedError, setFixedError] = useState('1');
   const [title, setTitle] = useState('');
   const [xLabel, setXLabel] = useState(form.header[0] ?? 'X');
   const [yLabel, setYLabel] = useState(form.header[yIndex] ?? 'Y');
@@ -38,20 +42,28 @@ export function ChartDialog({ form, defaultLabel, onClose, onCreate }: Props): J
         .filter((v): v is { label: string; y: number } => v !== null);
       return { bars, points: [], stats: descriptiveStats(bars.map((b) => b.y)), regression: null };
     }
+    const fixed = parseNumber(fixedError);
     const points = form.rows
       .map((_, i) => {
         const x = parseNumber(evaluated.values[i]?.[xIndex] ?? '');
         const y = parseNumber(evaluated.values[i]?.[yIndex] ?? '');
-        return x == null || y == null ? null : { x, y };
+        if (x == null || y == null) return null;
+        const rawError = showErrorBars
+          ? errorMode === 'fixed'
+            ? fixed
+            : parseNumber(evaluated.values[i]?.[errorIndex] ?? '')
+          : null;
+        const yError = rawError == null ? undefined : Math.abs(rawError);
+        return { x, y, yError };
       })
-      .filter((v): v is { x: number; y: number } => v !== null);
+      .filter((v): v is { x: number; y: number; yError?: number } => v !== null);
     const regression = regressionKind === 'linear'
       ? linearRegression({ x: points.map((p) => p.x), y: points.map((p) => p.y) })
       : regressionKind === 'quadratic'
         ? quadraticRegression({ x: points.map((p) => p.x), y: points.map((p) => p.y) })
         : null;
     return { points, bars: [], stats: descriptiveStats(points.map((p) => p.y)), regression };
-  }, [evaluated.values, form.rows, kind, xIndex, yIndex, regressionKind]);
+  }, [evaluated.values, form.rows, kind, xIndex, yIndex, regressionKind, showErrorBars, errorMode, errorIndex, fixedError]);
 
   const effectiveRegression = kind === 'bar' ? null : analysis.regression;
   const svg = useMemo(
@@ -68,8 +80,9 @@ export function ChartDialog({ form, defaultLabel, onClose, onCreate }: Props): J
         regressionEquation: effectiveRegression?.equation,
         r2: showR2 ? effectiveRegression?.r2 : undefined,
         regressionPredict: effectiveRegression?.predict,
+        yErrors: showErrorBars ? analysis.points.map((point) => point.yError ?? null) : undefined,
       }),
-    [analysis.bars, analysis.points, effectiveRegression, kind, showGrid, showR2, title, xLabel, yLabel],
+    [analysis.bars, analysis.points, effectiveRegression, kind, showGrid, showR2, showErrorBars, title, xLabel, yLabel],
   );
 
   const create = async (): Promise<void> => {
@@ -160,6 +173,23 @@ export function ChartDialog({ form, defaultLabel, onClose, onCreate }: Props): J
             <div className="space-y-2 rounded-[10px] border border-ink-200 bg-ink-50/60 p-2.5 text-[11px] text-ink-600">
               <label className="flex items-center gap-2"><input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Hiện lưới</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={showR2} onChange={(e) => setShowR2(e.target.checked)} disabled={!effectiveRegression} /> Hiện R²</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={showErrorBars} onChange={(e) => setShowErrorBars(e.target.checked)} disabled={kind === 'bar'} /> Thêm thanh sai số (Error Bars)</label>
+              {showErrorBars && kind !== 'bar' ? (
+                <div className="space-y-2 rounded-md border border-ink-200 bg-[var(--sr-surface)] p-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2"><input type="radio" checked={errorMode === 'column'} onChange={() => setErrorMode('column')} /> Theo cột Δy</label>
+                    <label className="flex items-center gap-2"><input type="radio" checked={errorMode === 'fixed'} onChange={() => setErrorMode('fixed')} /> Giá trị cố định</label>
+                  </div>
+                  {errorMode === 'column' ? (
+                    <select value={errorIndex} onChange={(e) => setErrorIndex(Number(e.target.value))} className="control">
+                      {form.header.map((h, i) => <option key={i} value={i}>{h || `Cột ${i + 1}`}</option>)}
+                    </select>
+                  ) : (
+                    <input className="control" type="number" min="0" step="any" value={fixedError} onChange={(e) => setFixedError(e.target.value)} placeholder="Ví dụ: 0.25" />
+                  )}
+                  <div className="text-[9.5px] text-ink-400">Sai số đối xứng: y ± Δy. Trục Y tự mở rộng để bao hàm toàn bộ thanh sai số.</div>
+                </div>
+              ) : null}
             </div>
 
             <div className="rounded-[10px] border border-ink-200 p-2.5">
