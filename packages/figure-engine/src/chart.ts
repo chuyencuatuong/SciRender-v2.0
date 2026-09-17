@@ -60,7 +60,13 @@ export function renderChartSvg(options: SvgChartOptions): string {
   const xs = points.map((p) => p.x);
   const ys = points.map((p) => p.y);
   const xRange = niceRange(Math.min(...xs), Math.max(...xs));
-  const yRange = niceRange(Math.min(...ys), Math.max(...ys));
+  const regressionSamples =
+    options.showRegression && options.regressionPredict
+      ? sampleRegressionPath(xRange.min, xRange.max, options.regressionPredict, 100)
+      : [];
+  const scaledY = regressionSamples.map((p) => p.y).filter(Number.isFinite);
+  const allY = scaledY.length ? [...ys, ...scaledY] : ys;
+  const yRange = niceRange(Math.min(...allY), Math.max(...allY));
   const xTicks = ticks(xRange.min, xRange.max, xRange.step);
   const yTicks = ticks(yRange.min, yRange.max, yRange.step);
   const sx = (x: number): number => plot.x + ((x - xRange.min) / (xRange.max - xRange.min || 1)) * plot.w;
@@ -82,12 +88,14 @@ export function renderChartSvg(options: SvgChartOptions): string {
   );
 
   if (options.showRegression && options.regressionPredict) {
-    const x0 = xRange.min;
-    const x1 = xRange.max;
-    const y0 = options.regressionPredict(x0);
-    const y1 = options.regressionPredict(x1);
-    if (Number.isFinite(y0) && Number.isFinite(y1)) {
-      parts.push(`<line x1="${fmt(sx(x0))}" y1="${fmt(sy(y0))}" x2="${fmt(sx(x1))}" y2="${fmt(sy(y1))}" stroke="${COLORS.regression}" stroke-width="2.2"/>`);
+    const samples = regressionSamples.length
+      ? regressionSamples
+      : sampleRegressionPath(xRange.min, xRange.max, options.regressionPredict, 100);
+    const path = polylinePath(samples, sx, sy);
+    if (path) {
+      parts.push(
+        `<path d="${path}" fill="none" stroke="${COLORS.regression}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`,
+      );
     }
     parts.push(annotation(options.regressionEquation, options.r2, plot));
   }
@@ -212,6 +220,28 @@ function annotation(equation: string | undefined, r2: number | undefined, plot: 
   return `<g transform="translate(${fmt(plot.x + plot.w - 150)},${fmt(plot.y + 12)})"><rect width="142" height="${26 + lines.length * 15}" rx="6" fill="#ffffff" stroke="${COLORS.grid}"/><text x="10" y="20" font-size="10.5" fill="${COLORS.ink}">${lines.map((line, i) => `<tspan x="10" dy="${i === 0 ? 0 : 15}">${escapeXml(line)}</tspan>`).join('')}</text></g>`;
 }
 
+function sampleRegressionPath(
+  xMin: number,
+  xMax: number,
+  predict: (x: number) => number,
+  samples: number,
+): NumericChartPoint[] {
+  const count = Math.max(50, Math.floor(samples));
+  const span = xMax - xMin;
+  if (!Number.isFinite(xMin) || !Number.isFinite(xMax) || !Number.isFinite(span)) return [];
+  if (span === 0) {
+    const y = predict(xMin);
+    return Number.isFinite(y) ? [{ x: xMin, y }] : [];
+  }
+  const out: NumericChartPoint[] = [];
+  for (let i = 0; i < count; i++) {
+    const x = xMin + (span * i) / (count - 1);
+    const y = predict(x);
+    if (Number.isFinite(y)) out.push({ x, y });
+  }
+  return out;
+}
+
 function polylinePath(points: NumericChartPoint[], sx: (x: number) => number, sy: (y: number) => number): string {
   return points.map((p, i) => `${i ? 'L' : 'M'}${fmt(sx(p.x))},${fmt(sy(p.y))}`).join(' ');
 }
@@ -259,7 +289,11 @@ function escapeXml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/** Safe local data URI: no network request is needed to print the chart. */
+/**
+ * Safe local data URI for transient preview/test use. New generated charts are
+ * persisted through the document AssetMap instead of putting this URI in Markdown.
+ * @deprecated Keep for backwards compatibility and callers that explicitly need a data URI.
+ */
 export function svgDataUri(svg: string): string {
   // Encode parentheses as well: the block-level Markdown image parser treats
   // the first unescaped `)` as the end of the URL. Percent-encoding keeps the

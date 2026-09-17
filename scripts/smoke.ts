@@ -760,6 +760,18 @@ check('SVG biểu đồ có viewBox/trục/điểm', chartSvg.includes('viewBox=
 check('SVG chart data-uri là ảnh cục bộ', svgDataUri(chartSvg).startsWith('data:image/svg+xml;charset=utf-8,'));
 const chartUri = svgDataUri(chartSvg);
 check('SVG data-uri encode dấu ngoặc để parser Figure không cắt sớm', !chartUri.includes(')') && !chartUri.includes('('));
+const quadSvg = renderChartSvg({
+  kind: 'scatter',
+  points: [{ x: 0, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 9 }, { x: 3, y: 22 }],
+  showRegression: true,
+  regressionPredict: quad?.predict,
+  regressionEquation: quad?.equation,
+  r2: quad?.r2,
+});
+const quadPath = /<path d="([^"]+)" fill="none" stroke="#b42318"/.exec(quadSvg)?.[1] ?? '';
+check('hồi quy bậc 2 dùng path cong lấy mẫu dày', quadPath.startsWith('M') && (quadPath.match(/L/g) ?? []).length >= 99 && !/<line[^>]+stroke="#b42318"/.test(quadSvg));
+const assetFigure = serializeFigure({ alt: 'Đặc tuyến V-A', src: 'asset:chart-ohm', label: 'fig:ohm', width: '100%' });
+check('figure chart dùng asset reference gọn', assetFigure === '![Đặc tuyến V-A](asset:chart-ohm){#fig:ohm width=100%}' && assetFigure.length < 100);
 const barSvg = renderChartSvg({ kind: 'bar', bars: [{ label: 'A', y: 2 }, { label: 'B', y: 5 }], xLabel: 'Mẫu', yLabel: 'Giá trị' });
 check('SVG biểu đồ cột', barSvg.includes('<rect') && barSvg.includes('Mẫu'));
 const invalid = evaluateGrid({ header: ['A', 'B'], rows: [['1', '=A1/0'], ['=B2', '=A2']] });
