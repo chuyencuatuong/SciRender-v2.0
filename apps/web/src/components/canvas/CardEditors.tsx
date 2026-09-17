@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpToLine, Plus, Trash2 } from 'lucide-react';
 import type { LabelRecord } from '@scirender/ast';
 import { renderMath } from '@scirender/equation-engine';
+import { evaluateGrid } from '@scirender/table-engine';
 import { TABLE_MERGE_MARKER } from '@scirender/parser';
 import type { CardKind } from '~/lib/cards';
 import {
@@ -332,12 +333,14 @@ const ALIGNS: Array<[CellAlign, string]> = [
   ['left', '⇤'],
   ['center', '↔'],
   ['right', '⇥'],
+  ['decimal', '1.2'],
 ];
 
 function TableEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element {
   const form = parseTable(text);
   if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} />;
   const width = form.header.length;
+  const evaluated = evaluateGrid({ header: form.header, rows: form.rows });
 
   const push = (next: TableForm): void => onChange(serializeTable(next));
 
@@ -441,14 +444,26 @@ function TableEditor({ text, onChange, kind, labels }: EditorProps): JSX.Element
                           <ArrowUpToLine size={11} />
                         </button>
                       ) : null}
-                      <input
-                        className="w-full min-w-[80px] bg-transparent px-1.5 py-1 outline-none disabled:text-ink-300"
-                        value={row[c] ?? ''}
-                        disabled={merged}
-                        placeholder={merged ? '(gộp với ô trên)' : undefined}
-                        aria-label={`Ô dòng ${r + 1} cột ${c + 1}`}
-                        onChange={(e) => setCell(r, c, e.target.value)}
-                      />
+                      <div className="min-w-0 flex-1">
+                        <input
+                          className="w-full min-w-[80px] bg-transparent px-1.5 py-1 outline-none disabled:text-ink-300"
+                          value={row[c] ?? ''}
+                          disabled={merged}
+                          placeholder={merged ? '(gộp với ô trên)' : undefined}
+                          aria-label={`Ô dòng ${r + 1} cột ${c + 1}`}
+                          onChange={(e) => setCell(r, c, e.target.value)}
+                        />
+                        {evaluated.evaluations[r]?.[c]?.formula ? (
+                          <div
+                            className={`truncate px-1.5 pb-1 text-[9.5px] ${
+                              evaluated.evaluations[r]?.[c]?.error ? 'text-flag-600' : 'text-emerald-600'
+                            }`}
+                            title={evaluated.evaluations[r]?.[c]?.error ?? undefined}
+                          >
+                            → {evaluated.values[r]?.[c]}
+                          </div>
+                        ) : null}
+                      </div>
                       {c === width - 1 ? (
                         <button
                           type="button"

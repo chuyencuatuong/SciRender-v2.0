@@ -22,6 +22,8 @@ import { CardShell, type DropZone } from './CardShell';
 import { InsertMenu } from './InsertMenu';
 import { SourceDialog } from './SourceDialog';
 import { FrontMatterDialog } from './FrontMatterDialog';
+import { ChartDialog } from './ChartDialog';
+import { parseTable } from '~/lib/card-forms';
 
 let seq = 0;
 const nextId = (): string => `card-new-${seq++}`;
@@ -81,6 +83,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   const [recognised, setRecognised] = useState<{ id: string; label: string; raw: string } | null>(
     null,
   );
+  const [chartRequest, setChartRequest] = useState<{ index: number; table: string; label: string } | null>(null);
 
   const reduced = useReducedMotion();
   const mine = useRef(source);
@@ -161,6 +164,20 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     if (!card) return;
     cards[index] = { ...card, text, kind: detectKind(text) };
     setCards(cards);
+  };
+
+  const requestChart = (index: number): void => {
+    const card = doc.cards[index];
+    if (!card || card.kind !== 'table') return;
+    const parsed = parseTable(card.text);
+    if (!parsed) return;
+    const used = new Set(Object.keys(labels ?? {}));
+    for (const existing of doc.cards) {
+      for (const match of existing.text.matchAll(/\{#(fig:[A-Za-z0-9_.-]+)\}/g)) used.add(match[1]!);
+    }
+    let n = 1;
+    while (used.has(`fig:chart-${n}`)) n++;
+    setChartRequest({ index, table: card.text, label: `fig:chart-${n}` });
   };
 
   const insertAt = (index: number, text: string, label?: string): void => {
@@ -472,6 +489,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
                 onMove={(delta) => moveBy(index, delta)}
                 onDuplicate={() => duplicateAt(index)}
                 onDelete={() => removeAt(index)}
+                onCreateChart={card.kind === 'table' ? () => requestChart(index) : undefined}
                 onUnmerge={() => unmerge(index)}
                 onMergeWithNext={() => mergeColumns(index, index + 1)}
                 onDragStart={() => setDragBoth({ from: index, over: null, zone: null })}
@@ -629,6 +647,24 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
             setShowFront(false);
           }}
         />
+      ) : null}
+
+      {chartRequest ? (
+        (() => {
+          const form = parseTable(chartRequest.table);
+          if (!form) return null;
+          return (
+            <ChartDialog
+              form={form}
+              defaultLabel={chartRequest.label}
+              onClose={() => setChartRequest(null)}
+              onCreate={(markdown, label) => {
+                insertAt(chartRequest.index + 1, markdown, label);
+                setChartRequest(null);
+              }}
+            />
+          );
+        })()
       ) : null}
     </>
   );

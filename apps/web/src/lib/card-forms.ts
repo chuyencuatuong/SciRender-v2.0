@@ -138,7 +138,7 @@ export function serializeFigure(form: FigureForm): string {
 
 /* ------------------------------------------------------------------ table */
 
-export type CellAlign = 'default' | 'left' | 'right' | 'center';
+export type CellAlign = 'default' | 'left' | 'right' | 'center' | 'decimal';
 
 export interface TableForm {
   header: string[];
@@ -146,11 +146,16 @@ export interface TableForm {
   rows: string[][];
   caption: string;
   label: string;
+  /** Trailing table caption attributes, kept verbatim for P1. */
+  attrs: Record<string, string>;
+  /** Exact `{...}` payload from the source caption, used for lossless round-trip when untouched. */
+  attrsRaw?: string;
+  sourceLabel?: string;
+  sourceDecimalCols?: string;
+  sourceAlign?: CellAlign[];
+  sourceAlignSpec?: string[];
 }
 
-// Same shape the parser accepts, including the one-column case — a table
-// trimmed down to a single column used to stop being recognised, and the card
-// silently dropped back to raw Markdown mid-edit.
 const DELIM = /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/;
 
 function splitRow(line: string): string[] {
@@ -180,36 +185,114 @@ function alignOf(spec: string): CellAlign {
 function alignSpec(a: CellAlign): string {
   switch (a) {
     case 'left': return ':---';
-    case 'right': return '---:';
+    case 'right':
+    case 'decimal': return '---:';
     case 'center': return ':---:';
     default: return '---';
   }
 }
 
+function parseCaptionAttrs(line: string): { caption: string; label: string; attrs: Record<string, string>; attrsRaw: string } {
+  const m = /^:\s+(.*)$/.exec(line.trim());
+  if (!m) return { caption: '', label: '', attrs: {}, attrsRaw: '' };
+  const body = m[1] ?? '';
+  const am = /\{([^{}]*)\}\s*$/.exec(body);
+  if (!am) return { caption: body.trim(), label: '', attrs: {}, attrsRaw: '' };
+  const rawAttrs = am[1] ?? '';
+  const label = /(?:^|\s)#([a-z]+:[A-Za-z0-9_.-]+)/.exec(rawAttrs)?.[1] ?? '';
+  const attrs: Record<string, string> = {};
+  for (const token of rawAttrs.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? []) {
+    if (token.startsWith('#') || token === '-') continue;
+    const eq = token.indexOf('=');
+    if (eq > 0) attrs[token.slice(0, eq)] = token.slice(eq + 1).replace(/^['"]|['"]$/g, '');
+  }
+  return { caption: body.slice(0, am.index).trim(), label, attrs, attrsRaw: rawAttrs };
+}
+
+function takeTableCaption(text: string): { body: string; caption: string; label: string; attrs: Record<string, string>; attrsRaw: string } {
+  const lines = text.replace(/\s+$/, '').split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i] as string;
+    if (!line.trim()) continue;
+    if (!/^:\s+/.test(line)) break;
+    const cap = parseCaptionAttrs(line);
+    return { body: lines.slice(0, i).join('\n').replace(/\s+$/, ''), ...cap };
+  }
+  return { body: text.replace(/\s+$/, ''), caption: '', label: '', attrs: {}, attrsRaw: '' };
+}
+
 export function parseTable(text: string): TableForm | null {
-  const { body, caption, label } = takeCaption(text);
+  const { body, caption, label, attrs, attrsRaw } = takeTableCaption(text);
   const lines = body.split('\n').filter((l) => l.trim());
   if (lines.length < 2 || !DELIM.test(lines[1] as string)) return null;
   const header = splitRow(lines[0] as string);
   const align = splitRow(lines[1] as string).map(alignOf);
+  const decimalCols = new Set(
+    (attrs['decimal-cols'] ?? '')
+      .split(',')
+      .map((v) => Number(v.trim()) - 1)
+      .filter((v) => Number.isInteger(v) && v >= 0),
+  );
+  decimalCols.forEach((c) => {
+    if (c < align.length) align[c] = 'decimal';
+  });
   const rows = lines.slice(2).map(splitRow);
-  return { header, align, rows, caption, label };
+  return {
+    header,
+    align,
+    rows,
+    caption,
+    label,
+    attrs,
+    attrsRaw,
+    sourceLabel: label,
+    sourceDecimalCols: attrs['decimal-cols'] ?? '',
+    sourceAlign: align.slice(),
+    sourceAlignSpec: splitRow(lines[1] as string),
+  };
 }
 
 function escapeCell(v: string): string {
   return v.replace(/\|/g, '\\|');
 }
 
+function serialisedTableAttrs(form: TableForm): string[] {
+  const attrs = { ...form.attrs };
+  const decimalCols = form.align
+    .map((a, i) => (a === 'decimal' ? i + 1 : null))
+    .filter((v): v is number => v != null);
+  if (decimalCols.length) attrs['decimal-cols'] = decimalCols.join(',');
+  else delete attrs['decimal-cols'];
+  if (form.label) attrs['#label'] = form.label;
+  else delete attrs['#label'];
+  return Object.entries(attrs)
+    .filter(([key]) => key !== '#label')
+    .map(([key, value]) => `${key}=${value}`);
+}
+
 export function serializeTable(form: TableForm): string {
   const width = form.header.length;
   const pad = (r: string[]): string[] =>
     Array.from({ length: width }, (_, i) => escapeCell(r[i] ?? ''));
+  const separator = Array.from({ length: width }, (_, i) => {
+    const current = form.align[i] ?? 'default';
+    const unchanged = form.sourceAlign?.[i] === current && form.sourceAlignSpec?.[i] != null;
+    return unchanged ? form.sourceAlignSpec![i]! : alignSpec(current);
+  });
   const lines = [
     `| ${pad(form.header).join(' | ')} |`,
-    `|${Array.from({ length: width }, (_, i) => alignSpec(form.align[i] ?? 'default')).join('|')}|`,
+    `|${separator.join('|')}|`,
     ...form.rows.map((r) => `| ${pad(r).join(' | ')} |`),
   ];
-  return lines.join('\n') + captionLine(form.caption, form.label);
+  const decimalCols = form.align
+    .map((a, i) => (a === 'decimal' ? i + 1 : null))
+    .filter((v): v is number => v != null)
+    .join(',');
+  const canPreserveAttrs = Boolean(form.attrsRaw) && form.label === (form.sourceLabel ?? '') && decimalCols === (form.sourceDecimalCols ?? '');
+  const attrs = serialisedTableAttrs(form);
+  const tailBits = canPreserveAttrs ? form.attrsRaw! : [form.label ? `#${form.label}` : '', ...attrs].filter(Boolean).join(' ');
+  if (!form.caption && !tailBits) return lines.join('\n');
+  return `${lines.join('\n')}\n\n: ${form.caption}${tailBits ? ` {${tailBits}}` : ''}`.replace(/: \{/, ': {');
 }
 
 /* ----------------------------------------------------------------- heading */

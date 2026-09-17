@@ -7,6 +7,7 @@ import {
   GripVertical,
   Rows2,
   Trash2,
+  LineChart,
 } from 'lucide-react';
 import type { LabelRecord } from '@scirender/ast';
 import { detectKind, KIND_LABEL, splitColumns, type Card } from '~/lib/cards';
@@ -28,6 +29,7 @@ interface Props {
   onMove: (delta: number) => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onCreateChart?: () => void;
   onUnmerge: () => void;
   onMergeWithNext: () => void;
   onDragStart: () => void;
@@ -163,6 +165,11 @@ export function CardShell(props: Props): JSX.Element {
               <Columns2 size={12} />
             </IconBtn>
           )}
+          {card.kind === 'table' && props.onCreateChart ? (
+            <IconBtn title="Chuyển bảng thành biểu đồ SVG" onClick={props.onCreateChart}>
+              <LineChart size={12} />
+            </IconBtn>
+          ) : null}
           <IconBtn title="Nhân bản (Ctrl+D)" onClick={props.onDuplicate}>
             <Copy size={12} />
           </IconBtn>
