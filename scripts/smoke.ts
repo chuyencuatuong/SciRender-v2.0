@@ -10,6 +10,8 @@
  * `scripts/browser-check.mjs`.
  */
 import { analyse } from '../packages/intelligence/src/index.js';
+import { descriptiveStats, evaluateGrid, linearRegression, quadraticRegression } from '../packages/table-engine/src/index.js';
+import { renderChartSvg, svgDataUri } from '../packages/figure-engine/src/chart.js';
 import { parse } from '../packages/parser/src/index.js';
 import {
   applyDiagramDirection,
@@ -729,6 +731,43 @@ check('bảng một dòng dữ liệu vẫn parse được', oneRow?.rows.length
 
 check('khối không đúng dạng thì biểu mẫu trả null', parseTable('chỉ là đoạn văn') === null);
 check('công thức sai dạng thì biểu mẫu trả null', parseEquation('$x$') === null);
+
+const formulaGrid = evaluateGrid({
+  header: ['A', 'B', 'C'],
+  rows: [
+    ['2', '3', '=A1+B1'],
+    ['4', '5', '=C1*2'],
+    ['1', '7', '=SUM(A1:B2)'],
+  ],
+});
+check('formula ô cơ bản', formulaGrid.values[0]?.[2] === '5', JSON.stringify(formulaGrid.values));
+check('formula tham chiếu dây chuyền', formulaGrid.values[1]?.[2] === '10', JSON.stringify(formulaGrid.values));
+check('SUM dải ô', formulaGrid.values[2]?.[2] === '14', JSON.stringify(formulaGrid.values));
+check('formula không làm đổi Markdown', tblText.includes('{#tbl:x}'));
+const decimalText = '| Giá trị | Nhiệt độ |\n|---:|---:|\n| 1.2 | 20.50 |\n| 12.34 | 101.5 |\n\n: Số đo {#tbl:decimal decimal-cols=1,2}';
+const decimalForm = parseTable(decimalText);
+check('căn lề thập phân được giữ trong card', decimalForm?.align[0] === 'decimal' && decimalForm?.align[1] === 'decimal');
+check('thuộc tính thập phân khứ hồi', decimalForm ? serializeTable(decimalForm) === decimalText : false, decimalForm ? serializeTable(decimalForm) : 'null');
+const stats = descriptiveStats([1, 2, 3, 4, 5]);
+check('thống kê N/Mean/Median/SD', !!stats && stats.n === 5 && stats.mean === 3 && stats.median === 3 && Math.abs(stats.sd - Math.sqrt(2.5)) < 1e-12);
+const lin = linearRegression({ x: [0, 1, 2, 3], y: [1, 3, 5, 7] });
+check('hồi quy tuyến tính', !!lin && Math.abs(lin.coefficients[0]! - 2) < 1e-12 && Math.abs(lin.coefficients[1]! - 1) < 1e-12 && Math.abs(lin.r2 - 1) < 1e-12);
+check('LaTeX hồi quy tuyến tính', lin?.latex === 'y = 2x + 1', lin?.latex);
+const quad = quadraticRegression({ x: [-2, -1, 0, 1, 2], y: [7, 2, 1, 4, 11] });
+check('hồi quy bậc 2', !!quad && Math.abs(quad.coefficients[0]! - 2) < 1e-10 && Math.abs(quad.coefficients[1]! - 1) < 1e-10 && Math.abs(quad.coefficients[2]! - 1) < 1e-10 && Math.abs(quad.r2 - 1) < 1e-10);
+const chartSvg = renderChartSvg({ kind: 'scatter', points: [{ x: 0, y: 1 }, { x: 1, y: 3 }], showRegression: !!lin, regressionPredict: lin?.predict, regressionEquation: lin?.equation, r2: lin?.r2, xLabel: 'X', yLabel: 'Y', showGrid: true });
+check('SVG biểu đồ có viewBox/trục/điểm', chartSvg.includes('viewBox="0 0') && chartSvg.includes('<circle') && chartSvg.includes('<line'));
+check('SVG chart data-uri là ảnh cục bộ', svgDataUri(chartSvg).startsWith('data:image/svg+xml;charset=utf-8,'));
+const chartUri = svgDataUri(chartSvg);
+check('SVG data-uri encode dấu ngoặc để parser Figure không cắt sớm', !chartUri.includes(')') && !chartUri.includes('('));
+const barSvg = renderChartSvg({ kind: 'bar', bars: [{ label: 'A', y: 2 }, { label: 'B', y: 5 }], xLabel: 'Mẫu', yLabel: 'Giá trị' });
+check('SVG biểu đồ cột', barSvg.includes('<rect') && barSvg.includes('Mẫu'));
+const invalid = evaluateGrid({ header: ['A', 'B'], rows: [['1', '=A1/0'], ['=B2', '=A2']] });
+check('phát hiện chia 0', invalid.errors.some((e) => e.code === 'DIV_ZERO'));
+check('phát hiện tham chiếu vòng', invalid.errors.some((e) => e.code === 'CIRCULAR_REF'));
+const attrRoundtrip = parseTable('| A | B |\n|---|---|\n| 1 | 2 |\n\n: Bảng {#tbl:q decimal-cols=1 note="giữ nguyên quote"}');
+check('giữ nguyên payload attribute khi chưa chỉnh bảng', attrRoundtrip ? serializeTable(attrRoundtrip) === '| A | B |\n|---|---|\n| 1 | 2 |\n\n: Bảng {#tbl:q decimal-cols=1 note="giữ nguyên quote"}' : false);
+
 
 check('đổi cấp đề mục', setHeadingDepth('## Tên', 1) === '# Tên');
 check('đọc cấp đề mục', headingDepth('### A') === 3);

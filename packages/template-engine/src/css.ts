@@ -207,6 +207,11 @@ ${headingRules}
 .sr-doc table{border-collapse:collapse;width:100%;margin:0;break-inside:avoid;page-break-inside:avoid;}
 .sr-doc .sr-table-wrap{margin:12pt 0;break-inside:avoid;page-break-inside:avoid;}
 .sr-doc th,.sr-doc td{border:1px solid var(--sr-rule);padding:3pt 5pt;vertical-align:top;text-align:left;text-indent:0;line-height:1.2;}
+.sr-doc .sr-decimal-cell{text-align:right;font-variant-numeric:tabular-nums;}
+.sr-doc .sr-decimal-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,auto);width:100%;font-variant-numeric:tabular-nums;}
+.sr-doc .sr-decimal-int{text-align:right;}
+.sr-doc .sr-decimal-sep{text-align:center;}
+.sr-doc .sr-decimal-frac{text-align:left;}
 .sr-doc thead th{background:var(--sr-table-head-bg);font-weight:700;}
 
 /* -------------------------------------------------------------- equations */

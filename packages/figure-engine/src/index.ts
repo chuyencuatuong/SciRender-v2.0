@@ -79,3 +79,5 @@ export function checkFigure(node: FigureNode, assets: AssetMap): Diagnostic[] {
   }
   return out;
 }
+
+export * from './chart.js';

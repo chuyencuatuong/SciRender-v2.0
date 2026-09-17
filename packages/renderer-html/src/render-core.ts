@@ -1,7 +1,7 @@
 import type { BlockNode, InlineNode, TableCell } from '@scirender/ast';
 import { renderMath } from '@scirender/equation-engine';
 import { figureStyle, resolveFigureSrc, type AssetMap } from '@scirender/figure-engine';
-import { alignStyle, normaliseTable } from '@scirender/table-engine';
+import { alignStyle, evaluateTable, normaliseTable, plainCellText } from '@scirender/table-engine';
 import { refWord, type TemplateDescriptor } from '@scirender/template-engine';
 import { highlightCode } from './highlight.js';
 import { escapeAttr, escapeHtml, safeUrl } from './escape.js';
@@ -175,12 +175,19 @@ export function renderBlock(
     }
     case 'table': {
       const norm = normaliseTable(node);
+      const evaluated = evaluateTable(node);
+      const decimalCols = new Set(
+        (node.attrs?.['decimal-cols'] ?? '')
+          .split(',')
+          .map((v) => Number(v.trim()) - 1)
+          .filter((v) => Number.isInteger(v) && v >= 0),
+      );
       const head = `<thead><tr>${norm.header
-        .map((c, i) => cellHtml('th', c, norm.align[i] ?? 'default', t))
+        .map((c, i) => cellHtml('th', c, decimalCols.has(i) ? 'decimal' : norm.align[i] ?? 'default', t))
         .join('')}</tr></thead>`;
       const body = `<tbody>${norm.rows
         .map(
-          (r) =>
+          (r, ri) =>
             // A cell `covered` by a rowspan from above gets no <td> at all —
             // the spanning cell above already reaches down over this slot,
             // exactly as plain HTML rowspan requires. The alignment lookup
@@ -188,7 +195,17 @@ export function renderBlock(
             // before filtering, not after (a filtered index would drift left
             // by one for every merged column to its left).
             `<tr>${r
-              .map((c, i) => (c.covered ? '' : cellHtml('td', c, norm.align[i] ?? 'default', t)))
+              .map((c, i) =>
+                c.covered
+                  ? ''
+                  : cellHtml(
+                      'td',
+                      c,
+                      decimalCols.has(i) ? 'decimal' : norm.align[i] ?? 'default',
+                      t,
+                      evaluated.evaluations[ri]?.[i],
+                    ),
+              )
               .join('')}</tr>`,
         )
         .join('')}</tbody>`;
@@ -307,8 +324,25 @@ function cellHtml(
   cell: TableCell,
   align: Parameters<typeof alignStyle>[0],
   t: TemplateDescriptor,
+  evaluated?: { value: number | null; display: string; formula: string | null; error: string | null },
 ): string {
   const style = alignStyle(align);
   const span = cell.rowspan && cell.rowspan > 1 ? ` rowspan="${cell.rowspan}"` : '';
-  return `<${tag}${span}${style ? ` style="${escapeAttr(style)}"` : ''}>${inline(cell.children, t)}</${tag}>`;
+  const raw = plainCellText(cell.children);
+  const isFormula = Boolean(evaluated?.formula);
+  const display = evaluated && !evaluated.error && evaluated.value != null ? evaluated.display : null;
+  const decimal = align === 'decimal' && display != null ? decimalHtml(display) : null;
+  const content = decimal ?? (isFormula && evaluated ? escapeHtml(evaluated.display) : inline(cell.children, t));
+  const title = isFormula && evaluated?.error ? ` title="${escapeAttr(evaluated.formula ?? raw)}"` : '';
+  const cls = align === 'decimal' ? ' class="sr-decimal-cell"' : '';
+  return `<${tag}${span}${cls}${style ? ` style="${escapeAttr(style)}"` : ''}${title}>${content}</${tag}>`;
+}
+
+function decimalHtml(value: string): string {
+  const text = value.trim().replace(',', '.');
+  const m = /^([+-]?[0-9]+)(?:\.([0-9]+))?$/.exec(text);
+  if (!m) return escapeHtml(value);
+  const integer = m[1] ?? '';
+  const fraction = m[2] ?? '';
+  return `<span class="sr-decimal-wrap"><span class="sr-decimal-int">${escapeHtml(integer)}</span><span class="sr-decimal-sep">${fraction ? '.' : ''}</span><span class="sr-decimal-frac">${escapeHtml(fraction)}</span></span>`;
 }

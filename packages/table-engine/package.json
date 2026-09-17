@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Table normalisation, column alignment and numbering.",
+  "description": "Table normalisation, spreadsheet-style formulas, decimal alignment, validation and statistics/regression.",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

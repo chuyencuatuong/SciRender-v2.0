@@ -1,4 +1,4 @@
-import type { AlignMode, Diagnostic, TableCell, TableNode } from '@scirender/ast';
+import type { AlignMode, TableCell, TableNode } from '@scirender/ast';
 
 export interface NormalisedTable {
   header: TableCell[];
@@ -28,7 +28,7 @@ export function normaliseTable(node: TableNode): NormalisedTable {
   };
 }
 
-export function alignStyle(mode: AlignMode): string {
+export function alignStyle(mode: AlignMode | 'decimal'): string {
   switch (mode) {
     case 'left':
       return 'text-align:left';
@@ -36,44 +36,15 @@ export function alignStyle(mode: AlignMode): string {
       return 'text-align:right';
     case 'center':
       return 'text-align:center';
+    case 'decimal':
+      return 'text-align:right;font-variant-numeric:tabular-nums';
     default:
       return '';
   }
 }
 
-export function checkTable(node: TableNode): Diagnostic[] {
-  const out: Diagnostic[] = [];
-  if (!node.rows.length) {
-    out.push({
-      code: 'SR-T001',
-      severity: 'warning',
-      stage: 'validator',
-      nodeId: node.id,
-      message: 'Bảng chỉ có dòng tiêu đề, không có dữ liệu.',
-      position: node.position,
-    });
-  }
-  if (!node.caption.length) {
-    out.push({
-      code: 'SR-T002',
-      severity: 'warning',
-      stage: 'validator',
-      nodeId: node.id,
-      message: 'Bảng chưa có chú thích (caption).',
-      hint: 'Thêm dòng ": Chú thích bảng {#tbl:ten}" ngay dưới bảng.',
-      position: node.position,
-    });
-  }
-  const widths = new Set(node.rows.map((r) => r.length));
-  if (widths.size > 1) {
-    out.push({
-      code: 'SR-T003',
-      severity: 'error',
-      stage: 'validator',
-      nodeId: node.id,
-      message: 'Các dòng trong bảng có số ô không đồng nhất.',
-      position: node.position,
-    });
-  }
-  return out;
-}
+
+export * from './formulas.js';
+export * from './statistics.js';
+
+

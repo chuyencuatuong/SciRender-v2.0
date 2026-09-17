@@ -138,6 +138,12 @@ Chú thích lấy từ `alt`. Muốn chú thích dài hơn, thêm dòng `: …` 
 
 Thuộc tính hỗ trợ: `width`, `height` (số trần hiểu là px).
 
+Biểu đồ được tạo từ bảng trong Canvas được lưu như một Figure dùng `data:image/svg+xml...`, nên không cần file ảnh ngoài hay thư viện chart bên thứ ba. Nó vẫn đi qua bộ đánh số Hình và cross-reference như mọi `FigureNode` khác.
+
+#### Biểu đồ từ bảng
+
+Từ Canvas, nút **Chuyển bảng thành biểu đồ SVG** mở cấu hình chọn cột X/Y và kiểu `scatter`, `line` hoặc `bar`. Với dữ liệu số, có thể bật hồi quy tuyến tính hoặc bậc 2; phương trình và `R²` được nhúng trực tiếp vào SVG. SVG được lưu như `data:image/svg+xml...`, vì vậy bản PDF vẫn là vector, không phụ thuộc Chart.js/D3/Recharts.
+
 ### Bảng
 
 ```markdown
@@ -150,6 +156,32 @@ Thuộc tính hỗ trợ: `width`, `height` (số trần hiểu là px).
 
 Dòng phân cách quyết định căn cột: `:---` trái, `---:` phải, `:---:` giữa, `---` mặc định.
 Dòng lệch số ô sinh cảnh báo `SR-P020` — bảng vẫn render nhưng lỗi được báo.
+
+### Công thức trong ô bảng
+
+Ô dữ liệu có thể giữ công thức bắt đầu bằng `=`. Công thức không bị thay đổi trong Markdown;
+khi render, SciRender tính giá trị để hiển thị. Tọa độ `A1`, `B1`, ... tính trên **các dòng dữ liệu**, không tính dòng tiêu đề.
+
+```markdown
+| Khối lượng | Gia tốc | Lực |
+|---:|---:|---:|
+| 2 | 9.81 | =A1*B1 |
+| 3 | 9.81 | =A2*B2 |
+|  |  | =SUM(C1:C2) |
+```
+
+Hỗ trợ `+`, `-`, `*`, `/`, `^`, ngoặc và `SUM`, `AVERAGE`, `MIN`, `MAX` với dải ô.
+Lỗi công thức không bị sửa âm thầm; validator báo mã `SR-T1xx`.
+
+### Căn lề dấu thập phân
+
+Markdown không có cú pháp căn dấu thập phân chuẩn, nên SciRender lưu thuộc tính ở dòng chú thích bảng:
+
+```markdown
+: Kết quả đo {#tbl:result decimal-cols=1,3}
+```
+
+`decimal-cols` dùng số cột 1-based. Bản in dùng một lưới ba phần để căn thẳng dấu thập phân giữa các dòng.
 
 ### Sơ đồ Mermaid
 

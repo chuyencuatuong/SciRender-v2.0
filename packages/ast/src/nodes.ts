@@ -182,6 +182,8 @@ export interface TableNode extends NodeBase {
   caption: InlineNode[];
   label: string | null;
   number: string | null;
+  /** Trailing caption attributes, preserved verbatim for P1 (e.g. decimal-cols). */
+  attrs: Record<string, string>;
 }
 
 export interface CodeBlockNode extends NodeBase {

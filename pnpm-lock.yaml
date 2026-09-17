@@ -23,6 +23,12 @@ importers:
       '@scirender/ast':
         specifier: workspace:*
         version: link:../../packages/ast
+      '@scirender/figure-engine':
+        specifier: workspace:*
+        version: link:../../packages/figure-engine
+      '@scirender/table-engine':
+        specifier: workspace:*
+        version: link:../../packages/table-engine
       '@scirender/intelligence':
         specifier: workspace:*
         version: link:../../packages/intelligence

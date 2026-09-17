@@ -577,6 +577,7 @@ function readTable(
     caption: cap?.caption ?? [],
     label: cap?.spec.label ?? null,
     number: null,
+    attrs: { ...(cap?.spec.attrs ?? {}) },
   });
   return cap ? cap.next : j;
 }

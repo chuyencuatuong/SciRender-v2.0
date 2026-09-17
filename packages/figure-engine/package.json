@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Figure numbering, caption and asset resolution.",
+  "description": "Figure numbering, caption and asset resolution plus dependency-free vector SVG chart generation.",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
