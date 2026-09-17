@@ -46,6 +46,17 @@ export function App(): JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        // While the caret is inside a card's own editor, Ctrl+Enter means what
+        // it means in Word: insert a page break where you are — CanvasPane's
+        // own shortcut handler owns that case. Only outside of typing (nothing
+        // focused, or a whole card merely selected) does Ctrl+Enter still mean
+        // "Render", as before this feature existed.
+        const target = e.target as HTMLElement | null;
+        const typing =
+          target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLInputElement ||
+          target?.isContentEditable === true;
+        if (typing) return;
         e.preventDefault();
         requestRender();
       }

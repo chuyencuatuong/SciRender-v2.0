@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { ArrowUpToLine, Plus, Trash2 } from 'lucide-react';
 import { renderMath } from '@scirender/equation-engine';
+import { TABLE_MERGE_MARKER } from '@scirender/parser';
 import type { CardKind } from '~/lib/cards';
 import {
   headingDepth,
@@ -47,6 +48,8 @@ export function CardEditor(props: EditorProps): JSX.Element {
       return <FigureEditor {...props} />;
     case 'heading':
       return <HeadingEditor {...props} />;
+    case 'pageBreak':
+      return <PageBreakEditor {...props} />;
     default:
       return <RawEditor {...props} />;
   }
@@ -60,6 +63,24 @@ function RawEditor({ text, onChange, kind }: EditorProps): JSX.Element {
       ariaLabel={`Nội dung khối ${kind}`}
       placeholder="Nội dung…"
     />
+  );
+}
+
+/* ------------------------------------------------------------- pageBreak */
+
+/**
+ * The marker's exact text (`:::pagebreak:::`) is what the parser matches — a
+ * free-text box would let one stray keystroke silently turn it back into an
+ * ordinary paragraph (P1). There is nothing to type here, so it shows a fixed
+ * strip instead of a textarea, the same way a divider is a fact, not prose.
+ */
+function PageBreakEditor(_props: EditorProps): JSX.Element {
+  return (
+    <div className="flex items-center gap-2 py-1 text-[12px] font-medium text-flag-600">
+      <span className="h-px flex-1 bg-flag-200" aria-hidden="true" />
+      <span>Ngắt trang — trang mới bắt đầu ở đây</span>
+      <span className="h-px flex-1 bg-flag-200" aria-hidden="true" />
+    </div>
   );
 }
 
@@ -396,12 +417,30 @@ function TableEditor({ text, onChange, kind }: EditorProps): JSX.Element {
           <tbody>
             {form.rows.map((row, r) => (
               <tr key={r}>
-                {Array.from({ length: width }, (_, c) => (
+                {Array.from({ length: width }, (_, c) => {
+                  const merged = (row[c] ?? '') === TABLE_MERGE_MARKER;
+                  return (
                   <td key={c} className="border-b border-black/[0.045] p-0 align-top">
                     <div className="flex items-center">
+                      {r > 0 ? (
+                        <button
+                          type="button"
+                          className={`shrink-0 px-1 ${merged ? 'text-deep-600' : 'text-ink-300 hover:text-deep-600'}`}
+                          title={
+                            merged
+                              ? 'Đang gộp với ô phía trên — bấm để bỏ gộp'
+                              : 'Gộp với ô phía trên (dòng nhóm)'
+                          }
+                          onClick={() => setCell(r, c, merged ? '' : TABLE_MERGE_MARKER)}
+                        >
+                          <ArrowUpToLine size={11} />
+                        </button>
+                      ) : null}
                       <input
-                        className="w-full min-w-[80px] bg-transparent px-1.5 py-1 outline-none"
+                        className="w-full min-w-[80px] bg-transparent px-1.5 py-1 outline-none disabled:text-ink-300"
                         value={row[c] ?? ''}
+                        disabled={merged}
+                        placeholder={merged ? '(gộp với ô trên)' : undefined}
                         aria-label={`Ô dòng ${r + 1} cột ${c + 1}`}
                         onChange={(e) => setCell(r, c, e.target.value)}
                       />
@@ -418,7 +457,8 @@ function TableEditor({ text, onChange, kind }: EditorProps): JSX.Element {
                       ) : null}
                     </div>
                   </td>
-                ))}
+                  );
+                })}
               </tr>
             ))}
           </tbody>

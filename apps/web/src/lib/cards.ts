@@ -28,6 +28,7 @@ export type CardKind =
   | 'blockquote'
   | 'callout'
   | 'thematicBreak'
+  | 'pageBreak'
   | 'footnote'
   | 'columns'
   | 'unknown';
@@ -75,6 +76,7 @@ function kindOf(type: string): CardKind {
     case 'blockquote':
     case 'callout':
     case 'thematicBreak':
+    case 'pageBreak':
     case 'columns':
       return type;
     default:
@@ -274,6 +276,14 @@ export const CARD_TEMPLATES: CardTemplate[] = [
     keywords: 'rule duong ke ngang hr',
     text: '---',
   },
+  {
+    id: 'pagebreak',
+    kind: 'pageBreak',
+    label: 'Ngắt trang',
+    hint: 'Buộc bắt đầu trang mới ở đây (Ctrl+Enter)',
+    keywords: 'pagebreak ngat trang page break trang moi sang trang',
+    text: ':::pagebreak:::',
+  },
 ];
 
 /** Strips Vietnamese diacritics so "cong thuc" finds "Công thức". */
@@ -329,6 +339,7 @@ export const KIND_TONE: Record<CardKind, string> = {
   blockquote: 'bg-ink-100 text-ink-600',
   callout: 'bg-amber-50 text-amber-700',
   thematicBreak: 'bg-ink-100 text-ink-500',
+  pageBreak: 'bg-flag-50 text-flag-700',
   footnote: 'bg-flag-50 text-flag-600',
   columns: 'bg-deep-50 text-deep-700',
   unknown: 'bg-ink-100 text-ink-500',
@@ -346,6 +357,7 @@ export const KIND_LABEL: Record<CardKind, string> = {
   blockquote: 'Trích dẫn',
   callout: 'Ghi chú',
   thematicBreak: 'Đường kẻ',
+  pageBreak: 'Ngắt trang',
   footnote: 'Chú thích',
   columns: 'Hai cột',
   unknown: 'Khối',
@@ -357,6 +369,7 @@ export function detectKind(text: string): CardKind {
   if (!t) return 'paragraph';
   if (/^\[\^[A-Za-z0-9_-]+\]:/.test(t)) return 'footnote';
   if (/^#{1,6}\s/.test(t)) return 'heading';
+  if (/^:::\s*pagebreak\s*:::$/i.test(t)) return 'pageBreak';
   if (/^:::\s*cols\b/.test(t)) return 'columns';
   if (/^:::/.test(t)) return 'callout';
   if (/^\$\$/.test(t)) return 'equation';

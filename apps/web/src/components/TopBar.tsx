@@ -34,6 +34,9 @@ import { readAppFontsCss, readKatexCss } from '~/lib/export-fonts';
 const PDF_SERVER_URL = (import.meta.env.VITE_PDF_SERVER_URL as string | undefined)?.trim();
 const PDF_SERVER_TOKEN = (import.meta.env.VITE_PDF_SERVER_TOKEN as string | undefined)?.trim();
 
+/** Đánh dấu đã hiện lời nhắc "chọn Save as PDF" một lần trên máy này (P5-friendly, không cần server). */
+const PRINT_HINT_SEEN_KEY = 'sr:print-hint-seen';
+
 interface Props {
   render: RenderState;
 }
@@ -66,6 +69,22 @@ export function TopBar({ render }: Props): JSX.Element {
   const onPrint = (): void => {
     if (!result || !render.pages.length) return;
     track('export.print', { pages: render.pages.length });
+    // Chỉ ai chưa từng thấy hộp thoại in của app mới cần nhắc — tránh làm
+    // phiền người đã biết. Nhắc bằng alert (không phải toast tự ẩn) vì đây
+    // là bước dễ làm sai nhất (chọn nhầm máy in thật) và không được bỏ lỡ.
+    try {
+      if (!window.localStorage.getItem(PRINT_HINT_SEEN_KEY)) {
+        window.alert(
+          'Hộp thoại In của trình duyệt sẽ mở ra.\n\n' +
+            'Ở mục "Destination" (Đích), chọn "Save as PDF" — KHÔNG chọn tên máy in — rồi bấm "Save".\n' +
+            'Cách này cho PDF chữ thật, chọn và tìm được, không cần mạng.',
+        );
+        window.localStorage.setItem(PRINT_HINT_SEEN_KEY, '1');
+      }
+    } catch {
+      // localStorage có thể bị chặn (chế độ ẩn danh nghiêm ngặt) — bỏ qua,
+      // không để việc nhắc nhở làm hỏng luồng in.
+    }
     printDocument({
       pages: pageHtml,
       template: result.template,
@@ -277,31 +296,41 @@ export function TopBar({ render }: Props): JSX.Element {
         />
 
         {/* In và Tải PDF là hai việc khác nhau, nên là hai mục khác nhau chứ
-            không phải một nút "In / PDF" mập mờ như trước. Tải PDF (chữ thật)
-            là mặc định khi có máy chủ; bản ảnh cũ vẫn còn cho lúc không có mạng. */}
+            không phải một nút "In / PDF" mập mờ như trước.
+            Nút chính (bấm thẳng) là "In…" — luôn cho chữ thật, không cần
+            server, không cần mạng; chỉ có một bước thủ công là chọn "Save
+            as PDF" ở hộp thoại in (đã có lời nhắc một lần, xem onPrint).
+            Tải PDF qua máy chủ / bản ảnh vẫn còn, xếp làm lựa chọn phụ trong
+            menu cho ai không muốn tự chọn Destination. */}
         <SplitMenu
           label={
             pdfServerStage
               ? pdfServerStage
               : pdf
                 ? `Đang tạo PDF ${pdf.done}/${pdf.total}`
-                : 'Xuất'
+                : 'In / Lưu PDF'
           }
-          icon={pdfBusy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-          onPrimary={() => void (PDF_SERVER_URL ? onDownloadPdfServer() : onDownloadPdf(2))}
-          primaryTitle={
-            PDF_SERVER_URL
-              ? 'Tải PDF chữ thật, chọn/tìm được (Ctrl + Shift + P)'
-              : 'Tải tệp PDF về máy — chữ là ảnh (Ctrl + Shift + P)'
-          }
+          icon={pdfBusy ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />}
+          onPrimary={onPrint}
+          primaryTitle='Mở hộp thoại in — chọn "Save as PDF" để lưu PDF chữ thật (Ctrl + P)'
           disabled={noPages || pdfBusy}
           width={320}
           items={[
             {
+              id: 'print',
+              label: 'In… (khuyến nghị)',
+              description: 'Mở hộp thoại in trình duyệt. Chọn "Save as PDF" ở Destination — chữ thật, không cần mạng.',
+              icon: <Printer size={13} />,
+              hint: '⌘P',
+              disabled: noPages,
+              onSelect: onPrint,
+            },
+            'separator',
+            {
               id: 'pdf-server',
-              label: 'Tải PDF (chữ thật)',
+              label: 'Tải PDF qua máy chủ (chữ thật)',
               description: PDF_SERVER_URL
-                ? 'Chữ chọn/tìm được, giống Word. Cần mạng.'
+                ? 'Tự tải file về, không cần tự chọn Destination. Chữ chọn/tìm được. Cần mạng.'
                 : 'Chưa cấu hình máy chủ xuất PDF (VITE_PDF_SERVER_URL).',
               icon: <Download size={13} />,
               hint: '⌘⇧P',
@@ -323,16 +352,6 @@ export function TopBar({ render }: Props): JSX.Element {
               icon: <Download size={13} />,
               disabled: noPages || pdfBusy,
               onSelect: () => void onDownloadPdf(3),
-            },
-            'separator',
-            {
-              id: 'print',
-              label: 'In…',
-              description: 'Mở hộp thoại in. Chọn “Save as PDF” nếu muốn chữ chọn được.',
-              icon: <Printer size={13} />,
-              hint: '⌘P',
-              disabled: noPages,
-              onSelect: onPrint,
             },
             'separator',
             {

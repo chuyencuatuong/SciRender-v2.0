@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Braces, FileText, Redo2, Undo2 } from 'lucide-react';
+import { Braces, FileText, Redo2, Rows2, Undo2 } from 'lucide-react';
 import { CARD_IN, useReducedMotion } from '~/lib/motion';
 import {
   detectKind,
@@ -79,6 +79,19 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
   const undoStack = useRef<CanvasDoc[]>([]);
   const redoStack = useRef<CanvasDoc[]>([]);
   const listRef = useRef<HTMLDivElement | null>(null);
+
+  // Split view: two independently-scrolled panes of the SAME document, one
+  // above the other — for keeping an eye on two places in a long report at
+  // once (the intro while writing the conclusion, say), the way VS Code lets
+  // you split an editor. Both panes share every piece of state above (doc,
+  // selected, undo/redo, shortcuts) — only the scroll position differs, so
+  // there is exactly one undo history and one "selected card" no matter which
+  // pane you last clicked in, never two documents drifting apart.
+  const [splitView, setSplitView] = useState(false);
+  const [splitPct, setSplitPct] = useState(55);
+  const [splitDragging, setSplitDragging] = useState(false);
+  const listRef2 = useRef<HTMLDivElement | null>(null);
+  const splitBoxRef = useRef<HTMLDivElement | null>(null);
 
   // Re-slice only when the source changed somewhere else (open a document,
   // apply an edit from the source view) — never on our own writes, which would
@@ -255,14 +268,16 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
   );
 
   useEffect(() => {
-    const host = listRef.current;
-    if (!host) return;
+    const hosts = [listRef.current, listRef2.current].filter(
+      (h): h is HTMLDivElement => h !== null,
+    );
+    if (!hosts.length) return;
     const handler = (e: ClipboardEvent): void => {
       void smartPaste(e);
     };
-    host.addEventListener('paste', handler);
-    return () => host.removeEventListener('paste', handler);
-  }, [smartPaste]);
+    hosts.forEach((h) => h.addEventListener('paste', handler));
+    return () => hosts.forEach((h) => h.removeEventListener('paste', handler));
+  }, [smartPaste, splitView]);
 
   /* ------------------------------------------------------------- shortcuts */
 
@@ -277,6 +292,14 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
         target instanceof HTMLTextAreaElement ||
         target instanceof HTMLInputElement ||
         target?.isContentEditable === true;
+      // Ctrl+Enter while typing in the document body, the same chord Word uses
+      // to force a page break — App.tsx's global Ctrl+Enter (Render) steps
+      // aside for this exact case, see the comment there.
+      if (typing && mod && e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        insertAt(selected + 1, ':::pagebreak:::');
+        return;
+      }
       if (typing && !e.altKey) return;
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -311,82 +334,45 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
     });
     if (index < 0) return;
     setSelected(index);
-    listRef.current
-      ?.querySelector(`[data-card-index="${index}"]`)
-      ?.scrollIntoView({ block: 'center' });
+    for (const ref of [listRef, listRef2]) {
+      ref.current
+        ?.querySelector(`[data-card-index="${index}"]`)
+        ?.scrollIntoView({ block: 'center' });
+    }
   }, [gotoLine?.nonce]);
 
-  return (
-    <>
-      <div className="flex h-11 shrink-0 items-center gap-1.5 overflow-hidden border-b border-black/[0.045] px-3">
-        <InsertMenu onInsert={(tpl) => insertAt(doc.cards.length, tpl.text)} />
-        <button
-          type="button"
-          onClick={() => setShowFront(true)}
-          title="Thông tin tài liệu — tên nhóm, GVHD, MSSV"
-          className="inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] text-ink-500 transition hover:bg-black/[0.04] hover:text-ink-900"
-        >
-          <FileText size={13} strokeWidth={1.5} /> Thông tin
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowSource(true)}
-          title="Xem mã nguồn Markdown của tài liệu"
-          className="inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] text-ink-500 transition hover:bg-black/[0.04] hover:text-ink-900"
-        >
-          <Braces size={13} strokeWidth={1.5} /> Mã nguồn
-        </button>
+  // Dragging the divider between the two split panes — the same bespoke
+  // mousemove/mouseup pattern App.tsx uses for the editor/preview divider,
+  // just resizing vertically (top-pane height %) instead of horizontally.
+  useEffect(() => {
+    if (!splitDragging) return;
+    const onMove = (e: MouseEvent): void => {
+      const box = splitBoxRef.current;
+      if (!box) return;
+      const rect = box.getBoundingClientRect();
+      const pct = ((e.clientY - rect.top) / rect.height) * 100;
+      setSplitPct(Math.min(80, Math.max(20, pct)));
+    };
+    const onUp = (): void => setSplitDragging(false);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [splitDragging]);
 
-        <div className="ml-auto flex shrink-0 items-center gap-1">
-          {viewSwitch ? (
-            <div
-              role="tablist"
-              aria-label="Khung nhìn"
-              className="mr-1 flex h-[28px] items-center gap-0.5 rounded-[9px] bg-black/[0.05] px-[3px]"
-            >
-              {(['canvas', 'preview'] as const).map((v) => (
-                <button
-                  key={v}
-                  role="tab"
-                  aria-selected={viewSwitch.view === v}
-                  onClick={() => viewSwitch.setView(v)}
-                  className={`h-[22px] rounded-[7px] px-2.5 text-[11.5px] transition ${
-                    viewSwitch.view === v
-                      ? 'bg-white font-medium text-deep-600 shadow-[0_1px_2px_rgba(15,23,42,.08)]'
-                      : 'text-ink-500'
-                  }`}
-                >
-                  {v === 'canvas' ? 'Soạn' : 'Bản in'}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <button
-            type="button"
-            title="Hoàn tác (Ctrl+Z)"
-            aria-label="Hoàn tác"
-            onClick={undo}
-            className="grid h-[26px] w-[26px] place-items-center rounded-[7px] text-ink-400 transition hover:bg-black/[0.04] hover:text-deep-600"
-          >
-            <Undo2 size={13} strokeWidth={1.5} />
-          </button>
-          <button
-            type="button"
-            title="Làm lại (Ctrl+Y)"
-            aria-label="Làm lại"
-            onClick={redo}
-            className="grid h-[26px] w-[26px] place-items-center rounded-[7px] text-ink-400 transition hover:bg-black/[0.04] hover:text-deep-600"
-          >
-            <Redo2 size={13} strokeWidth={1.5} />
-          </button>
-          <span className="ml-1 whitespace-nowrap font-mono text-[10.5px] text-ink-300">
-            {doc.cards.length} khối
-          </span>
-        </div>
-      </div>
-
-      <div ref={listRef} className="sr-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-28 pt-6">
-        <div className="mx-auto max-w-[660px]">
+  // The scrollable card list — one pane's worth of content. Split view mounts
+  // this TWICE (independent scroll containers, independent DOM), both fed the
+  // exact same `doc`/`selected`/handlers, so editing in either pane edits the
+  // one shared document (P1: the canvas is a view, never a second copy).
+  const renderPane = (ref: React.RefObject<HTMLDivElement>): JSX.Element => (
+    <div ref={ref} className="sr-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-28 pt-6">
+      <div className="mx-auto max-w-[660px]">
         <AnimatePresence>
           {coverAdded && coverAdded !== coverNoticeSeen ? (
             <motion.div
@@ -486,8 +472,111 @@ export function CanvasPane({ viewSwitch }: Props): JSX.Element {
             hoặc bấm vào một khối rồi Ctrl+V — app tự nhận dạng ảnh, bảng Excel, LaTeX, code
           </span>
         </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="flex h-11 shrink-0 items-center gap-1.5 overflow-hidden border-b border-black/[0.045] px-3">
+        <InsertMenu onInsert={(tpl) => insertAt(doc.cards.length, tpl.text)} />
+        <button
+          type="button"
+          onClick={() => setShowFront(true)}
+          title="Thông tin tài liệu — tên nhóm, GVHD, MSSV"
+          className="inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] text-ink-500 transition hover:bg-black/[0.04] hover:text-ink-900"
+        >
+          <FileText size={13} strokeWidth={1.5} /> Thông tin
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowSource(true)}
+          title="Xem mã nguồn Markdown của tài liệu"
+          className="inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] text-ink-500 transition hover:bg-black/[0.04] hover:text-ink-900"
+        >
+          <Braces size={13} strokeWidth={1.5} /> Mã nguồn
+        </button>
+        <button
+          type="button"
+          onClick={() => setSplitView((v) => !v)}
+          aria-pressed={splitView}
+          title="Chia đôi khung soạn — xem hai chỗ trong cùng tài liệu cùng lúc"
+          className={`inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] transition ${
+            splitView
+              ? 'bg-deep-50 text-deep-700'
+              : 'text-ink-500 hover:bg-black/[0.04] hover:text-ink-900'
+          }`}
+        >
+          <Rows2 size={13} strokeWidth={1.5} /> Chia đôi
+        </button>
+
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {viewSwitch ? (
+            <div
+              role="tablist"
+              aria-label="Khung nhìn"
+              className="mr-1 flex h-[28px] items-center gap-0.5 rounded-[9px] bg-black/[0.05] px-[3px]"
+            >
+              {(['canvas', 'preview'] as const).map((v) => (
+                <button
+                  key={v}
+                  role="tab"
+                  aria-selected={viewSwitch.view === v}
+                  onClick={() => viewSwitch.setView(v)}
+                  className={`h-[22px] rounded-[7px] px-2.5 text-[11.5px] transition ${
+                    viewSwitch.view === v
+                      ? 'bg-white font-medium text-deep-600 shadow-[0_1px_2px_rgba(15,23,42,.08)]'
+                      : 'text-ink-500'
+                  }`}
+                >
+                  {v === 'canvas' ? 'Soạn' : 'Bản in'}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <button
+            type="button"
+            title="Hoàn tác (Ctrl+Z)"
+            aria-label="Hoàn tác"
+            onClick={undo}
+            className="grid h-[26px] w-[26px] place-items-center rounded-[7px] text-ink-400 transition hover:bg-black/[0.04] hover:text-deep-600"
+          >
+            <Undo2 size={13} strokeWidth={1.5} />
+          </button>
+          <button
+            type="button"
+            title="Làm lại (Ctrl+Y)"
+            aria-label="Làm lại"
+            onClick={redo}
+            className="grid h-[26px] w-[26px] place-items-center rounded-[7px] text-ink-400 transition hover:bg-black/[0.04] hover:text-deep-600"
+          >
+            <Redo2 size={13} strokeWidth={1.5} />
+          </button>
+          <span className="ml-1 whitespace-nowrap font-mono text-[10.5px] text-ink-300">
+            {doc.cards.length} khối
+          </span>
         </div>
       </div>
+
+      {splitView ? (
+        <div ref={splitBoxRef} className="flex min-h-0 flex-1 flex-col">
+          <div style={{ height: `${splitPct}%` }} className="flex min-h-0 flex-col">
+            {renderPane(listRef)}
+          </div>
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Kéo để đổi chiều cao hai khung"
+            onMouseDown={() => setSplitDragging(true)}
+            className="h-[5px] shrink-0 cursor-ns-resize border-y border-black/[0.06] bg-black/[0.03] hover:bg-deep-100"
+          />
+          <div style={{ height: `${100 - splitPct}%` }} className="flex min-h-0 flex-col">
+            {renderPane(listRef2)}
+          </div>
+        </div>
+      ) : (
+        renderPane(listRef)
+      )}
 
       {showSource ? (
         <SourceDialog
