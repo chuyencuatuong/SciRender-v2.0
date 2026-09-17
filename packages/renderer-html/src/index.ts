@@ -1,6 +1,7 @@
-import type { DocumentNode } from '@scirender/ast';
+import { walk, type DocumentNode } from '@scirender/ast';
 import type { AssetMap } from '@scirender/figure-engine';
 import type { TemplateDescriptor } from '@scirender/template-engine';
+import { formatAPAReference, formatIEEEReference } from '@scirender/citation-engine';
 import { renderCoverPages } from './cover.js';
 import { escapeAttr, escapeHtml, safeUrl } from './escape.js';
 import {
@@ -164,9 +165,18 @@ function renderTitleBlock(doc: DocumentNode, t: TemplateDescriptor): string {
 function renderReferences(doc: DocumentNode, t: TemplateDescriptor): string[] {
   const byKey = new Map(doc.meta.bibliography.map((b) => [b.key, b]));
   const authorYearStyle = t.citation.style === 'author-year';
+  const firstCitation = new Map<string, string>();
+  walk(doc, (node) => {
+    if (node.type === 'citation') {
+      node.keys.forEach((key, i) => {
+        if (!firstCitation.has(key)) firstCitation.set(key, `sr-cite-${node.id}-${i}`);
+      });
+    }
+    return undefined;
+  });
+
   const ordered = authorYearStyle
-    ? // Author-year lists are alphabetical, not in order of first citation.
-      [...doc.meta.bibliography]
+    ? [...doc.meta.bibliography]
         .sort((a, b) =>
           `${a.authors ?? ''}|${a.year ?? ''}`.localeCompare(
             `${b.authors ?? ''}|${b.year ?? ''}`,
@@ -178,36 +188,40 @@ function renderReferences(doc: DocumentNode, t: TemplateDescriptor): string[] {
         ...doc.citationOrder,
         ...doc.meta.bibliography.map((b) => b.key).filter((k) => !doc.citationOrder.includes(k)),
       ];
+
   const items = ordered
     .map((key, i) => {
       const e = byKey.get(key);
       if (!e) return '';
-      const bits: string[] = [];
+      const anchor = `sr-ref-${encodeURIComponent(key)}`;
+      const back = firstCitation.get(key);
+      let body: string;
       if (t.citation.references === 'ieee') {
-        if (e.authors) bits.push(escapeHtml(e.authors));
-        if (e.title) bits.push(`"${escapeHtml(e.title)}"`);
-        if (e.source) bits.push(`<em>${escapeHtml(e.source)}</em>`);
-        if (e.volume) bits.push(`vol. ${escapeHtml(e.volume)}`);
-        if (e.pages) bits.push(`pp. ${escapeHtml(e.pages)}`);
-        if (e.year) bits.push(escapeHtml(String(e.year)));
+        body = formatIEEEReference(e, i + 1);
+      } else if (t.citation.references === 'apa') {
+        body = formatAPAReference(e);
       } else {
-        // APA-ish, matching the faculty sample: Tác giả (năm). Tên. Nguồn.
-        if (e.authors) bits.push(escapeHtml(e.authors));
-        if (e.year) bits.push(`(${escapeHtml(String(e.year))})`);
-        if (e.title) bits.push(`<em>${escapeHtml(e.title)}</em>`);
-        if (e.source) bits.push(escapeHtml(e.source));
-        if (e.volume) bits.push(`Tập ${escapeHtml(e.volume)}`);
-        if (e.pages) bits.push(`tr. ${escapeHtml(e.pages)}`);
+        const bits: string[] = [];
+        if (e.authors) bits.push(e.authors);
+        if (e.year) bits.push(String(e.year));
+        if (e.title) bits.push(e.title);
+        if (e.source) bits.push(e.source);
+        if (e.volume) bits.push(`vol. ${e.volume}`);
+        if (e.pages) bits.push(`pp. ${e.pages}`);
+        if (e.doi) bits.push(`doi: ${e.doi}`);
+        body = bits.join('. ') + (bits.length ? '.' : '');
       }
-      if (e.doi) bits.push(`DOI: ${escapeHtml(e.doi)}`);
-      else if (e.url) {
+      if (e.url && !e.doi) {
         const u = safeUrl(e.url);
-        if (u) bits.push(`<a href="${escapeAttr(u)}" rel="noreferrer noopener">${escapeHtml(u)}</a>`);
+        if (u) body += ` ${u}`;
       }
-      const marker = authorYearStyle ? '' : `<span>[${i + 1}]</span>`;
-      return `<li class="sr-reference-item${
+      const numberedPrefix = authorYearStyle || t.citation.references === 'ieee' ? '' : `<span>[${i + 1}]</span>`;
+      const backLink = back
+        ? `<a class="sr-reference-back" href="#${escapeAttr(back)}" title="Quay lại vị trí trích dẫn">↩</a>`
+        : '';
+      return `<li id="${escapeAttr(anchor)}" class="sr-reference-item${
         authorYearStyle ? ' sr-reference-hanging' : ''
-      }">${marker}<span>${bits.join('. ')}.</span></li>`;
+      }">${numberedPrefix}<span>${escapeHtml(body)}</span>${backLink}</li>`;
     })
     .filter(Boolean);
 

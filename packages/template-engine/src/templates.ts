@@ -181,7 +181,7 @@ export const HCMUT_BTL: TemplateDescriptor = {
     style: 'numeric',
     open: '[',
     close: ']',
-    references: 'apa',
+    references: 'ieee',
     and: 'và',
     etAl: 'và cs.',
   },

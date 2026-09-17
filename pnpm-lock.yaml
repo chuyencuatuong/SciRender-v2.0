@@ -23,6 +23,9 @@ importers:
       '@scirender/ast':
         specifier: workspace:*
         version: link:../../packages/ast
+      '@scirender/citation-engine':
+        specifier: workspace:*
+        version: link:../../packages/citation-engine
       '@scirender/figure-engine':
         specifier: workspace:*
         version: link:../../packages/figure-engine
@@ -136,6 +139,12 @@ importers:
         specifier: 0.16.7
         version: 0.16.7
 
+  packages/citation-engine:
+    dependencies:
+      '@scirender/ast':
+        specifier: workspace:*
+        version: link:../ast
+
   packages/figure-engine:
     dependencies:
       '@scirender/ast':
@@ -203,6 +212,9 @@ importers:
       '@scirender/ast':
         specifier: workspace:*
         version: link:../ast
+      '@scirender/citation-engine':
+        specifier: workspace:*
+        version: link:../citation-engine
       '@scirender/equation-engine':
         specifier: workspace:*
         version: link:../equation-engine

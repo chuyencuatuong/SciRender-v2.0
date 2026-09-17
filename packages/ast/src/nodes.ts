@@ -289,6 +289,8 @@ export interface Author {
 
 export interface BibEntry {
   key: string;
+  /** BibTeX entry type, e.g. article, book, inproceedings. */
+  type?: string;
   authors?: string;
   title?: string;
   year?: string | number;

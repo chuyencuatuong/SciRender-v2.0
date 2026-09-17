@@ -177,6 +177,8 @@ function normaliseBibliography(v: unknown, diagnostics: Diagnostic[]): BibEntry[
     }
     seen.add(key);
     const e: BibEntry = { key };
+    const type = str(o.type);
+    if (type) e.type = type.toLowerCase();
     const authors = str(o.authors) ?? str(o.author);
     if (authors) e.authors = authors;
     const title = str(o.title);

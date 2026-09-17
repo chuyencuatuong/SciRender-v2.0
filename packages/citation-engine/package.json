@@ -1,0 +1,15 @@
+{
+  "name": "@scirender/citation-engine",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Dependency-free BibTeX parsing, citation formatting and bibliography serialization.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@scirender/ast": "workspace:*"
+  }
+}

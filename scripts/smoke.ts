@@ -59,6 +59,14 @@ import {
   type TableForm,
 } from '../apps/web/src/lib/card-forms.js';
 import { SAMPLE_DOCUMENT } from '../apps/web/src/lib/sample.js';
+import {
+  formatAPAReference,
+  formatAuthorYear,
+  formatCitationCluster,
+  formatIEEEReference,
+  mergeBibliographyFrontMatter,
+  parseBibTeX,
+} from '../packages/citation-engine/src/index.js';
 
 let failures = 0;
 let checks = 0;
@@ -142,7 +150,7 @@ check('chú thích canh giữa, cùng cỡ chữ nội dung', t.captions.align =
 check('phần đầu đánh số i, ii, iii', t.layout.frontPageNumbers === 'roman-lower');
 check('nội dung đánh số 1, 2, 3', t.layout.bodyPageNumbers === 'arabic');
 check('hình/bảng đánh số theo chương', t.numbering.figures === 'section' && t.numbering.tables === 'section');
-check('trích dẫn kiểu số, kiểu APA', t.citation.style === 'numeric' && t.citation.references === 'apa');
+check('trích dẫn kiểu số, kiểu IEEE', t.citation.style === 'numeric' && t.citation.references === 'ieee');
 
 section('Số trang La Mã');
 check('1 -> i', formatPageNumber(1, 'roman-lower') === 'i');
@@ -506,6 +514,42 @@ check('danh mục author-year không đánh số [n]',
 const numHtml = compile(BIB).rendered.html;
 check('kiểu numeric vẫn ra [1] [2] [3]',
   numHtml.includes('[1]') && numHtml.includes('[2]') && numHtml.includes('[3]'));
+
+
+/* -------------------------------------------------------------- BibTeX */
+
+section('BibTeX & Citation Manager');
+
+const BIBTEX = `@article{nguyen2025,
+  author = {Nguyen Van A and Tran Thi B},
+  title = {A {Robust} Test},
+  year = {2025},
+  journal = {IEEE Transactions on Things},
+  volume = {12},
+  pages = {1--9},
+  doi = {10.1234/test}
+}
+@inproceedings{vaswani2017,
+  author = {Ashish Vaswani and Noam Shazeer and Niki Parmar},
+  title = {Attention is All You Need},
+  year = 2017,
+  booktitle = {NeurIPS}
+}`;
+const bibParsed = parseBibTeX(BIBTEX);
+check('BibTeX parser đọc đúng 2 entry', bibParsed.entries.length === 2, String(bibParsed.entries.length));
+check('BibTeX tách tác giả theo \'and\'', bibParsed.entries[0]?.authors === 'Nguyen Van A; Tran Thi B');
+check('BibTeX ánh xạ journal -> source', bibParsed.entries[0]?.source === 'IEEE Transactions on Things');
+check('BibTeX giữ DOI', bibParsed.entries[0]?.doi === '10.1234/test');
+const bibNumbers = new Map([['vaswani2017', 1], ['nguyen2025', 2]]);
+check('citation cluster IEEE', formatCitationCluster(bibParsed.entries, ['vaswani2017', 'nguyen2025'], 'ieee', bibNumbers) === '[1, 2]');
+check('citation APA', formatCitationCluster(bibParsed.entries, ['vaswani2017'], 'apa', bibNumbers) === '(Vaswani et al., 2017)');
+check('APA family name lấy họ', formatAuthorYear(bibParsed.entries[0]) === 'A & B, 2025' && formatAuthorYear(bibParsed.entries[1]) === 'Vaswani et al., 2017');
+check('IEEE bibliography có prefix số', formatIEEEReference(bibParsed.entries[0]!, 2).startsWith('[2]'));
+check('APA bibliography có năm', formatAPAReference(bibParsed.entries[1]).includes('(2017)'));
+const mergedBib = mergeBibliographyFrontMatter('# T\n\nNội dung [@nguyen2025].', bibParsed.entries);
+check('import BibTeX tự tạo frontmatter', mergedBib.startsWith('---\nbibliography:'));
+check('frontmatter chứa đủ citation key', mergedBib.includes('key: \"nguyen2025\"') && mergedBib.includes('key: \"vaswani2017\"'));
+
 
 /* ------------------------------------------------------- cross-ref mã nguồn */
 

@@ -386,6 +386,10 @@ ${
 .sr-doc a{color:var(--sr-accent);text-decoration:none;}
 .sr-doc .katex{font-size:1.02em;}
 .sr-doc .katex-display{margin:0;}
+
+.sr-doc .sr-citation-link,.sr-doc .sr-reference-back{color:var(--sr-accent);text-decoration:none;}
+.sr-doc .sr-citation-link:hover,.sr-doc .sr-reference-back:hover{text-decoration:underline;}
+.sr-doc .sr-reference-back{margin-left:.45em;font-size:.82em;white-space:nowrap;}
 `;
 }
 

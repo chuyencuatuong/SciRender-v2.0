@@ -246,7 +246,7 @@
     "style": "numeric",
     "open": "[",
     "close": "]",
-    "references": "apa"
+    "references": "ieee"
   },
   "colors": {
     "text": "#000000",

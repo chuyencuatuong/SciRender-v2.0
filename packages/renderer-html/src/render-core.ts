@@ -63,7 +63,9 @@ function inlineOne(node: InlineNode, t: TemplateDescriptor): string {
         if (shown == null) {
           return `<span class="sr-unresolved" title="Không có trong danh mục tham khảo">${escapeHtml(key)}</span>`;
         }
-        return escapeHtml(String(shown));
+        const anchor = `sr-ref-${encodeURIComponent(key)}`;
+        const citeId = `sr-cite-${node.id}-${i}`;
+        return `<a id="${escapeAttr(citeId)}" class="sr-citation-link" href="#${escapeAttr(anchor)}" title="Đi tới tài liệu tham khảo">${escapeHtml(String(shown))}</a>`;
       });
       const open = authorYearStyle ? '(' : t.citation.open;
       const close = authorYearStyle ? ')' : t.citation.close;
