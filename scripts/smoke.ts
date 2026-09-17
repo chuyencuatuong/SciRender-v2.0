@@ -10,6 +10,8 @@
  * `scripts/browser-check.mjs`.
  */
 import { analyse } from '../packages/intelligence/src/index.js';
+import { runPreSubmissionAudit } from '../packages/intelligence/src/pre-submission-audit.js';
+
 import { descriptiveStats, evaluateGrid, linearRegression, quadraticRegression } from '../packages/table-engine/src/index.js';
 import { renderChartSvg, svgDataUri } from '../packages/figure-engine/src/chart.js';
 import { parse } from '../packages/parser/src/index.js';
@@ -954,4 +956,42 @@ if (failures) {
   process.exit(1);
 }
 console.log('Toàn bộ kiểm tra đạt.');
+
+section('Pre-submission Audit & Consistency Checker');
+const auditSource = `---
+title: Audit demo
+abstract: Tóm tắt demo.
+bibliography:
+  - key: used2026
+    authors: "Nguyen; Tran"
+    title: "Used"
+    year: "2026"
+  - key: unused2025
+    authors: "Le"
+    title: "Unused"
+    year: "2025"
+---
+# CHƯƠNG 1: Mở đầu {#sec:intro}
+### Nhảy cấp
+Nội dung [@used2026] @fig:missing.\n\n![x](asset:x)\n: Figure demo {#fig:demo}\n\n# Chương 2: Kết luận\n\nNhiệt độ 10 m/s2 và 11 m/s²; R = 5 Ohm = 5 Ω.`;
+const auditParsed = parse(auditSource);
+const auditBase = findTemplate('hcmut-btl');
+const auditTemplate = resolveTemplate(auditBase);
+const auditNumbering = assignNumbers(auditParsed.document, auditTemplate.descriptor);
+const auditDiagnostics = [...auditParsed.diagnostics, ...auditNumbering.diagnostics, ...validate(auditParsed.document, { assets: ASSETS })];
+const audit = runPreSubmissionAudit(
+  auditParsed.document,
+  auditDiagnostics,
+  {
+    tocEnabled: auditTemplate.descriptor.frontMatter.sections.some((x) => x.kind === 'toc' && x.enabled),
+    pageBudget: auditTemplate.descriptor.layout.pageBudget,
+  },
+  { pages: 5, bodyPages: 5, warnings: [] },
+);
+check('audit phát hiện tham chiếu chéo bị gãy', audit.checks.some((x) => x.code === 'AUD-A002' && x.severity === 'error'));
+check('audit phát hiện hình/bảng mồ côi', audit.checks.some((x) => x.code === 'AUD-A001' && x.severity === 'warning'));
+check('audit phát hiện BibTeX chưa dùng', audit.checks.some((x) => x.code === 'AUD-A004' && x.severity === 'warning'));
+check('audit phát hiện nhảy cấp heading', audit.checks.some((x) => x.code === 'AUD-B002' && x.severity === 'warning'));
+check('audit phát hiện chapter casing không nhất quán', audit.checks.some((x) => x.code === 'AUD-C002' && x.severity === 'warning'));
+check('audit phát hiện đơn vị không nhất quán', audit.checks.some((x) => x.code === 'AUD-C003' && x.severity === 'warning'));
 

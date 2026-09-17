@@ -434,3 +434,5 @@ function clamp(n: number, lo: number, hi: number): number {
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
+
+export * from './pre-submission-audit.js';
