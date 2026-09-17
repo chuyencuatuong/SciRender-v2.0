@@ -23,7 +23,7 @@ import { InsertMenu } from './InsertMenu';
 import { SourceDialog } from './SourceDialog';
 import { FrontMatterDialog } from './FrontMatterDialog';
 import { ChartDialog } from './ChartDialog';
-import { parseTable } from '~/lib/card-forms';
+import { parseTable, serializeFigure } from '~/lib/card-forms';
 
 let seq = 0;
 const nextId = (): string => `card-new-${seq++}`;
@@ -60,6 +60,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   const docId = useStore((s) => s.docId);
   const setSource = useStore((s) => s.setSource);
   const addAssets = useStore((s) => s.addAssets);
+  const addGeneratedAsset = useStore((s) => s.addGeneratedAsset);
   const gotoLine = useStore((s) => s.gotoLine);
   const coverAdded = useStore((s) => s.coverAdded);
   const insertBlockRequest = useStore((s) => s.insertBlockRequest);
@@ -658,8 +659,16 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
               form={form}
               defaultLabel={chartRequest.label}
               onClose={() => setChartRequest(null)}
-              onCreate={(markdown, label) => {
-                insertAt(chartRequest.index + 1, markdown, label);
+              onCreate={async (svg, meta) => {
+                const safeBase = meta.label.replace(/^fig:/, '') || `chart-${chartRequest.index + 1}`;
+                const assetName = await addGeneratedAsset(svg, `chart-${safeBase}.svg`, 'image/svg+xml');
+                const markdown = serializeFigure({
+                  alt: meta.caption,
+                  src: `asset:${assetName}`,
+                  label: meta.label,
+                  width: meta.width,
+                });
+                insertAt(chartRequest.index + 1, markdown, meta.label);
                 setChartRequest(null);
               }}
             />

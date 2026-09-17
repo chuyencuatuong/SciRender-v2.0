@@ -95,6 +95,8 @@ export interface AppState {
   removeDocument: (id: string) => Promise<void>;
   /** Stores the files and returns the asset names they got. */
   addAssets: (files: FileList | File[]) => Promise<string[]>;
+  /** Stores an internally generated binary asset (e.g. SVG chart) in IndexedDB. */
+  addGeneratedAsset: (content: string | Blob, preferredName: string, mime?: string) => Promise<string>;
   removeAsset: (id: string) => Promise<void>;
   requestGotoLine: (line: number) => void;
   /** Remembers which block template was just inserted, for "Hay dùng". */
@@ -373,6 +375,34 @@ export const useStore = create<AppState>((set, get) => ({
     revokeAssets = revoke;
     set({ assets, assetMap: merged });
     return added;
+  },
+
+  async addGeneratedAsset(content, preferredName, mime = 'application/octet-stream') {
+    const { docId } = get();
+    const existingNames = new Set(get().assets.map((a) => a.name));
+    const baseName = assetNameFromFile(preferredName.endsWith('.svg') ? preferredName : `${preferredName}.svg`);
+    let name = baseName;
+    let n = 2;
+    while (existingNames.has(name)) name = `${baseName}-${n++}`;
+
+    const blob = content instanceof Blob ? content : new Blob([content], { type: mime });
+    await putAsset({
+      id: newId('asset'),
+      docId,
+      name,
+      mime: blob.type || mime,
+      size: blob.size,
+      blob,
+      createdAt: Date.now(),
+    });
+
+    const assets = await listAssets(docId);
+    revokeAssets?.();
+    const { map, revoke } = toAssetMap(assets);
+    revokeAssets = revoke;
+    set({ assets, assetMap: { ...BUILTIN_ASSETS, ...map } });
+    track('asset.generated', { bytes: blob.size, mime: blob.type || mime });
+    return name;
   },
 
   async removeAsset(id) {

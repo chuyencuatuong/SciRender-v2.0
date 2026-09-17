@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { descriptiveStats, evaluateGrid, linearRegression, parseNumber, quadraticRegression } from '@scirender/table-engine';
-import { renderChartSvg, svgDataUri, type ChartKind, type RegressionKind } from '@scirender/figure-engine';
-import { serializeFigure, type TableForm } from '~/lib/card-forms';
+import { renderChartSvg, type ChartKind, type RegressionKind } from '@scirender/figure-engine';
+import type { TableForm } from '~/lib/card-forms';
 
 interface Props {
   form: TableForm;
   defaultLabel: string;
   onClose: () => void;
-  onCreate: (markdown: string, label: string) => void;
+  onCreate: (svg: string, meta: { caption: string; label: string; width: string }) => void | Promise<void>;
 }
 
 export function ChartDialog({ form, defaultLabel, onClose, onCreate }: Props): JSX.Element {
@@ -23,6 +23,7 @@ export function ChartDialog({ form, defaultLabel, onClose, onCreate }: Props): J
   const [yLabel, setYLabel] = useState(form.header[yIndex] ?? 'Y');
   const [caption, setCaption] = useState(`Đồ thị ${form.header[yIndex] ?? 'Y'} theo ${form.header[xIndex] ?? 'X'}`);
   const [label, setLabel] = useState(defaultLabel);
+  const [creating, setCreating] = useState(false);
 
   const evaluated = useMemo(() => evaluateGrid({ header: form.header, rows: form.rows }), [form]);
 
@@ -71,16 +72,16 @@ export function ChartDialog({ form, defaultLabel, onClose, onCreate }: Props): J
     [analysis.bars, analysis.points, effectiveRegression, kind, showGrid, showR2, title, xLabel, yLabel],
   );
 
-  const create = (): void => {
+  const create = async (): Promise<void> => {
+    if (creating) return;
     const cleanLabel = label.trim().replace(/^#/, '');
     const cleanCaption = caption.trim() || `Đồ thị ${yLabel || 'Y'} theo ${xLabel || 'X'}`;
-    const markdown = serializeFigure({
-      alt: cleanCaption,
-      src: svgDataUri(svg),
-      label: cleanLabel,
-      width: '100%',
-    });
-    onCreate(markdown, cleanLabel);
+    setCreating(true);
+    try {
+      await onCreate(svg, { caption: cleanCaption, label: cleanLabel, width: '100%' });
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -194,8 +195,8 @@ export function ChartDialog({ form, defaultLabel, onClose, onCreate }: Props): J
 
         <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-ink-200 px-4 py-3">
           <button type="button" onClick={onClose} className="rounded-lg px-3 py-1.5 text-[12px] text-ink-500 hover:bg-ink-100">Hủy</button>
-          <button type="button" onClick={create} disabled={!label.trim() || (kind !== 'bar' && analysis.points.length < 2) || (kind === 'bar' && analysis.bars.length === 0) || (regressionKind !== 'none' && !effectiveRegression)} className="rounded-lg bg-deep-600 px-3.5 py-1.5 text-[12px] font-medium text-white transition hover:bg-deep-700 disabled:cursor-not-allowed disabled:opacity-45">
-            Chèn Hình SVG vào tài liệu
+          <button type="button" onClick={() => void create()} disabled={creating || !label.trim() || (kind !== 'bar' && analysis.points.length < 2) || (kind === 'bar' && analysis.bars.length === 0) || (regressionKind !== 'none' && !effectiveRegression)} className="rounded-lg bg-deep-600 px-3.5 py-1.5 text-[12px] font-medium text-white transition hover:bg-deep-700 disabled:cursor-not-allowed disabled:opacity-45">
+            {creating ? 'Đang lưu SVG…' : 'Chèn Hình SVG vào tài liệu'}
           </button>
         </footer>
       </div>
