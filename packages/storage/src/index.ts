@@ -162,13 +162,30 @@ export const DEFAULT_PREFERENCES: Preferences = {
   recentBlocks: [],
 };
 
+/**
+ * First-ever load (no `theme` key saved yet — the field existed but was never
+ * wired to any UI before Đợt 8) follows the OS's own light/dark setting
+ * instead of always forcing Sáng; once the person picks a theme themselves
+ * that explicit choice is what gets saved and always wins from then on.
+ */
+function systemTheme(): Preferences['theme'] {
+  try {
+    return typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
 export function loadPreferences(): Preferences {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
-    if (!raw) return { ...DEFAULT_PREFERENCES };
-    return { ...DEFAULT_PREFERENCES, ...(JSON.parse(raw) as Partial<Preferences>) };
+    const saved = raw ? (JSON.parse(raw) as Partial<Preferences>) : {};
+    return { ...DEFAULT_PREFERENCES, ...saved, theme: saved.theme ?? systemTheme() };
   } catch {
-    return { ...DEFAULT_PREFERENCES };
+    return { ...DEFAULT_PREFERENCES, theme: systemTheme() };
   }
 }
 
