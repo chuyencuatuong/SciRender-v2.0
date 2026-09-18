@@ -3,6 +3,7 @@ import { injectSvgAcademicFont } from '@scirender/figure-engine';
 
 let loader: Promise<typeof import('mermaid').default> | null = null;
 let seq = 0;
+const MAX_MERMAID_CACHE = 96;
 const cache = new Map<string, string>();
 let configuredKey = '';
 
@@ -183,6 +184,10 @@ export async function resolveMermaidBlocks(
       svg = `<div class="sr-unknown">Lỗi sơ đồ Mermaid: ${escapeHtml((err as Error).message)}</div>`;
     }
     cache.set(key, svg);
+    if (cache.size > MAX_MERMAID_CACHE) {
+      const oldest = cache.keys().next().value as string | undefined;
+      if (oldest) cache.delete(oldest);
+    }
     return svg;
   };
 

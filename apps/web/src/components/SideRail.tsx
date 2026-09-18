@@ -61,7 +61,7 @@ export function SideRail(): JSX.Element {
                 {errors}
               </span>
             ) : null}
-            <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 translate-x-[-4px] whitespace-nowrap rounded-[7px] bg-[#1e222d] px-2 py-1 text-[11px] text-white border border-white/10 shadow-xl opacity-0 transition-[transform,opacity] duration-150 group-hover:translate-x-0 group-hover:opacity-100">
+            <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 translate-x-[-4px] whitespace-nowrap rounded-[7px] bg-[var(--sr-panel)] px-2 py-1 text-[11px] text-white border border-white/10 shadow-xl opacity-0 transition-[transform,opacity] duration-150 group-hover:translate-x-0 group-hover:opacity-100">
               {label}
             </span>
           </button>

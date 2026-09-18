@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Braces, Columns2, FileText, Redo2, Undo2 } from 'lucide-react';
 import { CARD_IN, useReducedMotion } from '~/lib/motion';
@@ -49,6 +49,25 @@ interface Drag {
   zone: DropZone | null;
 }
 
+type CardActions = {
+  select: (index: number) => void;
+  doubleClick: (index: number) => void;
+  change: (index: number, text: string) => void;
+  move: (index: number, delta: number) => void;
+  duplicate: (index: number) => void;
+  delete: (index: number) => void;
+  chart: (index: number) => void;
+  unmerge: (index: number) => void;
+  toggleLandscape: (index: number) => void;
+  mergeNext: (index: number) => void;
+  dragStart: (index: number) => void;
+  dragEnd: () => void;
+  dragOver: (index: number, zone: DropZone) => void;
+  drop: () => void;
+  undoRecognition: () => void;
+  saveDiagramAsset: (index: number, svg: string, label: string) => Promise<string>;
+};
+
 /**
  * The block canvas — the document as a column of cards.
  *
@@ -58,8 +77,7 @@ interface Drag {
  * canvas from drifting away from what gets printed (P1, P3).
  */
 export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
-  const source = useStore((s) => s.source);
-  const docId = useStore((s) => s.docId);
+  const initialStore = useStore.getState();
   const setSource = useStore((s) => s.setSource);
   const addAssets = useStore((s) => s.addAssets);
   const addGeneratedAsset = useStore((s) => s.addGeneratedAsset);
@@ -71,7 +89,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   const [coverNoticeSeen, setCoverNoticeSeen] = useState<number | null>(null);
   const labels = render.result?.document.labels;
 
-  const [doc, setDoc] = useState<CanvasDoc>(() => toCards(source));
+  const [doc, setDoc] = useState<CanvasDoc>(() => toCards(initialStore.source));
   const [selected, setSelected] = useState(0);
   const [flashCardId, setFlashCardId] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -95,7 +113,8 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   const [deleteConfirmIndex, setDeleteConfirmIndex] = useState<number | null>(null);
 
   const reduced = useReducedMotion();
-  const mine = useRef(source);
+  const mine = useRef(initialStore.source);
+  const mineDocId = useRef(initialStore.docId);
   const undoStack = useRef<CanvasDoc[]>([]);
   const redoStack = useRef<CanvasDoc[]>([]);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -120,12 +139,17 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   // apply an edit from the source view) — never on our own writes, which would
   // rebuild every card mid-keystroke.
   useEffect(() => {
-    if (source === mine.current) return;
-    mine.current = source;
-    setDoc(toCards(source));
-    undoStack.current = [];
-    redoStack.current = [];
-  }, [source, docId]);
+    return useStore.subscribe((state) => {
+      if (state.source === mine.current && state.docId === mineDocId.current) return;
+      mine.current = state.source;
+      mineDocId.current = state.docId;
+      setDoc(toCards(state.source));
+      undoStack.current = [];
+      redoStack.current = [];
+      setSelected(0);
+      setActiveBlockId(null);
+    });
+  }, [setActiveBlockId]);
 
   const selectCard = useCallback((index: number): void => {
     const next = Math.max(0, Math.min(index, doc.cards.length - 1));
@@ -343,7 +367,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
       return;
     }
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const hasReferences = new RegExp(`@${escaped}(?![\\w:-])`).test(source);
+    const hasReferences = new RegExp(`@${escaped}(?![\\w:-])`).test(mine.current);
     if (hasReferences) {
       setDeleteConfirmIndex(index);
       selectCard(index);
@@ -843,6 +867,52 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   }, [splitDragging]);
 
 
+  const cardActionsRef = useRef<CardActions | null>(null);
+  cardActionsRef.current = {
+    select: selectCard,
+    doubleClick: (index) => window.dispatchEvent(new CustomEvent('sr:preview-focus', { detail: { id: doc.cards[index]?.id } })),
+    change: updateCard,
+    move: moveBy,
+    duplicate: duplicateAt,
+    delete: requestDelete,
+    chart: requestChart,
+    unmerge,
+    toggleLandscape: (index) => {
+      const card = doc.cards[index];
+      if (!card) return;
+      const landscape = /\b(?:landscape|orientation=landscape)\b/.test(card.text);
+      const next = landscape
+        ? card.text.replace(/\s+(?:landscape|orientation=landscape)/, '')
+        : card.text.replace(/^::: cols\b/, '::: cols landscape');
+      updateCard(index, next, 'columns');
+    },
+    mergeNext: (index) => mergeColumns(index, index + 1),
+    dragStart: (index) => {
+      stopDragAutoScroll();
+      setDragBoth({ from: index, over: null, zone: null });
+    },
+    dragEnd: () => {
+      stopDragAutoScroll();
+      setDragBoth(null);
+    },
+    dragOver: (index, zone) => {
+      const d = dragRef.current;
+      if (d) setDragBoth({ ...d, over: index, zone });
+    },
+    drop: onDrop,
+    undoRecognition: () => {
+      const current = recognised;
+      if (!current) return;
+      const at = doc.cards.findIndex((c) => c.id === current.id);
+      if (at >= 0) updateCard(at, current.raw);
+      setRecognised(null);
+    },
+    saveDiagramAsset: async (index, svg, label) => {
+      const safe = label.replace(/^dia:/, '') || `diagram-${index + 1}`;
+      return addGeneratedAsset(svg, `diagram-${safe}.svg`, 'image/svg+xml');
+    },
+  };
+
   // The scrollable card list — one pane's worth of content. Split view mounts
   // this TWICE (independent scroll containers, independent DOM), both fed the
   // exact same `doc`/`selected`/handlers, so editing in either pane edits the
@@ -922,7 +992,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
                 transition={CARD_IN.transition}
                 className="relative mb-2.5"
               >
-                <CardShell
+                <CanvasCard
                   card={card}
                   index={index}
                   total={doc.cards.length}
@@ -932,33 +1002,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
                   recognised={recognised?.id === card.id ? recognised.label : null}
                   labels={labels}
                   bibliography={render.result?.document.meta.bibliography}
-                  onSelect={() => selectCard(index)}
-                  onDoubleClick={() => window.dispatchEvent(new CustomEvent('sr:preview-focus', { detail: { id: card.id } }))}
-                  onChange={(text) => updateCard(index, text)}
-                  onMove={(delta) => moveBy(index, delta)}
-                  onDuplicate={() => duplicateAt(index)}
-                  onDelete={() => requestDelete(index)}
-                  onCreateChart={card.kind === 'table' ? () => requestChart(index) : undefined}
-                  onUnmerge={() => unmerge(index)}
-                  onToggleLandscape={card.kind === 'columns' ? () => { const landscape = /\b(?:landscape|orientation=landscape)\b/.test(card.text); const next = landscape ? card.text.replace(/\s+(?:landscape|orientation=landscape)/, '') : card.text.replace(/^::: cols\b/, '::: cols landscape'); updateCard(index, next, 'columns'); } : undefined}
-                  onMergeWithNext={() => mergeColumns(index, index + 1)}
-                  onDragStart={() => { stopDragAutoScroll(); setDragBoth({ from: index, over: null, zone: null }); }}
-                  onDragEnd={() => { stopDragAutoScroll(); setDragBoth(null); }}
-                  onDragOver={(zone) => {
-                    const d = dragRef.current;
-                    if (d) setDragBoth({ ...d, over: index, zone });
-                  }}
-                  onDrop={onDrop}
-                  onSaveDiagramAsset={async (svg, label) => {
-                    const safe = label.replace(/^dia:/, '') || `diagram-${index + 1}`;
-                    return addGeneratedAsset(svg, `diagram-${safe}.svg`, 'image/svg+xml');
-                  }}
-                  onUndoRecognition={() => {
-                    if (!recognised) return;
-                    const at = doc.cards.findIndex((c) => c.id === recognised.id);
-                    if (at >= 0) updateCard(at, recognised.raw);
-                    setRecognised(null);
-                  }}
+                  actionsRef={cardActionsRef}
                 />
                 {deleteConfirmIndex === index ? (
                   <div className="absolute right-2 top-[-8px] z-40 w-[min(360px,90vw)] -translate-y-full rounded-xl border border-flag-200 bg-[var(--sr-surface)] p-3 shadow-xl">
@@ -990,7 +1034,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
         </AnimatePresence>
 
         {pasteToast ? (
-          <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-xl border border-white/10 bg-[#161922]/95 px-3 py-2 text-[11px] text-white shadow-2xl backdrop-blur-md">
+          <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-xl border border-white/10 bg-[var(--sr-panel)] px-3 py-2 text-[11px] text-white shadow-2xl backdrop-blur-md">
             <span>{pasteToast.label}</span> <button type="button" onClick={undo} className="ml-2 font-medium text-sky-300 hover:text-sky-200">Hoàn tác</button>
           </div>
         ) : null}
@@ -1165,3 +1209,79 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     </>
   );
 }
+
+type CanvasCardProps = {
+  card: Card;
+  index: number;
+  total: number;
+  selected: boolean;
+  flash: boolean;
+  dropZone: DropZone | null;
+  recognised: string | null;
+  labels?: Record<string, import('@scirender/ast').LabelRecord>;
+  bibliography?: import('@scirender/ast').BibEntry[];
+  actionsRef: MutableRefObject<CardActions | null>;
+};
+
+const CanvasCard = memo(function CanvasCard({
+  card,
+  index,
+  total,
+  selected,
+  flash,
+  dropZone,
+  recognised,
+  labels,
+  bibliography,
+  actionsRef,
+}: CanvasCardProps): JSX.Element {
+  const handlers = useMemo(() => ({
+    onSelect: () => actionsRef.current?.select(index),
+    onDoubleClick: () => actionsRef.current?.doubleClick(index),
+    onChange: (text: string) => actionsRef.current?.change(index, text),
+    onMove: (delta: number) => actionsRef.current?.move(index, delta),
+    onDuplicate: () => actionsRef.current?.duplicate(index),
+    onDelete: () => actionsRef.current?.delete(index),
+    onCreateChart: card.kind === 'table' ? () => actionsRef.current?.chart(index) : undefined,
+    onUnmerge: () => actionsRef.current?.unmerge(index),
+    onToggleLandscape: card.kind === 'columns' ? () => actionsRef.current?.toggleLandscape(index) : undefined,
+    onMergeWithNext: () => actionsRef.current?.mergeNext(index),
+    onDragStart: () => actionsRef.current?.dragStart(index),
+    onDragEnd: () => actionsRef.current?.dragEnd(),
+    onDragOver: (zone: DropZone) => actionsRef.current?.dragOver(index, zone),
+    onDrop: () => actionsRef.current?.drop(),
+    onSaveDiagramAsset: async (svg: string, label: string) => actionsRef.current?.saveDiagramAsset(index, svg, label) ?? '',
+    onUndoRecognition: () => actionsRef.current?.undoRecognition(),
+  }), [actionsRef, index, card.kind]);
+
+  return (
+    <CardShell
+      card={card}
+      index={index}
+      total={total}
+      selected={selected}
+      flash={flash}
+      dropZone={dropZone}
+      recognised={recognised}
+      labels={labels}
+      bibliography={bibliography}
+      onSelect={handlers.onSelect}
+      onDoubleClick={handlers.onDoubleClick}
+      onChange={handlers.onChange}
+      onMove={handlers.onMove}
+      onDuplicate={handlers.onDuplicate}
+      onDelete={handlers.onDelete}
+      onCreateChart={handlers.onCreateChart}
+      onUnmerge={handlers.onUnmerge}
+      onToggleLandscape={handlers.onToggleLandscape}
+      onMergeWithNext={handlers.onMergeWithNext}
+      onDragStart={handlers.onDragStart}
+      onDragEnd={handlers.onDragEnd}
+      onDragOver={handlers.onDragOver}
+      onDrop={handlers.onDrop}
+      onSaveDiagramAsset={handlers.onSaveDiagramAsset}
+      onUndoRecognition={handlers.onUndoRecognition}
+    />
+  );
+});
+

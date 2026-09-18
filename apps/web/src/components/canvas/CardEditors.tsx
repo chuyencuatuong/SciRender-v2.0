@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpToLine, Check, Code2, Columns3, Plus, Save, Trash2, WandSparkles } from 'lucide-react';
 import type { BibEntry, LabelRecord } from '@scirender/ast';
 import { renderMath } from '@scirender/equation-engine';
@@ -23,7 +24,7 @@ import {
 } from '~/lib/card-forms';
 import { useStore } from '~/state/store';
 import { AutoTextarea } from './AutoTextarea';
-import { renderDiagramSvg } from '~/lib/diagram-studio';
+import { applyDiagramViewport, renderDiagramSvg } from '~/lib/diagram-studio';
 import { DiagramDialog } from './DiagramDialog';
 
 export interface EditorProps {
@@ -254,31 +255,44 @@ function DiagramEditor({ text, onChange, kind, labels, bibliography, onSaveDiagr
   useEffect(() => {
     let cancelled = false;
     if (!previewSource.trim()) { setThumb(''); return () => { cancelled = true; }; }
-    void renderDiagramSvg(previewSource, { curve: form?.curve, theme: form?.theme, direction: (form?.direction || undefined) as 'TB' | 'BT' | 'LR' | 'RL' | undefined })
-      .then((svg) => { if (!cancelled) setThumb(svg); })
-      .catch(() => { if (!cancelled) setThumb(''); });
-    return () => { cancelled = true; };
+    const timer = window.setTimeout(() => {
+      void renderDiagramSvg(previewSource, { curve: form?.curve, theme: form?.theme, direction: (form?.direction || undefined) as 'TB' | 'BT' | 'LR' | 'RL' | undefined })
+        .then((svg) => { if (!cancelled) setThumb(svg); })
+        .catch(() => { if (!cancelled) setThumb(''); });
+    }, 300);
+    return () => { cancelled = true; window.clearTimeout(timer); };
   }, [previewSource, form?.curve, form?.theme, form?.direction]);
 
   if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} bibliography={bibliography} />;
   const setForm = (patch: Partial<typeof form>): void => onChange(serializeDiagram({ ...form, ...patch }));
-  const saveAsset = async (options: { nodeSpacing: number; rankSpacing: number } = { nodeSpacing: 32, rankSpacing: 36 }): Promise<void> => {
+  const saveAsset = async (options: { nodeSpacing: number; rankSpacing: number; viewX: number; viewY: number; viewZoom: number } = { nodeSpacing: 32, rankSpacing: 36, viewX: 0, viewY: 0, viewZoom: 1 }): Promise<void> => {
     if (!onSaveDiagramAsset || !form.source.trim()) return;
     setBusy(true);
     try {
-      const svg = await renderDiagramSvg(form.source, { curve: form.curve, theme: form.theme, direction: (form.direction || undefined) as 'TB' | 'BT' | 'LR' | 'RL' | undefined, nodeSpacing: options.nodeSpacing, rankSpacing: options.rankSpacing });
+      let svg = await renderDiagramSvg(form.source, { curve: form.curve, theme: form.theme, direction: (form.direction || undefined) as 'TB' | 'BT' | 'LR' | 'RL' | undefined, nodeSpacing: options.nodeSpacing, rankSpacing: options.rankSpacing });
+      svg = applyDiagramViewport(svg, options.viewX, options.viewY, options.viewZoom);
       const name = await onSaveDiagramAsset(svg, form.label || 'dia:technical-diagram');
-      if (name) setForm({ asset: `asset:${name}` });
+      if (name) {
+        setForm({
+          asset: `asset:${name}`,
+          attrs: {
+            ...form.attrs,
+            'view-x': String(Math.round(options.viewX * 100) / 100),
+            'view-y': String(Math.round(options.viewY * 100) / 100),
+            'view-zoom': String(Math.round(options.viewZoom * 1000) / 1000),
+          },
+        });
+      }
       setSaved(Boolean(name));
       if (name) window.setTimeout(() => setSaved(false), 1800);
     } finally { setBusy(false); }
   };
   return (
     <>
-      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-[var(--sr-card)] dark:border-white/[.07] dark:bg-[#161922]">
-        <div className="relative min-h-[138px] overflow-hidden bg-[#0e1017] p-3">
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-[var(--sr-card)] dark:border-white/[.07] dark:bg-[var(--sr-panel)]">
+        <div className="relative min-h-[138px] overflow-hidden bg-[var(--sr-sunk)] p-3">
           {thumb ? <div className="pointer-events-none flex max-h-[138px] items-center justify-center overflow-hidden opacity-90" dangerouslySetInnerHTML={{ __html: thumb }} /> : <div className="grid min-h-[110px] place-items-center text-[11px] text-slate-500">Chưa có bản xem trước sơ đồ</div>}
-          <button type="button" onClick={() => setOpen(true)} className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-[#161922]/90 px-2.5 py-1.5 text-[10.5px] font-medium text-white shadow-lg backdrop-blur-md hover:bg-[#1c202a]"><Code2 size={12}/> Mở Diagram Studio</button>
+          <button type="button" onClick={() => setOpen(true)} className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-[var(--sr-panel)] px-2.5 py-1.5 text-[10.5px] font-medium text-white shadow-lg backdrop-blur-md hover:bg-white/10"><Code2 size={12}/> Mở Diagram Studio</button>
         </div>
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-200/80 px-3 py-2 dark:border-white/[.07]">
           <span className="font-mono text-[10px] text-slate-400">{form.label || 'dia:ten-nhan'}</span>
@@ -777,27 +791,94 @@ function TableEditor({ text, onChange, kind, labels, bibliography, suppressLands
       </div>
       <CaptionField caption={form.caption} label={form.label} labelHint="tbl:ten-nhan" onChange={(caption, label) => push({ ...form, caption, label })} />
       {contextMenu ? (
-        <div className="fixed z-[80] w-[228px] rounded-xl border border-white/10 bg-[#161922]/95 p-1.5 text-white shadow-2xl backdrop-blur-md" style={{ left: Math.min(contextMenu.x, window.innerWidth - 244), top: Math.min(contextMenu.y, window.innerHeight - 430) }} onMouseDown={(e) => e.stopPropagation()}>
-          {horizontalMerge ? <MenuAction label="Gộp vùng ngang (>>)" onClick={() => { mergeSelected('horizontal'); setContextMenu(null); }} /> : null}
-          {verticalMerge ? <MenuAction label="Gộp vùng dọc (^^)" onClick={() => { mergeSelected('vertical'); setContextMenu(null); }} /> : null}
-          {selectedCells.size > 1 ? <MenuAction label="Tách gộp / Hủy merge" onClick={() => { unmergeSelected(); setContextMenu(null); }} /> : null}
-          <div className="my-1 h-px bg-white/10" />
-          <MenuAction label="Thêm hàng trên" onClick={() => { addRowsAt(bounds && bounds.r1 >= 0 ? bounds.r1 : form.rows.length); setContextMenu(null); }} />
-          <MenuAction label="Thêm hàng dưới" onClick={() => { addRowsAt((bounds && bounds.r2 >= 0 ? bounds.r2 : form.rows.length - 1) + 1); setContextMenu(null); }} />
-          <MenuAction label="Xóa hàng đang chọn" disabled={!bounds || bounds.r1 < 0} onClick={() => { deleteSelectedRows(); setContextMenu(null); }} />
-          <MenuAction label="Thêm cột trái" onClick={() => { addColumnAt(bounds?.c1 ?? width); setContextMenu(null); }} />
-          <MenuAction label="Thêm cột phải" onClick={() => { addColumnAt((bounds?.c2 ?? width - 1) + 1); setContextMenu(null); }} />
-          <MenuAction label="Xóa cột đang chọn" disabled={!bounds} onClick={() => { deleteSelectedColumns(); setContextMenu(null); }} />
-          <div className="my-1 h-px bg-white/10" />
-          <MenuAction label="Căn trái" onClick={() => { setSelectedAlignment('left'); setContextMenu(null); }} />
-          <MenuAction label="Căn giữa" onClick={() => { setSelectedAlignment('center'); setContextMenu(null); }} />
-          <MenuAction label="Căn phải" onClick={() => { setSelectedAlignment('right'); setContextMenu(null); }} />
-          <MenuAction label="Căn theo dấu thập phân" onClick={() => { setSelectedAlignment('decimal'); setContextMenu(null); }} />
-          <div className="my-1 h-px bg-white/10" />
-          <MenuAction label="Xóa dữ liệu vùng chọn" disabled={!selectedCells.size} onClick={() => { let next = { ...form, header: form.header.slice(), rows: form.rows.map((r) => r.slice()) }; selectedList.forEach((cell) => { next = writeCellOn(next, cell, ''); }); push(next); setContextMenu(null); }} />
-        </div>
+        <TableContextMenu
+          point={contextMenu}
+          onClose={() => setContextMenu(null)}
+          actions={
+            <>
+              {horizontalMerge ? <MenuAction label="Gộp vùng ngang (>>)" onClick={() => { mergeSelected('horizontal'); setContextMenu(null); }} /> : null}
+              {verticalMerge ? <MenuAction label="Gộp vùng dọc (^^)" onClick={() => { mergeSelected('vertical'); setContextMenu(null); }} /> : null}
+              {selectedCells.size > 1 ? <MenuAction label="Tách gộp / Hủy merge" onClick={() => { unmergeSelected(); setContextMenu(null); }} /> : null}
+              {(horizontalMerge || verticalMerge || selectedCells.size > 1) ? <div className="my-1 h-px bg-white/10" /> : null}
+              <MenuAction label="Thêm hàng trên" onClick={() => { addRowsAt(bounds && bounds.r1 >= 0 ? bounds.r1 : form.rows.length); setContextMenu(null); }} />
+              <MenuAction label="Thêm hàng dưới" onClick={() => { addRowsAt((bounds && bounds.r2 >= 0 ? bounds.r2 : form.rows.length - 1) + 1); setContextMenu(null); }} />
+              <MenuAction label="Xóa hàng đang chọn" disabled={!bounds || bounds.r1 < 0} onClick={() => { deleteSelectedRows(); setContextMenu(null); }} />
+              <MenuAction label="Thêm cột trái" onClick={() => { addColumnAt(bounds?.c1 ?? width); setContextMenu(null); }} />
+              <MenuAction label="Thêm cột phải" onClick={() => { addColumnAt((bounds?.c2 ?? width - 1) + 1); setContextMenu(null); }} />
+              <MenuAction label="Xóa cột đang chọn" disabled={!bounds} onClick={() => { deleteSelectedColumns(); setContextMenu(null); }} />
+              <div className="my-1 h-px bg-white/10" />
+              <MenuAction label="Căn trái" onClick={() => { setSelectedAlignment('left'); setContextMenu(null); }} />
+              <MenuAction label="Căn giữa" onClick={() => { setSelectedAlignment('center'); setContextMenu(null); }} />
+              <MenuAction label="Căn phải" onClick={() => { setSelectedAlignment('right'); setContextMenu(null); }} />
+              <MenuAction label="Căn theo dấu thập phân" onClick={() => { setSelectedAlignment('decimal'); setContextMenu(null); }} />
+              <div className="my-1 h-px bg-white/10" />
+              <MenuAction label="Xóa dữ liệu vùng chọn" disabled={!selectedCells.size} onClick={() => { let next = { ...form, header: form.header.slice(), rows: form.rows.map((r) => r.slice()) }; selectedList.forEach((cell) => { next = writeCellOn(next, cell, ''); }); push(next); setContextMenu(null); }} />
+            </>
+          }
+        />
       ) : null}
     </div>
+  );
+}
+
+function TableContextMenu({
+  point,
+  onClose,
+  actions,
+}: {
+  point: { x: number; y: number };
+  onClose: () => void;
+  actions: React.ReactNode;
+}): JSX.Element {
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState({ left: point.x, top: point.y, visible: false });
+
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const gutter = 8;
+    const maxLeft = Math.max(gutter, window.innerWidth - rect.width - gutter);
+    const maxTop = Math.max(gutter, window.innerHeight - rect.height - gutter);
+    let left = point.x;
+    let top = point.y;
+    if (left + rect.width + gutter > window.innerWidth) left = point.x - rect.width;
+    if (top + rect.height + gutter > window.innerHeight) top = point.y - rect.height;
+    setPosition({
+      left: Math.min(maxLeft, Math.max(gutter, left)),
+      top: Math.min(maxTop, Math.max(gutter, top)),
+      visible: true,
+    });
+  }, [point.x, point.y, actions]);
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent): void => {
+      const target = event.target;
+      if (target instanceof Node && menuRef.current?.contains(target)) return;
+      onClose();
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      role="menu"
+      className="sr-table-context-menu fixed z-[9999] w-[228px] rounded-xl p-1.5 shadow-2xl backdrop-blur-md"
+      style={{ left: position.left, top: position.top, visibility: position.visible ? 'visible' : 'hidden' }}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      {actions}
+    </div>,
+    document.body,
   );
 }
 

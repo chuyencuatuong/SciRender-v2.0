@@ -15,7 +15,7 @@ import { CardEditor } from './CardEditors';
 
 export type DropZone = 'above' | 'below' | 'left' | 'right';
 
-interface Props {
+export interface CardShellProps {
   card: Card;
   index: number;
   total: number;
@@ -60,7 +60,7 @@ const ZONE_RING: Record<DropZone, string> = {
  * of another card puts the two side by side, and the target is shown before
  * the drop so the gesture is never a guess.
  */
-export function CardShell(props: Props): JSX.Element {
+export function CardShell(props: CardShellProps): JSX.Element {
   const { card, index, total, selected, dropZone } = props;
   const [handleDown, setHandleDown] = useState(false);
   const columns = card.kind === 'columns' ? splitColumns(card.text) : null;
@@ -115,7 +115,7 @@ export function CardShell(props: Props): JSX.Element {
       />
 
       <header
-        className="sr-floating-toolbar pointer-events-none absolute -top-3 right-2 z-20 flex h-[28px] items-center gap-px rounded-full border border-white/10 bg-[#161922]/90 px-1 text-white opacity-0 shadow-lg backdrop-blur-md transition-[opacity,transform] duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[on=true]:pointer-events-auto data-[on=true]:opacity-100 dark:text-white"
+        className="sr-floating-toolbar pointer-events-none absolute -top-3 right-2 z-20 flex h-[28px] items-center gap-px rounded-full border border-white/10 bg-[var(--sr-panel)] px-1 text-white opacity-0 shadow-lg backdrop-blur-md transition-[opacity,transform] duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[on=true]:pointer-events-auto data-[on=true]:opacity-100 dark:text-white"
         data-on={selected}
       >
         <span

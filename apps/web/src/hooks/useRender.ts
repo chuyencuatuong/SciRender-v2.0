@@ -88,6 +88,7 @@ export function useRender(): RenderState {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     setState((s) => ({ ...s, running: true, error: null }));
 
     const run = async (): Promise<void> => {
@@ -136,8 +137,11 @@ export function useRender(): RenderState {
         t.metrics.bodySizePx,
         t.metrics.contentWidthPx,
         mathWarnings,
+        controller.signal,
       );
-      if (cancelled || !hostRef.current) return;
+      if (cancelled || controller.signal.aborted || !hostRef.current) return;
+      await nextFrame();
+      if (cancelled || controller.signal.aborted) return;
 
       const opts = {
         ...optionsFromTemplate(t),
@@ -241,6 +245,7 @@ export function useRender(): RenderState {
     void run();
     return () => {
       cancelled = true;
+      controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderNonce, renderedSource, templateId, overrides, assetMap]);
@@ -279,6 +284,7 @@ async function settleMedia(
   bodySizePx: number,
   contentWidthPx: number,
   mathWarnings: LayoutWarning[],
+  signal?: AbortSignal,
 ): Promise<Element[]> {
   host.textContent = '';
   // The measuring host must already be exactly one text column wide: formulas
@@ -305,7 +311,9 @@ async function settleMedia(
   probe.textContent = '\u00a0';
   staging.appendChild(probe);
   for (let i = 0; i < 30; i++) {
+    if (signal?.aborted) { probe.remove(); return []; }
     await nextFrame();
+    if (signal?.aborted) { probe.remove(); return []; }
     const size = Number.parseFloat(getComputedStyle(probe).fontSize);
     if (Number.isFinite(size) && Math.abs(size - bodySizePx) < 0.5) break;
   }
@@ -315,18 +323,24 @@ async function settleMedia(
     Array.from(staging.querySelectorAll('img')).map(
       (img) =>
         new Promise<void>((resolve) => {
-          if (img.complete && img.naturalWidth > 0) {
+          if (signal?.aborted || (img.complete && img.naturalWidth > 0)) {
             resolve();
             return;
           }
-          const done = (): void => resolve();
+          const cleanup = (): void => {
+            img.removeEventListener('load', done);
+            img.removeEventListener('error', done);
+            signal?.removeEventListener('abort', abort);
+          };
+          const done = (): void => { cleanup(); resolve(); };
+          const abort = (): void => { cleanup(); resolve(); };
           img.addEventListener('load', done, { once: true });
-          // A broken image still has to stop blocking the render (P6 reports it
-          // separately); it simply measures at its alt-text height.
           img.addEventListener('error', done, { once: true });
+          signal?.addEventListener('abort', abort, { once: true });
         }),
     ),
   );
+  if (signal?.aborted) { staging.remove(); return []; }
 
   const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
   if (fonts) {
@@ -336,12 +350,15 @@ async function settleMedia(
       /* font loading is best effort — never block a render on it */
     }
   }
+  if (signal?.aborted) { staging.remove(); return []; }
 
   // Long formulas are fitted to the column while the document is still laid
   // out here, so pagination measures the height that will actually print.
   mathWarnings.push(...fitDisplayMath(staging));
 
+  if (signal?.aborted) { staging.remove(); return []; }
   await nextFrame();
+  if (signal?.aborted) { staging.remove(); return []; }
   staging.remove();
   host.textContent = '';
   return elements;

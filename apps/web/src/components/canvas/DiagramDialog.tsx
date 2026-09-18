@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type WheelEvent as ReactWheelEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Code2, Maximize2, Minus, Plus, Save, Sparkles, X } from 'lucide-react';
 import type { BibEntry, LabelRecord } from '@scirender/ast';
@@ -11,7 +11,7 @@ interface Props {
   bibliography?: BibEntry[];
   labels?: Record<string, LabelRecord>;
   onChange: (patch: Partial<DiagramForm>) => void;
-  onSave: (options: { nodeSpacing: number; rankSpacing: number }) => Promise<void>;
+  onSave: (options: { nodeSpacing: number; rankSpacing: number; viewX: number; viewY: number; viewZoom: number }) => Promise<void>;
   onClose: () => void;
   saved?: boolean;
   busy?: boolean;
@@ -46,7 +46,12 @@ export function DiagramDialog({ open, form, bibliography, labels, onChange, onSa
   const [nodeSpacing, setNodeSpacing] = useState(32);
   const [rankSpacing, setRankSpacing] = useState(36);
   const [zoom, setZoom] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [rendering, setRendering] = useState(false);
+  const dragRef = useRef<{ clientX: number; clientY: number; panX: number; panY: number; pointerId: number } | null>(null);
   const renderSeq = useRef(0);
+  const previewRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -63,38 +68,140 @@ export function DiagramDialog({ open, form, bibliography, labels, onChange, onSa
   }, [open, onClose]);
 
   useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (!previewRef.current) return;
+      if (e.code === 'Space') previewRef.current.dataset.spacePan = e.type === 'keydown' ? '1' : '0';
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKey);
+      if (previewRef.current) previewRef.current.dataset.spacePan = '0';
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (!open || !form.source.trim()) {
       setSvg('');
       setError('');
+      setRendering(false);
       return;
     }
     const seq = ++renderSeq.current;
     let cancelled = false;
-    void renderDiagramSvg(form.source, {
-      curve: form.curve,
-      theme: form.theme,
-      direction: (form.direction || undefined) as 'TB' | 'TD' | 'BT' | 'LR' | 'RL' | undefined,
-      nodeSpacing,
-      rankSpacing,
-    }).then((value) => {
-      if (!cancelled && seq === renderSeq.current) {
-        setSvg(value);
-        setError('');
-      }
-    }).catch((err: unknown) => {
-      if (!cancelled && seq === renderSeq.current) {
-        setSvg('');
-        setError(String((err as Error).message));
-      }
-    });
-    return () => { cancelled = true; };
+    setRendering(true);
+    const timer = window.setTimeout(() => {
+      void renderDiagramSvg(form.source, {
+        curve: form.curve,
+        theme: form.theme,
+        direction: (form.direction || undefined) as 'TB' | 'TD' | 'BT' | 'LR' | 'RL' | undefined,
+        nodeSpacing,
+        rankSpacing,
+      }).then((value) => {
+        if (!cancelled && seq === renderSeq.current) {
+          setSvg(value);
+          setError('');
+          setRendering(false);
+        }
+      }).catch((err: unknown) => {
+        if (!cancelled && seq === renderSeq.current) {
+          setError(String((err as Error).message));
+          setRendering(false);
+        }
+      });
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [open, form.source, form.curve, form.theme, form.direction, nodeSpacing, rankSpacing]);
+
+  useEffect(() => {
+    if (!open) return;
+    const savedX = Number(form.attrs['view-x']);
+    const savedY = Number(form.attrs['view-y']);
+    const savedZoom = Number(form.attrs['view-zoom']);
+    setZoom(Number.isFinite(savedZoom) && savedZoom > 0 ? Math.max(0.25, Math.min(2.5, savedZoom)) : 1);
+    setPanX(Number.isFinite(savedX) ? savedX : 0);
+    setPanY(Number.isFinite(savedY) ? savedY : 0);
+  }, [open, form.attrs]);
+
+  const clampPan = (nextX: number, nextY: number, nextZoom = zoom): [number, number] => {
+    const limit = Math.max(0, (nextZoom - 1) * 50);
+    return [Math.max(-limit, Math.min(limit, nextX)), Math.max(-limit, Math.min(limit, nextY))];
+  };
+
+  const changeZoomAt = (nextZoom: number, anchor?: { x: number; y: number }): void => {
+    const bounded = Math.max(0.25, Math.min(2.5, nextZoom));
+    if (!anchor || !previewRef.current) {
+      const [x, y] = clampPan(panX, panY, bounded);
+      setZoom(bounded); setPanX(x); setPanY(y); return;
+    }
+    const rect = previewRef.current.getBoundingClientRect();
+    const nx = (anchor.x - rect.left) / Math.max(1, rect.width) - 0.5;
+    const ny = (anchor.y - rect.top) / Math.max(1, rect.height) - 0.5;
+    const ratio = bounded / zoom;
+    const rawX = panX + nx * 100 * (1 - ratio);
+    const rawY = panY + ny * 100 * (1 - ratio);
+    const [x, y] = clampPan(rawX, rawY, bounded);
+    setZoom(bounded); setPanX(x); setPanY(y);
+  };
+
+  const fitToViewport = (): void => {
+    const host = previewRef.current;
+    const content = host?.querySelector<HTMLElement>('[data-sr-diagram-content]');
+    if (!host || !content) {
+      setPanX(0);
+      setPanY(0);
+      setZoom(1);
+      return;
+    }
+    const hostRect = host.getBoundingClientRect();
+    const contentRect = content.getBoundingClientRect();
+    const baseW = contentRect.width / Math.max(zoom, 0.001);
+    const baseH = contentRect.height / Math.max(zoom, 0.001);
+    const availableW = Math.max(64, hostRect.width - 64);
+    const availableH = Math.max(64, hostRect.height - 64);
+    const nextZoom = Math.max(0.25, Math.min(2.5, availableW / Math.max(1, baseW), availableH / Math.max(1, baseH)));
+    setPanX(0);
+    setPanY(0);
+    setZoom(nextZoom);
+  };
+
+  const onWheel = (event: ReactWheelEvent<HTMLDivElement>): void => {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    event.preventDefault();
+    const factor = Math.exp(-event.deltaY * 0.0015);
+    changeZoomAt(zoom * factor, { x: event.clientX, y: event.clientY });
+  };
+
+  const beginPan = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    const isMiddle = event.button === 1;
+    const isSpaceDrag = event.button === 0 && event.currentTarget.dataset.spacePan === '1';
+    if (!isMiddle && !isSpaceDrag) return;
+    event.preventDefault();
+    dragRef.current = { clientX: event.clientX, clientY: event.clientY, panX, panY, pointerId: 0 };
+  };
+
+  const movePan = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    const start = dragRef.current;
+    if (!start) return;
+    const nextX = start.panX + (event.clientX - start.clientX) * 100 / Math.max(1, previewRef.current?.getBoundingClientRect().width ?? 1);
+    const nextY = start.panY + (event.clientY - start.clientY) * 100 / Math.max(1, previewRef.current?.getBoundingClientRect().height ?? 1);
+    const [x, y] = clampPan(nextX, nextY);
+    setPanX(x); setPanY(y);
+  };
+
+  const endPan = (): void => { dragRef.current = null; };
+
 
   if (!open) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
-      <div role="dialog" aria-modal="true" aria-label="Technical Diagram Studio" className="sr-diagram-dialog flex max-h-[calc(100dvh-2rem)] min-h-0 w-[min(1400px,96vw)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#11141a] text-white shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-label="Technical Diagram Studio" className="sr-diagram-dialog flex max-h-[calc(100dvh-2rem)] min-h-0 w-[min(1400px,96vw)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[var(--sr-panel)] text-white shadow-2xl">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-white/10 px-4">
           <div className="grid h-8 w-8 place-items-center rounded-lg bg-sky-500/12 text-sky-300"><Sparkles size={16} /></div>
           <div className="min-w-0 flex-1"><div className="text-[13px] font-semibold">Technical Diagram Studio</div><div className="text-[10.5px] text-white/45">AI-ready Mermaid · SVG · Academic print</div></div>
@@ -138,29 +245,41 @@ export function DiagramDialog({ open, form, bibliography, labels, onChange, onSa
               </section>
 
               <section className="space-y-2">
-                <input className="w-full rounded-lg border border-white/[.06] bg-[#0e1017] px-2.5 py-2 text-[11.5px] text-white outline-none focus:border-sky-400/50 focus:ring-1 focus:ring-sky-400/20" value={form.caption} placeholder="Chú thích sơ đồ" onChange={(e) => onChange({ caption: e.target.value })} />
-                <input className="w-full rounded-lg border border-white/[.06] bg-[#0e1017] px-2.5 py-2 font-mono text-[11px] text-white outline-none focus:border-sky-400/50 focus:ring-1 focus:ring-sky-400/20" value={form.label} placeholder="dia:ten-nhan" onChange={(e) => onChange({ label: e.target.value.trim() })} />
+                <input className="w-full rounded-lg border border-white/[.06] bg-[var(--sr-sunk)] px-2.5 py-2 text-[11.5px] text-white outline-none focus:border-sky-400/50 focus:ring-1 focus:ring-sky-400/20" value={form.caption} placeholder="Chú thích sơ đồ" onChange={(e) => onChange({ caption: e.target.value })} />
+                <input className="w-full rounded-lg border border-white/[.06] bg-[var(--sr-sunk)] px-2.5 py-2 font-mono text-[11px] text-white outline-none focus:border-sky-400/50 focus:ring-1 focus:ring-sky-400/20" value={form.label} placeholder="dia:ten-nhan" onChange={(e) => onChange({ label: e.target.value.trim() })} />
               </section>
             </div>
           </aside>
 
-          <main className="flex min-h-0 flex-col bg-[#0b0d11]">
+          <main className="flex min-h-0 flex-col bg-[var(--sr-paper-ground)]">
             <div className="flex h-11 shrink-0 items-center gap-1 border-b border-white/[.07] px-3">
               <span className="mr-auto text-[10.5px] font-medium uppercase tracking-[.12em] text-white/35">SVG Preview</span>
-              <button type="button" onClick={() => setZoom((v) => Math.max(.25, Number((v-.05).toFixed(2))))} className="grid h-7 w-7 place-items-center rounded-md text-white/50 hover:bg-white/5"><Minus size={13}/></button>
+              <button type="button" onClick={() => changeZoomAt(zoom - .05)} aria-label="Thu nhỏ" className="grid h-7 w-7 place-items-center rounded-md text-white/50 hover:bg-white/5"><Minus size={13}/></button>
               <span className="w-12 text-center font-mono text-[10px] text-white/50">{Math.round(zoom*100)}%</span>
-              <button type="button" onClick={() => setZoom((v) => Math.min(1.6, Number((v+.05).toFixed(2))))} className="grid h-7 w-7 place-items-center rounded-md text-white/50 hover:bg-white/5"><Plus size={13}/></button>
-              <button type="button" onClick={() => setZoom(1)} title="Đặt lại zoom" className="ml-1 grid h-7 w-7 place-items-center rounded-md text-white/50 hover:bg-white/5"><Maximize2 size={13}/></button>
+              <button type="button" onClick={() => changeZoomAt(zoom + .05)} aria-label="Phóng to" className="grid h-7 w-7 place-items-center rounded-md text-white/50 hover:bg-white/5"><Plus size={13}/></button>
+              <button type="button" onClick={() => changeZoomAt(1)} title="Đặt lại zoom" className="ml-1 grid h-7 w-7 place-items-center rounded-md text-white/50 hover:bg-white/5"><Maximize2 size={13}/></button>
+              <button type="button" onClick={fitToViewport} title="Vừa khung" className="grid h-7 px-2 place-items-center rounded-md text-[10px] text-white/50 hover:bg-white/5">Fit</button>
+              <span className="ml-2 hidden text-[9.5px] text-white/25 xl:inline">Ctrl/Cmd+wheel · MMB · Space+drag</span>
             </div>
-            <div className="min-h-0 flex-1 overflow-auto p-6">
-              <div className="grid min-h-full place-items-center rounded-xl border border-white/[.05] bg-white/[.015] p-8">
-                {error ? <div className="max-w-[600px] rounded-lg border border-rose-400/20 bg-rose-400/5 p-4 text-xs text-rose-200">{error}</div> : svg ? <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }} className="will-change-transform" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="text-xs text-white/30">Dán mã Mermaid hoặc chọn mẫu để xem trước.</div>}
+            <div
+              ref={previewRef}
+              className="min-h-0 flex-1 overflow-auto p-6"
+              onWheel={onWheel}
+              onMouseDown={beginPan}
+              onMouseMove={movePan}
+              onMouseUp={endPan}
+              onMouseLeave={endPan}
+              style={{ cursor: dragRef.current ? 'grabbing' : 'default' }}
+            >
+              <div className="relative grid min-h-full place-items-center rounded-xl border border-white/[.05] bg-white/[.015] p-8">
+                {rendering ? <span className="pointer-events-none absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-white/[.08] bg-black/20 px-2 py-1 text-[9.5px] text-white/45">Đang dựng…</span> : null}
+                {error ? <div className="max-w-[600px] rounded-lg border border-rose-400/20 bg-rose-400/5 p-4 text-xs text-rose-200">{error}</div> : svg ? <div data-sr-diagram-content="1" style={{ transform: `translate(${panX}%, ${panY}%) scale(${zoom})`, transformOrigin: 'center center' }} className="will-change-transform" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="text-xs text-white/30">Dán mã Mermaid hoặc chọn mẫu để xem trước.</div>}
               </div>
             </div>
             <footer className="flex min-h-12 shrink-0 items-center gap-2 border-t border-white/[.07] px-3">
               {saved ? <span className="mr-auto inline-flex items-center gap-1.5 text-[10.5px] text-emerald-300"><Check size={13}/> Đã lưu Asset SVG</span> : <span className="mr-auto text-[10px] text-white/30">Asset được lưu sạch vào IndexedDB khi lưu.</span>}
               <button type="button" onClick={onClose} className="rounded-lg px-3 py-1.5 text-[11.5px] text-white/60 hover:bg-white/5 hover:text-white">Hủy</button>
-              <button type="button" disabled={busy || !form.source.trim()} onClick={() => void onSave({ nodeSpacing, rankSpacing })} className="inline-flex items-center gap-1.5 rounded-lg bg-sky-500 px-3.5 py-1.5 text-[11.5px] font-medium text-white shadow-lg shadow-sky-500/20 hover:bg-sky-400 disabled:opacity-40"><Save size={13}/>{busy ? 'Đang lưu…' : 'Lưu sơ đồ'}</button>
+              <button type="button" disabled={busy || !form.source.trim()} onClick={() => void onSave({ nodeSpacing, rankSpacing, viewX: panX, viewY: panY, viewZoom: zoom })} className="inline-flex items-center gap-1.5 rounded-lg bg-sky-500 px-3.5 py-1.5 text-[11.5px] font-medium text-white shadow-lg shadow-sky-500/20 hover:bg-sky-400 disabled:opacity-40"><Save size={13}/>{busy ? 'Đang lưu…' : 'Lưu sơ đồ'}</button>
             </footer>
           </main>
         </div>
@@ -181,7 +300,7 @@ function MermaidSourceEditor({ value, onChange }: { value: string; onChange: (va
     }
   };
   return (
-    <div className="relative min-h-[230px] overflow-hidden rounded-xl border border-white/[.07] bg-[#0e1017]">
+    <div className="relative min-h-[230px] overflow-hidden rounded-xl border border-white/[.07] bg-[var(--sr-sunk)]">
       <pre ref={overlayRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-5 text-white/70">{value ? <span dangerouslySetInnerHTML={{ __html: highlightMermaid(value) }} /> : null}</pre>
       <textarea
         ref={ref}

@@ -36,6 +36,10 @@ export const DIAGRAM_PRESETS: DiagramPreset[] = [
 ];
 
 let renderSeq = 0;
+let mermaidLoader: Promise<typeof import('mermaid').default> | null = null;
+let configuredKey = '';
+const MAX_RENDER_CACHE = 64;
+const renderCache = new Map<string, string>();
 
 const THEME_VARS: Record<DiagramStudioTheme, Record<string, string>> = {
   academic: {
@@ -80,30 +84,85 @@ export async function renderDiagramSvg(
   source: string,
   options: { curve?: DiagramStudioCurve; theme?: DiagramStudioTheme; direction?: 'TB' | 'TD' | 'BT' | 'LR' | 'RL'; fontFamily?: string; nodeSpacing?: number; rankSpacing?: number } = {},
 ): Promise<string> {
-  const mermaid = (await import('mermaid')).default;
+  if (!mermaidLoader) mermaidLoader = import('mermaid').then((m) => m.default);
+  const mermaid = await mermaidLoader;
   const curve = options.curve ?? 'basis';
   const theme = options.theme ?? 'academic';
   const direction = options.direction;
   const directedSource = direction ? applyDirection(source, direction) : source;
   const fontFamily = '"Times New Roman", Times, serif';
   const tv = THEME_VARS[theme];
-  mermaid.initialize({
-    startOnLoad: false,
-    securityLevel: 'strict',
-    theme: 'base',
-    fontFamily,
-    themeVariables: { fontFamily, fontSize: '13px', ...tv },
-    flowchart: { htmlLabels: false, useMaxWidth: true, curve, nodeSpacing: options.nodeSpacing ?? 32, rankSpacing: options.rankSpacing ?? 36, padding: 10 },
-    sequence: { useMaxWidth: true },
-    gantt: { useMaxWidth: true },
-  });
+  const nodeSpacing = options.nodeSpacing ?? 32;
+  const rankSpacing = options.rankSpacing ?? 36;
+  const configKey = JSON.stringify([curve, theme, nodeSpacing, rankSpacing]);
+  if (configuredKey !== configKey) {
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: 'base',
+      fontFamily,
+      themeVariables: { fontFamily, fontSize: '13px', ...tv },
+      flowchart: { htmlLabels: false, useMaxWidth: true, curve, nodeSpacing, rankSpacing, padding: 10 },
+      sequence: { useMaxWidth: true },
+      gantt: { useMaxWidth: true },
+    });
+    configuredKey = configKey;
+    renderCache.clear();
+  }
+  const cacheKey = `${configuredKey}:${hash(directedSource)}`;
+  const hit = renderCache.get(cacheKey);
+  if (hit) return hit;
   const id = `sr-studio-${renderSeq++}`;
   const svg = (await mermaid.render(id, directedSource)).svg;
   const root = /<svg\b[^>]*>/i.exec(svg);
   if (!root) return svg;
   const css = `<style>text, tspan, .nodeLabel, .edgeLabel, foreignObject, foreignObject * { font-family: \"Times New Roman\", Times, serif !important; }</style>`;
-  return svg.slice(0, (root.index ?? 0) + root[0].length) + css + svg.slice((root.index ?? 0) + root[0].length);
+  const value = svg.slice(0, (root.index ?? 0) + root[0].length) + css + svg.slice((root.index ?? 0) + root[0].length);
+  renderCache.set(cacheKey, value);
+  if (renderCache.size > MAX_RENDER_CACHE) {
+    const oldest = renderCache.keys().next().value as string | undefined;
+    if (oldest) renderCache.delete(oldest);
+  }
+  return value;
 }
+
+function hash(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
+}
+
+/** Applies the editor viewpoint to the saved SVG by narrowing its viewBox. */
+export function applyDiagramViewport(svg: string, panXPercent: number, panYPercent: number, zoom: number): string {
+  const root = /<svg\b[^>]*>/i.exec(svg);
+  if (!root) return svg;
+  const tag = root[0];
+  const vb = /\bviewBox="([^"]+)"/i.exec(tag);
+  if (!vb) return svg;
+  const viewBox = vb[1];
+  if (!viewBox) return svg;
+  const parts = viewBox.trim().split(/[\s,]+/).map(Number);
+  if (parts.length < 4) return svg;
+  const x = parts[0] as number;
+  const y = parts[1] as number;
+  const w = parts[2] as number;
+  const h = parts[3] as number;
+  if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) return svg;
+  const z = Math.max(0.25, Math.min(2.5, zoom));
+  const viewW = w / z;
+  const viewH = h / z;
+  const centerX = x + w / 2 - (panXPercent / 100) * w;
+  const centerY = y + h / 2 - (panYPercent / 100) * h;
+  const nextX = centerX - viewW / 2;
+  const nextY = centerY - viewH / 2;
+  const next = `${nextX} ${nextY} ${viewW} ${viewH}`;
+  const rebuilt = tag.replace(/\bviewBox="[^"]+"/i, `viewBox="${next}"`);
+  return svg.slice(0, root.index) + rebuilt + svg.slice(root.index + tag.length);
+}
+
 
 function applyDirection(source: string, direction: string): string {
   const re = /^(\s*)(flowchart|graph)([ \t]+)(TB|TD|BT|RL|LR)\b/;

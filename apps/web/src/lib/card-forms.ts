@@ -109,16 +109,18 @@ export function parseDiagram(text: string): DiagramForm | null {
     const payload = assetMatch[3] ?? '';
     const label = /(?:^|\s)#(dia:[A-Za-z0-9_.-]+)/.exec(payload)?.[1] ?? '';
     if (!label) return null;
+    const attrs: Record<string, string> = { asset };
+    for (const match of payload.matchAll(/(?:^|\s)([a-z][a-z0-9-]*)=([^\s}]+)/g)) attrs[match[1] as string] = match[2] as string;
     return {
       source: '',
       asset,
       direction: '',
       curve: 'basis',
       theme: 'academic',
-      landscape: false,
+      landscape: attrs.orientation === 'landscape' || attrs.landscape === 'true',
       caption: (assetMatch[1] ?? '').trim(),
       label,
-      attrs: { asset },
+      attrs,
     };
   }
 
@@ -155,7 +157,13 @@ export function parseDiagram(text: string): DiagramForm | null {
 
 export function serializeDiagram(form: DiagramForm): string {
   if (form.asset?.startsWith('asset:')) {
-    return `![${form.caption || 'Sơ đồ kỹ thuật'}](${form.asset}){#${form.label || 'dia:technical-diagram'}}`;
+    const assetBits = [
+      `#${form.label || 'dia:technical-diagram'}`,
+      form.attrs['view-x'] ? `view-x=${form.attrs['view-x']}` : '',
+      form.attrs['view-y'] ? `view-y=${form.attrs['view-y']}` : '',
+      form.attrs['view-zoom'] ? `view-zoom=${form.attrs['view-zoom']}` : '',
+    ].filter(Boolean).join(' ');
+    return `![${form.caption || 'Sơ đồ kỹ thuật'}](${form.asset}){${assetBits}}`;
   }
   const bits = [
     form.label ? `#${form.label}` : '',
