@@ -8,6 +8,7 @@ import {
 import { renderFrontMatter, type FrontNumbers } from '@scirender/renderer-html';
 import { formatPageNumber, type FrontSectionKind } from '@scirender/template-engine';
 import { track } from '@scirender/telemetry';
+import { runPreSubmissionAudit, type AuditReport } from '@scirender/intelligence';
 import { fitDisplayMath } from '~/lib/fit-math';
 import { resolveMermaidBlocks } from '~/lib/mermaid';
 import { compile, type CompileResult } from '~/lib/pipeline';
@@ -24,6 +25,7 @@ export interface RenderedPage {
 
 export interface RenderState {
   result: CompileResult | null;
+  audit: AuditReport | null;
   pages: RenderedPage[];
   warnings: LayoutWarning[];
   /** Pages of the body flow only — what the faculty page budget is about. */
@@ -36,6 +38,7 @@ export interface RenderState {
 
 const EMPTY: RenderState = {
   result: null,
+  audit: null,
   pages: [],
   warnings: [],
   bodyPageCount: 0,
@@ -199,9 +202,19 @@ export function useRender(): RenderState {
         })),
       ];
 
+      const audit = runPreSubmissionAudit(result.document, result.diagnostics, {
+        tocEnabled: Boolean(d.frontMatter.enabled && d.frontMatter.sections.some((section) => section.kind === 'toc' && section.enabled)),
+        pageBudget: d.layout.pageBudget,
+      }, {
+        pages: pages.length,
+        bodyPages: body.pages.length,
+        warnings,
+      });
+
       const durationMs = Math.round((performance.now() - started) * 10) / 10;
       setState({
         result,
+        audit,
         pages,
         warnings,
         bodyPageCount: body.pages.length,

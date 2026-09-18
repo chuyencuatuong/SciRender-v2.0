@@ -12,6 +12,7 @@ import {
   Sun,
   TriangleAlert,
   Upload,
+  ClipboardCheck,
 } from 'lucide-react';
 import { exportStandaloneHtml, printDocument, slug } from '@scirender/renderer-pdf';
 import { importBundle, exportBundle } from '@scirender/storage';
@@ -20,6 +21,7 @@ import type { RenderState } from '~/hooks/useRender';
 import { Menu } from '~/components/ui/Menu';
 import { useStore } from '~/state/store';
 import { readAppFontsCss, readKatexCss } from '~/lib/export-fonts';
+import { AuditDialog } from '~/components/AuditDialog';
 
 /** Đánh dấu đã hiện lời nhắc "chọn Save as PDF" một lần trên máy này (P5-friendly, không cần server). */
 const PRINT_HINT_SEEN_KEY = 'sr:print-hint-seen';
@@ -46,6 +48,7 @@ export function TopBar({ render }: Props): JSX.Element {
   const [busy, setBusy] = useState(false);
   const importRef = useRef<HTMLInputElement | null>(null);
   const printNonceSeen = useRef(printNonce);
+  const [auditOpen, setAuditOpen] = useState(false);
 
   const stale = source !== renderedSource;
   const result = render.result;
@@ -251,6 +254,17 @@ export function TopBar({ render }: Props): JSX.Element {
             server, không cần mạng; chỉ có một bước thủ công là chọn "Save
             as PDF" ở hộp thoại in (đã có lời nhắc một lần, xem onPrint). */}
         <button
+          type="button"
+          className="sr-btn-ghost"
+          onClick={() => setAuditOpen(true)}
+          disabled={!result && render.running}
+          title="Kiểm tra trước khi nộp"
+        >
+          <ClipboardCheck size={14} />
+          <span className="hidden lg:inline">Kiểm tra trước khi nộp</span>
+        </button>
+
+        <button
           className="sr-btn-render"
           onClick={onPrint}
           disabled={noPages}
@@ -287,6 +301,13 @@ export function TopBar({ render }: Props): JSX.Element {
           }}
         />
       </div>
+      <AuditDialog
+        open={auditOpen}
+        onClose={() => setAuditOpen(false)}
+        render={render}
+        stale={stale}
+        onRender={requestRender}
+      />
     </header>
   );
 }
