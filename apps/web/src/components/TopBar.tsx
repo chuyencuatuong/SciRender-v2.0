@@ -131,7 +131,7 @@ export function TopBar({ render }: Props): JSX.Element {
   };
 
   // Ctrl+P luôn là In / Lưu PDF — không còn lối tải PDF riêng để hai phím tắt
-  // phải phân biệt nữa (bỏ hẳn Ctrl+Shift+P, xem Đợt 8).
+  // giữ Ctrl+Shift+P cho Command Palette; Ctrl+P là phím In/Lưu PDF chuẩn Word.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'p') return;

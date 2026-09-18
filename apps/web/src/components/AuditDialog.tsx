@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, FileText, Hash, Table2, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, FileText, Hash, Table2, X, XCircle } from 'lucide-react';
 import type { AuditCheck, AuditReport } from '@scirender/intelligence';
 import { useStore } from '~/state/store';
 import type { RenderState } from '~/hooks/useRender';
@@ -25,8 +25,17 @@ export function AuditDialog({ open, onClose, render, stale, onRender }: Props): 
   const requestGotoLine = useStore((s) => s.requestGotoLine);
 
   return (
-    <div className="fixed inset-0 z-[120] grid place-items-center bg-ink-950/35 p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-label="Kiểm tra trước khi nộp">
-      <div className="flex max-h-[min(820px,90vh)] w-[min(760px,96vw)] flex-col overflow-hidden rounded-2xl border border-ink-900/[0.08] bg-[var(--sr-surface)] shadow-pop">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Kiểm tra trước khi nộp"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-ink-900/[0.1] bg-[var(--sr-surface)] shadow-2xl"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="flex shrink-0 items-center gap-3 border-b border-ink-900/[0.06] px-5 py-4">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600">
             <ClipboardCheck size={18} strokeWidth={1.7} />
@@ -36,7 +45,7 @@ export function AuditDialog({ open, onClose, render, stale, onRender }: Props): 
             <p className="mt-0.5 text-[11.5px] text-ink-400">Quét AST + metadata + dàn trang bằng luật local-first, không dùng AI.</p>
           </div>
           <button type="button" className="sr-rail-btn ml-auto !h-8 !w-8" onClick={onClose} aria-label="Đóng">
-            ×
+            <X size={15} />
           </button>
         </div>
 
@@ -86,7 +95,7 @@ function AuditBody({ audit, onGoto }: { audit: AuditReport; onGoto: (line: numbe
         <Summary tone="error" label="LỖI" value={audit.errors} />
       </div>
 
-      <div className="sr-scroll min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="sr-scroll min-h-0 flex-1 overflow-y-auto p-6 space-y-3">
         {audit.ready ? (
           <div className="mb-4 flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3.5 py-3 text-[12px] text-emerald-700">
             <CheckCircle2 size={15} />

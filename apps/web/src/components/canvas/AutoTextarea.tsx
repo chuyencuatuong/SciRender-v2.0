@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { BibEntry, LabelRecord } from '@scirender/ast';
 import { caretViewportPosition } from '~/lib/caret';
 import { foldDiacritics, searchTemplates, type CardTemplate } from '~/lib/cards';
+import { matchesShortcut } from '~/lib/shortcuts';
 import { REF_KIND_ICON, REF_KIND_LABEL } from '~/lib/refs';
 import { useStore } from '~/state/store';
 
@@ -286,6 +287,42 @@ export function AutoTextarea({
   }, [trigger]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (matchesShortcut(e, 'hyperlink')) {
+      e.preventDefault();
+      const el = ref.current;
+      if (!el) return;
+      let start = el.selectionStart;
+      let end = el.selectionEnd;
+      let selected = value.slice(start, end);
+      let linkMatch = /^\[([^\]]*)\]\(([^)]*)\)$/.exec(selected);
+
+      if (!linkMatch) {
+        for (const match of value.matchAll(/\[([^\]]*)\]\(([^)]*)\)/g)) {
+          const at = match.index ?? -1;
+          if (at >= 0 && start >= at && start <= at + match[0].length) {
+            start = at;
+            end = at + match[0].length;
+            selected = match[0];
+            linkMatch = match;
+            break;
+          }
+        }
+      }
+
+      const existingUrl = linkMatch?.[2] ?? '';
+      const label = linkMatch?.[1] ?? selected;
+      const url = window.prompt('URL liên kết', existingUrl || 'https://');
+      if (url === null) return;
+      const cleanUrl = url.trim();
+      if (!cleanUrl) return;
+      const text = `[${label || 'Liên kết'}](${cleanUrl})`;
+      const next = value.slice(0, start) + text + value.slice(end);
+      pendingCaret.current = start + text.length;
+      onChange(next);
+      setTrigger(null);
+      return;
+    }
+
     if (!trigger || !items.length) {
       if (trigger && e.key === 'Escape') {
         e.preventDefault();

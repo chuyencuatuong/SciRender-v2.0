@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { CommandPalette } from '~/components/CommandPalette';
+import { ShortcutCheatSheet } from '~/components/ShortcutCheatSheet';
 import { TopBar } from '~/components/TopBar';
 import { SideRail } from '~/components/SideRail';
 import { SidePanel } from '~/components/SidePanel';
@@ -25,6 +26,7 @@ export function App(): JSX.Element {
   const floatPanel = useMediaQuery(`(max-width:${FLOAT_PANEL}px)`);
   const overlayPreview = useMediaQuery(`(max-width:${SPLIT_PREVIEW}px)`);
   const [view, setView] = useState<'canvas' | 'preview'>('canvas');
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const splitRef = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -152,6 +154,7 @@ export function App(): JSX.Element {
       </div>
 
       <StatusBar render={render} />
+      <ShortcutCheatSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} onToggle={() => setShortcutsOpen((v) => !v)} />
       <CommandPalette render={render} />
     </div>
   );

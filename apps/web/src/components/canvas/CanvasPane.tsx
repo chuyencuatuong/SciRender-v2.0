@@ -14,6 +14,8 @@ import {
   type CanvasDoc,
   type CardTemplate,
 } from '~/lib/cards';
+import { setHeadingDepth } from '~/lib/card-forms';
+import { isEditableTarget, matchesShortcut } from '~/lib/shortcuts';
 import { detectPaste } from '~/lib/paste';
 import { BadgeCheck, X } from 'lucide-react';
 import type { RenderState } from '~/hooks/useRender';
@@ -86,6 +88,16 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     null,
   );
   const [chartRequest, setChartRequest] = useState<{ index: number; table: string; label: string } | null>(null);
+  const [pendingPaste, setPendingPaste] = useState<{
+    text: string;
+    markdown: string;
+    label?: string;
+    kind: string;
+    target?: HTMLTextAreaElement | HTMLInputElement;
+    start?: number;
+    end?: number;
+  } | null>(null);
+  const [deleteConfirmIndex, setDeleteConfirmIndex] = useState<number | null>(null);
 
   const reduced = useReducedMotion();
   const mine = useRef(source);
@@ -219,7 +231,27 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
 
   const removeAt = (index: number): void => {
     setCards(doc.cards.filter((_, i) => i !== index));
-    setSelected(Math.max(0, index - 1));
+    setSelected(Math.max(0, Math.min(index - 1, doc.cards.length - 2)));
+    setDeleteConfirmIndex(null);
+  };
+
+  const requestDelete = (index: number): void => {
+    const card = doc.cards[index];
+    if (!card) return;
+    const labelMatch = /\{#((?:fig|tbl):[A-Za-z0-9_.-]+)\}/.exec(card.text);
+    const label = labelMatch?.[1];
+    if (!label) {
+      removeAt(index);
+      return;
+    }
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const hasReferences = new RegExp(`@${escaped}(?![\\w:-])`).test(source);
+    if (hasReferences) {
+      setDeleteConfirmIndex(index);
+      setSelected(index);
+      return;
+    }
+    removeAt(index);
   };
 
   const duplicateAt = (index: number): void => {
@@ -312,11 +344,25 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
       const text = data.getData('text/plain');
       if (!text.trim()) return;
       const html = data.getData('text/html');
+      const richHtml = /<(?:p|div|span|table|thead|tbody|tr|ul|ol|pre|blockquote|h[1-6]|strong|em|a)\b/i.test(html);
       const result = detectPaste(text, html || undefined);
-      if (result.kind === 'text' && inField) return;
+
+      if (inField && !fieldIsEmpty && !(richHtml || result.kind !== 'text')) return;
 
       e.preventDefault();
-      insertAt(selected + 1, result.markdown, result.kind === 'text' ? undefined : result.label);
+      if (result.kind === 'text' && !richHtml) {
+        insertAt(selected + 1, result.markdown);
+      } else {
+        setPendingPaste({
+          text,
+          markdown: result.markdown,
+          label: result.label,
+          kind: result.kind === 'text' ? 'rich text' : result.kind,
+          target: inField ? (active as HTMLTextAreaElement | HTMLInputElement) : undefined,
+          start: inField ? (active as HTMLTextAreaElement | HTMLInputElement).selectionStart ?? 0 : undefined,
+          end: inField ? (active as HTMLTextAreaElement | HTMLInputElement).selectionEnd ?? 0 : undefined,
+        });
+      }
     },
     [addAssets, insertAt, selected],
   );
@@ -338,34 +384,81 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const mod = e.ctrlKey || e.metaKey;
-      // A dialog owns the keyboard while it is open, and Ctrl+Z inside a text
-      // field has to undo the text — not silently rewind the whole canvas.
       if (document.querySelector('[role="dialog"]')) return;
       const target = e.target as HTMLElement | null;
-      const typing =
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLInputElement ||
-        target?.isContentEditable === true;
-      // Ctrl+Enter while typing in the document body, the same chord Word uses
-      // to force a page break — App.tsx's global Ctrl+Enter (Render) steps
-      // aside for this exact case, see the comment there.
-      if (typing && mod && e.key === 'Enter' && !e.shiftKey) {
+      const typing = isEditableTarget(target);
+      const interactive = Boolean(target?.closest('button, select, option, [contenteditable="true"]'));
+
+      // Ctrl+Shift+V is deliberately handled here rather than relying on the
+      // browser's rich clipboard path: it guarantees that HTML/style fragments
+      // never enter the Markdown source. Native execCommand fires the normal
+      // input event, so controlled React inputs remain in sync.
+      if (typing && matchesShortcut(e, 'clean-paste')) {
+        e.preventDefault();
+        const clipboard = navigator.clipboard;
+        if (!clipboard) return;
+        void clipboard.readText().then((text) => {
+          if (!text) return;
+          try {
+            document.execCommand('insertText', false, text);
+          } catch {
+            // Browsers without execCommand support simply leave the editor
+            // untouched; regular Ctrl+V remains available.
+          }
+        });
+        return;
+      }
+
+      // Word-style heading shortcuts operate on the selected semantic card.
+      // Do not hijack them inside table/figure form controls.
+      if (typing && mod && e.altKey && !e.shiftKey && ['0', '1', '2', '3'].includes(e.key)) {
+        const card = doc.cards[selected];
+        const textual = card && ['paragraph', 'heading', 'blockquote', 'list', 'callout'].includes(card.kind);
+        if (textual) {
+          e.preventDefault();
+          const depth = Number(e.key);
+          updateCard(selected, depth === 0 ? card!.text.replace(/^#{1,6}\s+/, '') : setHeadingDepth(card!.text, depth));
+        }
+        return;
+      }
+
+      if (typing && matchesShortcut(e, 'page-break')) {
         e.preventDefault();
         insertAt(selected + 1, ':::pagebreak:::');
         return;
       }
+
       if (typing && !e.altKey) return;
-      if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+
+      if (!typing && !interactive && e.key === 'Enter') {
+        const card = doc.cards[selected];
+        if (card && ['figure', 'table', 'equation', 'codeBlock', 'diagram'].includes(card.kind)) {
+          e.preventDefault();
+          insertAt(selected + 1, 'Nội dung đoạn văn.');
+          return;
+        }
+      }
+
+      if (!typing && !interactive && (e.key === 'Backspace' || e.key === 'Delete')) {
+        const card = doc.cards[selected];
+        if (card) {
+          e.preventDefault();
+          requestDelete(selected);
+          return;
+        }
+      }
+
+      if (matchesShortcut(e, 'undo')) {
         e.preventDefault();
         undo();
         return;
       }
-      if (mod && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+      if (matchesShortcut(e, 'redo')) {
         e.preventDefault();
         redo();
         return;
       }
-      if (mod && e.key.toLowerCase() === 'd') {
+      if (matchesShortcut(e, 'duplicate')) {
         e.preventDefault();
         duplicateAt(selected);
         return;
@@ -420,6 +513,35 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
       document.body.style.userSelect = '';
     };
   }, [splitDragging]);
+
+  const applyPendingPaste = (text: string): void => {
+    if (!pendingPaste) return;
+    const target = pendingPaste.target;
+    if (target && target.isConnected) {
+      target.focus();
+      const start = pendingPaste.start ?? target.selectionStart ?? 0;
+      const end = pendingPaste.end ?? target.selectionEnd ?? start;
+      target.setSelectionRange?.(start, end);
+      const inserted = text;
+      let handled = false;
+      try {
+        handled = document.execCommand('insertText', false, inserted);
+      } catch {
+        handled = false;
+      }
+      if (!handled) {
+        const next = target.value.slice(0, start) + inserted + target.value.slice(end);
+        const proto = target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        setter?.call(target, next);
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        target.setSelectionRange?.(start + inserted.length, start + inserted.length);
+      }
+    } else {
+      insertAt(selected + 1, text, pendingPaste.label);
+    }
+    setPendingPaste(null);
+  };
 
   // The scrollable card list — one pane's worth of content. Split view mounts
   // this TWICE (independent scroll containers, independent DOM), both fed the
@@ -486,7 +608,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
               animate={CARD_IN.animate}
               exit={reduced ? undefined : CARD_IN.exit}
               transition={CARD_IN.transition}
-              className="mb-2.5"
+              className="relative mb-2.5"
             >
               <CardShell
                 card={card}
@@ -501,7 +623,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
                 onChange={(text) => updateCard(index, text)}
                 onMove={(delta) => moveBy(index, delta)}
                 onDuplicate={() => duplicateAt(index)}
-                onDelete={() => removeAt(index)}
+                onDelete={() => requestDelete(index)}
                 onCreateChart={card.kind === 'table' ? () => requestChart(index) : undefined}
                 onUnmerge={() => unmerge(index)}
                 onMergeWithNext={() => mergeColumns(index, index + 1)}
@@ -519,9 +641,29 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
                   setRecognised(null);
                 }}
               />
+              {deleteConfirmIndex === index ? (
+                <div className="absolute right-2 top-[-8px] z-40 w-[min(360px,90vw)] -translate-y-full rounded-xl border border-flag-200 bg-[var(--sr-surface)] p-3 shadow-xl">
+                  <div className="text-[11.5px] font-semibold text-flag-700">Khối này đang được tham chiếu</div>
+                  <p className="mt-1 text-[11px] leading-[1.45] text-ink-600">Xóa sẽ làm gãy các liên kết <code>@fig:…</code> hoặc <code>@tbl:…</code> đang có trong tài liệu.</p>
+                  <div className="mt-2.5 flex justify-end gap-1.5">
+                    <button type="button" className="sr-btn-ghost h-7 !px-2.5 text-[10.5px]" onClick={() => setDeleteConfirmIndex(null)}>Hủy</button>
+                    <button type="button" className="sr-btn-render h-7 !border-flag-500 !bg-flag-500 !px-2.5 text-[10.5px] text-white" onClick={() => removeAt(index)}>Xóa và chấp nhận gãy tham chiếu</button>
+                  </div>
+                </div>
+              ) : null}
             </motion.div>
           ))}
         </AnimatePresence>
+
+        {pendingPaste ? (
+          <div className="fixed bottom-6 left-1/2 z-[60] flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-1.5 rounded-xl border border-ink-900/[0.08] bg-[var(--sr-surface)] p-1.5 shadow-2xl">
+            <span className="px-2 text-[10.5px] text-ink-500">Đã nhận dạng: <strong>{pendingPaste.kind}</strong></span>
+            <button type="button" className="rounded-lg px-2 py-1.5 text-[10.5px] text-deep-700 hover:bg-sky-50" onClick={() => applyPendingPaste(pendingPaste.markdown)}>Theo định dạng SciRender</button>
+            <button type="button" className="rounded-lg px-2 py-1.5 text-[10.5px] text-ink-700 hover:bg-ink-900/[0.05]" onClick={() => applyPendingPaste(pendingPaste.text)}>Chỉ lấy văn bản</button>
+            <button type="button" className="rounded-lg px-2 py-1.5 text-[10.5px] text-ink-700 hover:bg-ink-900/[0.05]" onClick={() => applyPendingPaste(pendingPaste.text)}>Markdown thô</button>
+            <button type="button" aria-label="Bỏ dán" className="ml-0.5 grid h-6 w-6 place-items-center rounded text-ink-400 hover:bg-ink-900/[0.05]" onClick={() => setPendingPaste(null)}>×</button>
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-2 pt-3">
           <InsertMenu

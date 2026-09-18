@@ -15,6 +15,7 @@ import { plainText, walk } from '@scirender/ast';
 import { CARD_TEMPLATES, foldDiacritics } from '~/lib/cards';
 import { REF_KIND_ICON, REF_KIND_LABEL } from '~/lib/refs';
 import { POP_IN, useReducedMotion } from '~/lib/motion';
+import { matchesShortcut } from '~/lib/shortcuts';
 import type { RenderState } from '~/hooks/useRender';
 import { ITEMS as PANEL_ITEMS } from './SideRail';
 import { useStore } from '~/state/store';
@@ -34,7 +35,7 @@ interface Action {
 }
 
 /**
- * `Ctrl/Cmd+K` — Hạng mục 6. Every action here goes through the same store
+ * `Ctrl/Cmd+Shift+P` / `F1` — Hạng mục 6. Every action here goes through the same store
  * methods the toolbar and panels already call (render/save/print/panel
  * toggles), or the two small nonce-based requests added alongside this
  * (`requestPrint`, `requestInsertBlock`) for the two things that live in a
@@ -66,7 +67,7 @@ export function CommandPalette({ render }: Props): JSX.Element {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      if (matchesShortcut(e, 'command-palette')) {
         e.preventDefault();
         setOpen((v) => !v);
         return;
