@@ -61,7 +61,7 @@ export function OutlinePanel({ render }: Props): JSX.Element {
             <button
               key={item.id}
               onClick={() => requestGotoLine(item.line)}
-              className="group flex w-full items-start gap-2 px-3 py-1.5 text-left transition hover:bg-ink-50"
+              className="group flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left transition hover:bg-slate-100/80 dark:hover:bg-slate-800"
               style={{ paddingLeft: `${10 + (item.depth - 1) * 12}px` }}
             >
               <Hash size={12} className="mt-1 shrink-0 text-ink-300 group-hover:text-sky-500" />
@@ -74,7 +74,7 @@ export function OutlinePanel({ render }: Props): JSX.Element {
                 </span>
               </span>
               {render.pageOfNode[item.id] ? (
-                <span className="mt-0.5 shrink-0 text-[10px] text-ink-400">
+                <span className="mt-0.5 shrink-0 font-mono text-[10px] text-slate-400">
                   tr.{render.pageOfNode[item.id]}
                 </span>
               ) : null}

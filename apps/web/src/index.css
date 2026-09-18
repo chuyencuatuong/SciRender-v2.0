@@ -99,11 +99,21 @@
   --emerald-900: 24 47 36;
   --emerald-950: 16 30 23;
 
+  /* ----------------------------------------------------------- elevation tokens */
+  --sr-workspace-base: #f0f2f5;
+  --sr-workspace-sunk: #e8ebef;
+  --sr-paper-ground: #e2e5eb;
+  --sr-chrome: rgb(255 255 255 / 0.80);
+  --sr-chrome-strong: rgb(255 255 255 / 0.92);
+  --sr-card: #ffffff;
+  --sr-card-border: rgb(226 232 240 / 0.90);
+  --sr-floating: rgb(15 23 42 / 0.90);
+
   /* nền và mặt */
-  --sr-bg: rgb(var(--ink-50));
-  --sr-bg-sunk: rgb(var(--ink-100));
-  --sr-surface: #ffffff;
-  --sr-surface-warm: #f9fafb;
+  --sr-bg: var(--sr-workspace-base);
+  --sr-bg-sunk: var(--sr-workspace-sunk);
+  --sr-surface: var(--sr-card);
+  --sr-surface-warm: #f8fafc;
   --sr-hairline: rgb(var(--ink-900) / 0.07);
   --sr-hairline-soft: rgb(var(--ink-900) / 0.045);
 
@@ -123,11 +133,8 @@
   --sr-sky-line: rgb(var(--sky-500) / 0.3);
   --sr-red: rgb(var(--flag-500));
 
-  /* nền trang in: xám trung tính để tờ giấy nổi lên */
-  --sr-paper-ground: #dedee3;
-
-  /* bóng: hai tầng cho thẻ, ba tầng cho tờ giấy — ở nền Sáng bóng đen mờ là đủ */
-  --sr-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 24px -8px rgba(15, 23, 42, 0.07);
+  /* bóng: card theo elevation 2; paper/popover sâu hơn */
+  --sr-shadow-card: 0 2px 8px -2px rgba(15,23,42,0.06), 0 1px 3px -1px rgba(15,23,42,0.04);
   --sr-shadow-pop: 0 1px 2px rgba(15, 23, 42, 0.05), 0 8px 16px -6px rgba(15, 23, 42, 0.1),
     0 24px 48px -16px rgba(15, 23, 42, 0.14);
   --sr-shadow-paper: 0 1px 1px rgba(11, 22, 45, 0.05), 0 10px 20px -8px rgba(11, 22, 45, 0.1),
@@ -214,12 +221,21 @@
   --emerald-900: 225 239 233;
   --emerald-950: 245 250 248;
 
-  /* nền và mặt — mặt tối vẫn cần NỔI hơn nền một chút để phân lớp được (ink-100
-     thay vì ink-50), khác nền Sáng nơi mặt trắng tinh còn nền hơi ngà. */
-  --sr-bg: rgb(var(--ink-50));
-  --sr-bg-sunk: rgb(22 21 18);
-  --sr-surface: rgb(var(--ink-100));
-  --sr-surface-warm: rgb(var(--ink-100));
+  /* ----------------------------------------------------------- elevation tokens */
+  --sr-workspace-base: #0d1117;
+  --sr-workspace-sunk: #11161d;
+  --sr-paper-ground: #161b22;
+  --sr-chrome: rgb(15 23 42 / 0.80);
+  --sr-chrome-strong: rgb(15 23 42 / 0.92);
+  --sr-card: rgb(30 41 59 / 0.90);
+  --sr-card-border: rgb(51 65 85 / 0.80);
+  --sr-floating: rgb(241 245 249 / 0.96);
+
+  /* nền và mặt */
+  --sr-bg: var(--sr-workspace-base);
+  --sr-bg-sunk: var(--sr-workspace-sunk);
+  --sr-surface: var(--sr-card);
+  --sr-surface-warm: rgb(30 41 59 / 0.82);
   --sr-hairline: rgb(var(--ink-900) / 0.09);
   --sr-hairline-soft: rgb(var(--ink-900) / 0.06);
 
@@ -237,11 +253,6 @@
   --sr-sky-line: rgb(var(--sky-500) / 0.38);
   --sr-red: rgb(var(--flag-600));
 
-  /* LƯU Ý: không dùng ink-950 ở đây — thang ink bị "lật gương" nên ink-950 ở
-     Tối lại gần TRẮNG (vì vai trò của nó là "chữ đậm nhất", không phải "nền
-     tối nhất"). Khay giấy cần một NỀN tối thật — rgb() cứng, tối hơn hẳn
-     sr-bg, để trang trắng nổi lên rõ giữa khay, giống trình xem PDF tối màu. */
-  --sr-paper-ground: rgb(20 19 16);
 
   /* bóng ở nền Tối cần thêm viền sáng rất mờ (ink-900 tối = gần trắng) mới
      tách được khối — bóng đen đơn thuần gần như vô hình trên nền đã tối sẵn */
@@ -337,10 +348,51 @@ body {
   -webkit-backdrop-filter: saturate(180%) blur(14px);
 }
 
+/* -------------------------------------------------------- elevation surfaces */
+.sr-chrome {
+  background: var(--sr-chrome);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-color: rgb(148 163 184 / 0.28);
+}
+[data-theme='dark'] .sr-chrome {
+  border-color: rgb(51 65 85 / 0.80);
+}
+.sr-canvas-toolbar {
+  background: var(--sr-chrome-strong);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 1px 0 rgb(15 23 42 / 0.05), 0 4px 14px -10px rgb(15 23 42 / 0.18);
+}
+.sr-card-shell {
+  background: var(--sr-card);
+  border: 1px solid var(--sr-card-border);
+  border-radius: 12px;
+  box-shadow: var(--sr-shadow-card);
+}
+.sr-card-shell:hover {
+  border-color: rgb(96 165 250 / 0.45);
+}
+.sr-card-shell[data-active='true'] {
+  border-color: rgb(96 165 250 / 0.60);
+  box-shadow: 0 4px 14px -4px rgb(15 23 42 / 0.12), 0 1px 3px -1px rgb(15 23 42 / 0.06);
+}
+.sr-floating-toolbar {
+  background: var(--sr-floating);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 14px 30px -12px rgb(15 23 42 / 0.42), 0 2px 8px -2px rgb(15 23 42 / 0.24);
+}
+
 /* ------------------------------------------------------------- page canvas */
 .sr-canvas {
   background:
-    radial-gradient(86% 46% at 50% -10%, rgb(var(--ink-50) / 0.24), transparent 66%),
+    radial-gradient(86% 46% at 50% -10%, rgb(255 255 255 / 0.42), transparent 66%),
+    var(--sr-paper-ground);
+}
+[data-theme='dark'] .sr-canvas {
+  background:
+    radial-gradient(86% 46% at 50% -10%, rgb(255 255 255 / 0.025), transparent 66%),
     var(--sr-paper-ground);
 }
 .sr-page-shell {
@@ -391,6 +443,12 @@ body {
 .sr-btn-primary:hover:not(:disabled) {
   filter: brightness(1.08);
 }
+.sr-btn-accent {
+  @apply inline-flex items-center gap-1.5 rounded-[9px] px-3 py-[7px] text-[12.5px] font-medium text-white transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
+  background: rgb(37 99 235);
+  box-shadow: 0 1px 2px rgb(37 99 235 / 0.18), 0 6px 14px -6px rgb(37 99 235 / 0.36);
+}
+.sr-btn-accent:hover:not(:disabled) { background: rgb(29 78 216); }
 .sr-btn-render {
   @apply inline-flex items-center gap-1.5 rounded-[9px] px-3 py-[7px] text-[12.5px] font-semibold text-white transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
   background: linear-gradient(180deg, rgb(var(--sky-400)), var(--sr-sky));
@@ -444,12 +502,22 @@ select.sr-input {
 }
 
 .sr-input {
-  @apply w-full rounded-[8px] px-2.5 py-1.5 text-[12.5px] text-ink-800 outline-none transition;
-  background: var(--sr-surface);
-  box-shadow: inset 0 0 0 1px var(--sr-hairline);
+  @apply w-full rounded-[8px] border px-2.5 py-1.5 text-[12.5px] text-ink-800 outline-none transition;
+  background: rgb(248 250 252 / 0.70);
+  border-color: rgb(203 213 225 / 0.60);
+  box-shadow: none;
+}
+[data-theme='dark'] .sr-input {
+  background: rgb(15 23 42 / 0.50);
+  border-color: rgb(71 85 105 / 0.50);
 }
 .sr-input:focus {
-  box-shadow: inset 0 0 0 1px var(--sr-sky), 0 0 0 3px var(--sr-sky-wash);
+  background: #ffffff;
+  border-color: rgb(59 130 246);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.10);
+}
+[data-theme='dark'] .sr-input:focus {
+  background: rgb(30 41 59 / 0.92);
 }
 
 /* Viên lọc mềm — dùng ở panel Chẩn đoán và bất cứ chỗ nào cần chọn một trong nhiều */
@@ -480,9 +548,14 @@ select.sr-input {
 }
 
 .sr-menu {
-  @apply absolute z-40 overflow-hidden rounded-xl py-1;
-  background: var(--sr-surface);
+  @apply absolute z-40 overflow-hidden rounded-xl border border-slate-200/80 py-1 dark:border-slate-700;
+  background: rgb(255 255 255 / 0.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   box-shadow: var(--sr-shadow-pop);
+}
+[data-theme='dark'] .sr-menu {
+  background: rgb(15 23 42 / 0.96);
 }
 .sr-menu-item {
   @apply flex w-full items-center gap-2.5 px-2.5 py-2 text-left text-[12.5px] text-ink-700 transition disabled:opacity-40;

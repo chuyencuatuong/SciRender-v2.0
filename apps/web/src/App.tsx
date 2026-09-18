@@ -104,7 +104,7 @@ export function App(): JSX.Element {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden bg-sr-workspace text-ink-900">
       <TopBar render={render} />
 
       {storageError ? (
@@ -117,9 +117,9 @@ export function App(): JSX.Element {
         <SideRail />
         <SidePanel render={render} floating={floatPanel} />
 
-        <div ref={splitRef} className="relative flex min-w-0 flex-1">
+        <div ref={splitRef} className="relative flex min-w-0 flex-1 bg-sr-workspace">
           <div
-            className="flex min-w-0 flex-1 flex-col bg-ink-50"
+            className="flex min-w-0 flex-1 flex-col bg-sr-workspace"
             style={overlayPreview ? undefined : { width: `${prefs.editorWidth}%`, flex: '0 0 auto' }}
           >
             <CanvasPane render={render} viewSwitch={overlayPreview ? { view, setView } : null} />
@@ -131,7 +131,7 @@ export function App(): JSX.Element {
               aria-orientation="vertical"
               aria-label="Kéo để đổi tỉ lệ soạn thảo và bản in"
               onMouseDown={() => setDragging(true)}
-              className={`w-1 shrink-0 cursor-col-resize transition ${
+              className={`w-1 shrink-0 cursor-col-resize border-l border-slate-300/80 transition dark:border-slate-700 ${
                 dragging ? 'bg-sky-500' : 'bg-transparent hover:bg-sky-400/50'
               }`}
             />
@@ -140,12 +140,12 @@ export function App(): JSX.Element {
           <div
             className={
               overlayPreview
-                ? `absolute bottom-0 right-0 top-0 z-[38] flex w-[min(560px,92vw)] flex-col shadow-[-24px_0_48px_-24px_rgb(var(--ink-900)/0.28)] transition-transform duration-300 ${
+                ? `absolute bottom-0 right-0 top-0 z-[38] flex w-[min(560px,92vw)] flex-col border-l border-slate-300/80 bg-sr-paper shadow-[-24px_0_48px_-24px_rgb(var(--ink-900)/0.28)] transition-transform duration-300 dark:border-slate-700 ${
                     view === 'preview'
                       ? 'translate-x-0'
                       : 'pointer-events-none translate-x-full'
                   }`
-                : 'flex min-w-0 flex-1 flex-col'
+                : 'flex min-w-0 flex-1 flex-col border-l border-slate-300/80 bg-sr-paper shadow-inner dark:border-slate-700'
             }
           >
             <PreviewPane render={render} onBack={overlayPreview ? () => setView('canvas') : null} />

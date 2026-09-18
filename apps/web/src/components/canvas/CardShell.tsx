@@ -92,8 +92,9 @@ export function CardShell(props: Props): JSX.Element {
       }}
       onMouseDown={props.onSelect}
       onFocusCapture={props.onSelect}
-      className={`group relative rounded-[12px] px-3.5 py-2 transition-[background,box-shadow] duration-200 ${
-        selected ? 'bg-[var(--sr-surface)] shadow-card' : 'hover:bg-[rgb(var(--ink-50)/0.7)]'
+      data-active={selected}
+      className={`sr-card-shell group relative px-3.5 py-3 transition-[border-color,box-shadow,transform] duration-200 ${
+        selected ? 'translate-y-[-1px]' : ''
       } ${dropZone ? ZONE_RING[dropZone] : ''}`}
     >
       {/* Thanh chỉ dấu bên trái thay cho cái khung: khối phẳng lì cho tới khi
@@ -105,15 +106,9 @@ export function CardShell(props: Props): JSX.Element {
         }`}
       />
 
-      <header className="pointer-events-none absolute -top-3 right-2 z-20 flex h-[30px] items-center gap-px rounded-full px-1 opacity-0 transition-[opacity,transform] duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[on=true]:pointer-events-auto data-[on=true]:opacity-100"
+      <header
+        className="sr-floating-toolbar pointer-events-none absolute -top-3 right-2 z-20 flex h-[30px] items-center gap-px rounded-full border border-slate-700/30 px-1 text-white opacity-0 dark:bg-slate-100 dark:text-slate-900 transition-[opacity,transform] duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[on=true]:pointer-events-auto data-[on=true]:opacity-100 dark:border-slate-300/40"
         data-on={selected}
-        style={{
-          background: 'rgb(var(--ink-50) / 0.92)',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
-          boxShadow:
-            '0 1px 2px rgb(var(--ink-900) / 0.05), 0 8px 16px -6px rgb(var(--ink-900) / 0.1), 0 24px 48px -16px rgb(var(--ink-900) / 0.14)',
-        }}
       >
         <span
           role="button"
@@ -122,13 +117,13 @@ export function CardShell(props: Props): JSX.Element {
           title="Kéo dọc để đổi thứ tự · kéo sang mép trái/phải khối khác để xếp hai cột"
           onMouseDown={() => setHandleDown(true)}
           onMouseUp={() => setHandleDown(false)}
-          className="grid h-[26px] w-[22px] cursor-grab place-items-center rounded-full text-ink-400 transition-colors hover:text-deep-600 active:cursor-grabbing"
+          className="grid h-[26px] w-[22px] cursor-grab place-items-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white active:cursor-grabbing dark:text-slate-600 dark:hover:bg-slate-200 dark:hover:text-slate-900"
         >
           <GripVertical size={13} />
         </span>
-        <span className="mx-0.5 h-[15px] w-px bg-ink-900/[0.07]" />
-        <span className="px-1.5 text-[11.5px] text-ink-500">{KIND_LABEL[card.kind]}</span>
-        <span className="mx-0.5 h-[15px] w-px bg-ink-900/[0.07]" />
+        <span className="mx-0.5 h-[15px] w-px bg-white/15 dark:bg-slate-300" />
+        <span className="px-1.5 text-[11.5px] text-white/80 dark:text-slate-700">{KIND_LABEL[card.kind]}</span>
+        <span className="mx-0.5 h-[15px] w-px bg-white/15 dark:bg-slate-300" />
 
         {props.recognised ? (
           <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-deep-700">
@@ -231,8 +226,8 @@ function IconBtn({
       aria-label={title}
       disabled={disabled}
       onClick={onClick}
-      className={`grid h-[26px] w-[26px] place-items-center rounded-full text-ink-400 transition disabled:opacity-25 ${
-        danger ? 'hover:bg-flag-50 hover:text-flag-600' : 'hover:bg-sky-500/10 hover:text-deep-600'
+      className={`grid h-[26px] w-[26px] place-items-center rounded-full text-white/70 transition disabled:opacity-25 dark:text-slate-600 ${
+        danger ? 'hover:bg-white/10 hover:text-red-200 dark:hover:bg-red-100 dark:hover:text-red-700' : 'hover:bg-white/10 hover:text-white dark:hover:bg-slate-200 dark:hover:text-slate-900'
       }`}
     >
       {children}

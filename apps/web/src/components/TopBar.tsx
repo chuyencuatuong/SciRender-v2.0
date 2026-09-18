@@ -1,19 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { listenForShortcuts } from '~/lib/shortcuts';
 import {
-  CheckCircle2,
   FileCode2,
   FilePlus2,
   Loader2,
   Moon,
   Package,
-  Play,
   Printer,
+  RefreshCw,
+  ShieldCheck,
   Save,
   Sun,
-  TriangleAlert,
   Upload,
-  ClipboardCheck,
 } from 'lucide-react';
 import { exportStandaloneHtml, printDocument, slug } from '@scirender/renderer-pdf';
 import { importBundle, exportBundle } from '@scirender/storage';
@@ -53,8 +51,8 @@ export function TopBar({ render }: Props): JSX.Element {
 
   const stale = source !== renderedSource;
   const result = render.result;
-  const errors = result?.diagnostics.filter((d) => d.severity === 'error').length ?? 0;
   const warnings = result?.diagnostics.filter((d) => d.severity === 'warning').length ?? 0;
+  const errors = result?.diagnostics.filter((d) => d.severity === 'error').length ?? 0;
 
   const pageHtml = render.pages.map((p) => p.html);
   const footers = render.pages.map((p) => p.footer);
@@ -161,54 +159,60 @@ export function TopBar({ render }: Props): JSX.Element {
   return (
     <header
       data-sr-topbar
-      className="sr-frost relative z-50 flex h-[60px] shrink-0 items-center gap-3 border-b border-ink-900/[0.05] pl-2.5 pr-3.5"
+      className="sr-chrome relative z-50 flex h-[60px] shrink-0 items-center gap-3 border-b px-3"
     >
-      <div className="flex shrink-0 items-baseline gap-2 pl-1">
-        <span className="font-serif text-[20px] font-normal tracking-[-0.015em] text-ink-900">
-          Sci<i className="font-light not-italic text-deep-600">Render</i>
-        </span>
-        <span className="hidden -translate-y-px rounded-full px-[5px] py-px font-mono text-[9.5px] tracking-wide text-ink-400 ring-1 ring-ink-900/[0.07] sm:inline">
-          v2.4
-        </span>
+      <div className="flex min-w-0 shrink-0 items-center gap-2.5">
+        <div className="flex shrink-0 items-baseline gap-2">
+          <span className="font-serif text-[20px] font-normal tracking-[-0.015em] text-ink-900">
+            Sci<i className="font-light not-italic text-sky-600 dark:text-sky-400">Render</i>
+          </span>
+          <span className="hidden rounded-full bg-slate-100 px-1.5 py-0.5 font-mono text-[9.5px] font-medium tracking-wide text-slate-500 ring-1 ring-slate-200 sm:inline dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
+            v2.4
+          </span>
+        </div>
+        <span aria-hidden="true" className="hidden h-4 w-px bg-slate-300 md:block dark:bg-slate-700" />
+        <div className="flex min-w-0 items-center gap-2">
+          <h1
+            className="hidden min-w-0 max-w-[24vw] truncate text-[13.5px] font-medium tracking-[-0.005em] text-ink-900 md:block"
+            title={title}
+          >
+            {title}
+          </h1>
+          <SaveState dirty={dirty} savedAt={savedAt} />
+        </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 items-center gap-2.5">
-        <h1
-          className="hidden min-w-0 truncate text-[13.5px] font-medium tracking-[-0.005em] text-ink-900 md:block"
-          title={title}
-        >
-          {title}
-        </h1>
-        <SaveState dirty={dirty} savedAt={savedAt} />
+      <div className="hidden min-w-0 flex-1 items-center justify-center lg:flex">
+        <div className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-white/70 px-2 py-1 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+          <span className="px-2 font-mono text-[10.5px] text-slate-500 dark:text-slate-400">{render.pages.length} trang</span>
+          <span className="h-3.5 w-px bg-slate-200 dark:bg-slate-700" />
+          <span className="px-2 font-mono text-[10.5px] text-slate-500 dark:text-slate-400">{result?.health.stats.words ?? 0} từ</span>
+          {errors > 0 || warnings > 0 ? (
+            <>
+              <span className="h-3.5 w-px bg-slate-200 dark:bg-slate-700" />
+              {errors > 0 ? (
+                <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10.5px] font-medium text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">{errors} lỗi</span>
+              ) : (
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-medium text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">{warnings} cảnh báo</span>
+              )}
+            </>
+          ) : null}
+        </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        {result ? (
-          errors > 0 ? (
-            <span className="sr-chip hidden bg-flag-50 text-flag-600 lg:inline-flex">
-              <TriangleAlert size={12} /> {errors} lỗi
-            </span>
-          ) : warnings > 0 ? (
-            <span className="sr-chip hidden bg-amber-50 text-amber-700 lg:inline-flex">
-              {warnings} cảnh báo
-            </span>
-          ) : (
-            <span className="sr-chip hidden bg-emerald-50 text-emerald-700 lg:inline-flex">
-              <CheckCircle2 size={12} /> Không lỗi
-            </span>
-          )
-        ) : null}
-
+      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <div className="flex items-center gap-1 overflow-x-auto">
         <button
           className={stale ? 'sr-btn-render' : 'sr-btn-ghost'}
           onClick={requestRender}
           disabled={render.running}
           title="Dựng lại trang (Ctrl + Enter)"
         >
-          {render.running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+          {render.running ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           <span className="hidden sm:inline">Dựng trang</span>
         </button>
 
+        <span aria-hidden="true" className="mx-0.5 hidden h-5 w-px bg-slate-200 sm:block dark:bg-slate-700" />
         <Menu
           label="Tệp"
           icon={<FilePlus2 size={14} />}
@@ -252,23 +256,25 @@ export function TopBar({ render }: Props): JSX.Element {
           ]}
         />
 
+        <span aria-hidden="true" className="mx-0.5 hidden h-5 w-px bg-slate-200 sm:block dark:bg-slate-700" />
+
         {/* Một nút duy nhất — không còn menu chẻ với các lối tải PDF ảnh
             (qua máy chủ / ngoại tuyến). "In…" luôn cho chữ thật, không cần
             server, không cần mạng; chỉ có một bước thủ công là chọn "Save
             as PDF" ở hộp thoại in (đã có lời nhắc một lần, xem onPrint). */}
         <button
           type="button"
-          className="sr-btn-ghost"
+          className="sr-btn-ghost !px-2.5"
           onClick={() => setAuditOpen(true)}
           disabled={!result && render.running}
           title="Kiểm tra trước khi nộp"
         >
-          <ClipboardCheck size={14} />
+          <ShieldCheck size={14} />
           <span className="hidden lg:inline">Kiểm tra trước khi nộp</span>
         </button>
 
         <button
-          className="sr-btn-render"
+          className="sr-btn-accent"
           onClick={onPrint}
           disabled={noPages}
           title='Mở hộp thoại in — chọn "Save as PDF" để lưu PDF chữ thật (Ctrl + P)'
@@ -277,7 +283,7 @@ export function TopBar({ render }: Props): JSX.Element {
           <span className="hidden sm:inline">In / Lưu PDF</span>
         </button>
 
-        <span aria-hidden="true" className="mx-0.5 h-5 w-px bg-ink-900/[0.07]" />
+        <span aria-hidden="true" className="mx-0.5 h-5 w-px bg-slate-200 dark:bg-slate-700" />
 
         {/* Sáng/Tối — chỉ đổi data-theme trên <html>, không đụng tới trang in
             (trang A4 luôn trắng, xem index.css). Lưu lại nên mở app lần sau
@@ -303,6 +309,7 @@ export function TopBar({ render }: Props): JSX.Element {
             e.target.value = '';
           }}
         />
+        </div>
       </div>
       <AuditDialog
         open={auditOpen}

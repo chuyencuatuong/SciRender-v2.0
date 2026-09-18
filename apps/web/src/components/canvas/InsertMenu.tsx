@@ -90,7 +90,7 @@ export function InsertMenu({ onInsert, label = 'Thêm khối', compact = false, 
             ? 'inline-grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--sr-surface)] text-deep-700 shadow-card ring-1 ring-ink-900/[0.07] transition hover:bg-sky-50 hover:text-deep-600'
             : compact
             ? 'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-[9px] bg-ink-900/[0.045] px-2.5 py-[5px] text-[11.5px] text-ink-600 transition hover:bg-sky-500/10 hover:text-deep-700'
-            : 'inline-flex h-[27px] shrink-0 items-center gap-1 whitespace-nowrap rounded-[8px] bg-[var(--sr-surface)] px-2.5 text-[12px] font-medium text-deep-700 shadow-card transition hover:text-deep-600'
+            : 'inline-flex h-[29px] shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 text-[12px] font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
         }
       >
         <Plus size={13} />

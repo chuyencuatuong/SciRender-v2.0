@@ -41,6 +41,14 @@ export default {
         // biến CSS như các màu thương hiệu.
         amber: themedScale('amber'),
         emerald: themedScale('emerald'),
+        sr: {
+          workspace: 'var(--sr-workspace-base)',
+          sunk: 'var(--sr-workspace-sunk)',
+          paper: 'var(--sr-paper-ground)',
+          chrome: 'var(--sr-chrome)',
+          card: 'var(--sr-card)',
+          floating: 'var(--sr-floating)',
+        },
       },
       fontFamily: {
         // Cả ba mặt chữ đều có bộ dấu tiếng Việt và nằm trong app (xem fonts.css)
@@ -52,6 +60,8 @@ export default {
         card: '0 1px 2px rgba(15,23,42,.04), 0 12px 24px -8px rgba(15,23,42,.07)',
         pop: '0 1px 2px rgba(15,23,42,.05), 0 8px 16px -6px rgba(15,23,42,.10), 0 24px 48px -16px rgba(15,23,42,.14)',
         island: '0 1px 2px rgba(15,23,42,.06), 0 10px 28px -10px rgba(15,23,42,.22)',
+        'elevation-card': '0 2px 8px -2px rgba(15,23,42,.06), 0 1px 3px -1px rgba(15,23,42,.04)',
+        'elevation-float': '0 14px 30px -12px rgba(15,23,42,.42), 0 2px 8px -2px rgba(15,23,42,.24)',
       },
     },
   },

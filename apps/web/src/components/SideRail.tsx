@@ -36,7 +36,7 @@ export function SideRail(): JSX.Element {
 
   return (
     <nav
-      className="sr-frost-soft z-40 flex w-[56px] shrink-0 flex-col items-center gap-1 border-r border-ink-900/[0.06] py-2.5"
+      className="sr-chrome z-40 flex w-[56px] shrink-0 flex-col items-center gap-1 border-r py-2.5"
       aria-label="Bảng bên"
     >
       {ITEMS.map(({ id, label, icon: Icon }) => {

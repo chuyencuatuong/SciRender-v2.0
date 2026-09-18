@@ -805,13 +805,52 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
 
   return (
     <>
-      <div className="flex h-11 shrink-0 items-center gap-1.5 overflow-hidden border-b border-ink-900/[0.045] px-3">
+      <div className="sr-canvas-toolbar flex h-11 shrink-0 items-center gap-1.5 overflow-hidden border-b border-slate-200/80 px-3 dark:border-slate-800">
         <InsertMenu onInsert={(tpl) => insertAt(doc.cards.length, tpl.text)} />
+        <button
+          type="button"
+          onClick={() => setSplitView((v) => !v)}
+          aria-pressed={splitView}
+          title="Chia đôi khung soạn — xem hai chỗ trong cùng tài liệu cùng lúc"
+          className={`inline-flex h-[28px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[12px] font-medium transition ${
+            splitView
+              ? 'border-sky-200 bg-sky-50 text-sky-700 shadow-sm dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300'
+              : 'border-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-950 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100'
+          }`}
+        >
+          <Columns2 size={13} strokeWidth={1.5} /> Chia đôi
+        </button>
+
+        {viewSwitch ? (
+          <div
+            role="tablist"
+            aria-label="Khung nhìn"
+            className="flex h-[30px] items-center gap-0.5 rounded-full border border-slate-200/80 bg-slate-100/80 px-[3px] dark:border-slate-700 dark:bg-slate-900/70"
+          >
+            {(['canvas', 'preview'] as const).map((v) => (
+              <button
+                key={v}
+                role="tab"
+                aria-selected={viewSwitch.view === v}
+                onClick={() => viewSwitch.setView(v)}
+                className={`h-[24px] rounded-full px-2.5 text-[11.5px] transition ${
+                  viewSwitch.view === v
+                    ? 'bg-white font-medium text-slate-800 shadow-sm dark:bg-slate-800 dark:text-slate-100'
+                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
+                }`}
+              >
+                {v === 'canvas' ? 'Soạn' : 'Bản in'}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <span aria-hidden="true" className="mx-1 hidden h-5 w-px bg-slate-200 md:block dark:bg-slate-700" />
         <button
           type="button"
           onClick={() => setShowFront(true)}
           title="Thông tin tài liệu — tên nhóm, GVHD, MSSV"
-          className="inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] text-ink-500 transition hover:bg-ink-900/[0.04] hover:text-ink-900"
+          className="hidden h-[28px] shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2.5 text-[11.5px] text-slate-500 transition hover:border-slate-200 hover:bg-white hover:text-slate-900 md:inline-flex dark:text-slate-400 dark:hover:border-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100"
         >
           <FileText size={13} strokeWidth={1.5} /> Thông tin
         </button>
@@ -819,54 +858,18 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
           type="button"
           onClick={() => setShowSource(true)}
           title="Xem mã nguồn Markdown của tài liệu"
-          className="inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] text-ink-500 transition hover:bg-ink-900/[0.04] hover:text-ink-900"
+          className="hidden h-[28px] shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2.5 text-[11.5px] text-slate-500 transition hover:border-slate-200 hover:bg-white hover:text-slate-900 lg:inline-flex dark:text-slate-400 dark:hover:border-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100"
         >
           <Braces size={13} strokeWidth={1.5} /> Mã nguồn
         </button>
-        <button
-          type="button"
-          onClick={() => setSplitView((v) => !v)}
-          aria-pressed={splitView}
-          title="Chia đôi khung soạn — xem hai chỗ trong cùng tài liệu cùng lúc"
-          className={`inline-flex h-[27px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] transition ${
-            splitView
-              ? 'bg-deep-50 text-deep-700'
-              : 'text-ink-500 hover:bg-ink-900/[0.04] hover:text-ink-900'
-          }`}
-        >
-          <Columns2 size={13} strokeWidth={1.5} /> Chia đôi
-        </button>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1">
-          {viewSwitch ? (
-            <div
-              role="tablist"
-              aria-label="Khung nhìn"
-              className="mr-1 flex h-[28px] items-center gap-0.5 rounded-[9px] bg-ink-900/[0.05] px-[3px]"
-            >
-              {(['canvas', 'preview'] as const).map((v) => (
-                <button
-                  key={v}
-                  role="tab"
-                  aria-selected={viewSwitch.view === v}
-                  onClick={() => viewSwitch.setView(v)}
-                  className={`h-[22px] rounded-[7px] px-2.5 text-[11.5px] transition ${
-                    viewSwitch.view === v
-                      ? 'bg-[var(--sr-surface)] font-medium text-deep-600 shadow-[0_1px_2px_rgb(var(--ink-900)/0.08)]'
-                      : 'text-ink-500'
-                  }`}
-                >
-                  {v === 'canvas' ? 'Soạn' : 'Bản in'}
-                </button>
-              ))}
-            </div>
-          ) : null}
+        <div className="ml-auto flex shrink-0 items-center gap-1 rounded-full border border-slate-200/80 bg-white/70 p-0.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
           <button
             type="button"
             title="Hoàn tác (Ctrl+Z)"
             aria-label="Hoàn tác"
             onClick={undo}
-            className="grid h-[26px] w-[26px] place-items-center rounded-[7px] text-ink-400 transition hover:bg-ink-900/[0.04] hover:text-deep-600"
+            className="grid h-[26px] w-[26px] place-items-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
           >
             <Undo2 size={13} strokeWidth={1.5} />
           </button>
@@ -875,11 +878,11 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
             title="Làm lại (Ctrl+Y)"
             aria-label="Làm lại"
             onClick={redo}
-            className="grid h-[26px] w-[26px] place-items-center rounded-[7px] text-ink-400 transition hover:bg-ink-900/[0.04] hover:text-deep-600"
+            className="grid h-[26px] w-[26px] place-items-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
           >
             <Redo2 size={13} strokeWidth={1.5} />
           </button>
-          <span className="ml-1 whitespace-nowrap font-mono text-[10.5px] text-ink-300">
+          <span className="whitespace-nowrap px-2 font-mono text-[10.5px] text-slate-400">
             {doc.cards.length} khối
           </span>
         </div>

@@ -89,7 +89,7 @@ export function PreviewPane({ render, onBack = null }: Props): JSX.Element {
 
   return (
     <>
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-ink-900/[0.045] bg-ink-50 px-4">
+      <div className="sr-chrome flex h-11 shrink-0 items-center gap-2 border-b px-4">
         {/* Số trang nằm ở đảo thu phóng dưới chân giấy, nên ở đây chỉ còn
             trạng thái: thanh này trả lời "bản in đã mới chưa", không đếm. */}
         {onBack ? (

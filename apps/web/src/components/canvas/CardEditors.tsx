@@ -537,7 +537,7 @@ function LabelField({
   onChange: (value: string) => void;
 }): JSX.Element {
   return (
-    <label className="flex items-center gap-2 text-[11px] text-ink-500">
+    <label className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
       nhãn
       <input
         className="sr-input h-6 min-w-0 flex-1 font-mono text-[11px]"
