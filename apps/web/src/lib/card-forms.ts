@@ -25,10 +25,18 @@ function takeCaption(text: string): { body: string; caption: string; label: stri
 }
 
 function takeLabel(text: string): { text: string; label: string } {
-  const m = /\{#([a-z]+:[A-Za-z0-9_.-]+)\}\s*$/.exec(text.trim());
-  if (!m) return { text: text.trim(), label: '' };
-  return { text: text.slice(0, m.index).trim(), label: m[1] as string };
+  const matches = Array.from(text.matchAll(/\{#([a-z]+:[A-Za-z0-9_.-]+)(?:\s+[^{}]*)?\}/g));
+  const label = matches.at(-1)?.[1] ?? '';
+  const cleaned = text
+    .replace(/\{#.*?\}|\{\s*\}/g, ' ')
+    .replace(/\{([^{}]*)\}/g, (_, content: string) =>
+      content.replace(/#([a-z]+:[A-Za-z0-9_.-]+)/g, '').trim(),
+    )
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return { text: cleaned, label };
 }
+
 
 function captionLine(caption: string, label: string): string {
   if (!caption && !label) return '';
@@ -83,6 +91,7 @@ export function serializeCode(form: CodeForm): string {
 
 export interface DiagramForm {
   source: string;
+  asset?: string;
   direction: string;
   curve: 'linear' | 'basis' | 'step';
   theme: 'academic' | 'obsidian' | 'blueprint';
@@ -93,6 +102,26 @@ export interface DiagramForm {
 }
 
 export function parseDiagram(text: string): DiagramForm | null {
+  const trimmed = text.trim();
+  const assetMatch = /^!\[([^\]]*)\]\((asset:[^)]+)\)\s*\{([^}]*)\}\s*$/.exec(trimmed);
+  if (assetMatch) {
+    const asset = assetMatch[2] ?? '';
+    const payload = assetMatch[3] ?? '';
+    const label = /(?:^|\s)#(dia:[A-Za-z0-9_.-]+)/.exec(payload)?.[1] ?? '';
+    if (!label) return null;
+    return {
+      source: '',
+      asset,
+      direction: '',
+      curve: 'basis',
+      theme: 'academic',
+      landscape: false,
+      caption: (assetMatch[1] ?? '').trim(),
+      label,
+      attrs: { asset },
+    };
+  }
+
   const { body, caption, label } = takeCaption(text);
   const m = /^```mermaid[ \t]*\n([\s\S]*?)\n?```[ \t]*$/.exec(body.trim());
   if (!m) return null;
@@ -106,15 +135,28 @@ export function parseDiagram(text: string): DiagramForm | null {
   if (theme) attrs.theme = theme;
   if (landscape) attrs.landscape = 'true';
   const cleanCaption = caption
-    .replace(/\s*\bdir=(TB|TD|BT|LR|RL)\b/, '')
-    .replace(/\s*\bcurve=(linear|basis|step)\b/, '')
-    .replace(/\s*\btheme=(academic|obsidian|blueprint)\b/, '')
-    .replace(/\s*\b(?:landscape|orientation=landscape)\b/, '')
+    .replace(/\s*\bdir=(TB|TD|BT|LR|RL)\b/g, '')
+    .replace(/\s*\bcurve=(linear|basis|step)\b/g, '')
+    .replace(/\s*\btheme=(academic|obsidian|blueprint)\b/g, '')
+    .replace(/\s*\b(?:landscape|orientation=landscape)\b/g, '')
+    .replace(/\{\s*\}/g, ' ')
     .trim();
-  return { source: m[1] ?? '', direction: dir ? (dir[1] as string) : '', curve: curve ?? 'basis', theme: theme ?? 'academic', landscape, caption: cleanCaption, label, attrs };
+  return {
+    source: m[1] ?? '',
+    direction: dir ? (dir[1] as string) : '',
+    curve: curve ?? 'basis',
+    theme: theme ?? 'academic',
+    landscape,
+    caption: cleanCaption,
+    label,
+    attrs,
+  };
 }
 
 export function serializeDiagram(form: DiagramForm): string {
+  if (form.asset?.startsWith('asset:')) {
+    return `![${form.caption || 'Sơ đồ kỹ thuật'}](${form.asset}){#${form.label || 'dia:technical-diagram'}}`;
+  }
   const bits = [
     form.label ? `#${form.label}` : '',
     form.direction ? `dir=${form.direction}` : '',
@@ -179,15 +221,24 @@ function splitRow(line: string): string[] {
   if (t.endsWith('|') && !t.endsWith('\\|')) t = t.slice(0, -1);
   const out: string[] = [];
   let buf = '';
+  let inMath = false;
+  let mathFence = '';
   for (let i = 0; i < t.length; i++) {
     const ch = t[i] as string;
     if (ch === '\\' && t[i + 1] === '|') { buf += '|'; i++; continue; }
-    if (ch === '|') { out.push(buf.trim()); buf = ''; continue; }
+    if (ch === '$') {
+      if (t[i + 1] === '$') { inMath = !inMath; mathFence = inMath ? '$$' : ''; buf += '$$'; i++; continue; }
+      if (mathFence !== '$$') { inMath = !inMath; mathFence = inMath ? '$' : ''; }
+      buf += ch;
+      continue;
+    }
+    if (ch === '|' && !inMath) { out.push(buf.trim()); buf = ''; continue; }
     buf += ch;
   }
   out.push(buf.trim());
   return out;
 }
+
 
 function alignOf(spec: string): CellAlign {
   const t = spec.trim();

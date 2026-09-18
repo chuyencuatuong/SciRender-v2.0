@@ -17,6 +17,58 @@ import { detectKind, type CardKind } from './cards';
  */
 export type PasteKind = 'text' | 'latex' | 'table' | 'code' | 'diagram' | 'image';
 
+export function normalizeLatex(text: string): string {
+  return text
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_m, body: string) => `$${body}$`)
+    .replace(/\\\[([\s\S]*?)\\\]/g, '$$\n$1\n$$')
+    .replace(/\r\n?/g, '\n');
+}
+
+export interface BulkPasteItem {
+  markdown: string;
+  label: string;
+  cardKind: CardKind;
+}
+
+export function parseBulkMarkdown(text: string): BulkPasteItem[] | null {
+  const source = normalizeLatex(text).trim();
+  if (!source) return null;
+  const lines = source.split('\n');
+  const blocks: string[] = [];
+  let buf: string[] = [];
+  let fence: string | null = null;
+  const flush = (): void => {
+    const value = buf.join('\n').trim();
+    if (value) blocks.push(value);
+    buf = [];
+  };
+  for (const line of lines) {
+    const f = /^\s*(```|~~~)(.*)$/.exec(line);
+    if (fence) {
+      buf.push(line);
+      if (f && f[1] === fence) { fence = null; flush(); }
+      continue;
+    }
+    if (f) { flush(); fence = f[1]!; buf.push(line); continue; }
+    if (/^#{1,6}\s+/.test(line) && buf.length) flush();
+    if (/^#{1,6}\s+/.test(line) || /^\$\$/.test(line) || /^\|.*\|\s*$/.test(line)) {
+      if (buf.length && /^\|/.test(line) !== /^\|/.test(buf[0] ?? '')) flush();
+    }
+    if (!line.trim()) { flush(); continue; }
+    buf.push(line);
+  }
+  flush();
+  if (blocks.length < 2) return null;
+  const items: BulkPasteItem[] = [];
+  for (const block of blocks) {
+    const kind = detectPaste(block).cardKind;
+    const label = detectPaste(block).label;
+    items.push({ markdown: block, label, cardKind: kind });
+  }
+  const structural = items.filter((item) => item.cardKind !== 'paragraph').length;
+  return structural || blocks.length > 2 ? items : null;
+}
+
 export interface PasteResult {
   kind: PasteKind;
   /** Markdown ready to go into a card. Empty for images (the file is handled). */
@@ -155,7 +207,7 @@ export function tableFromHtml(html: string): string[][] | null {
 /* ------------------------------------------------------------- dispatcher */
 
 export function detectPaste(text: string, html?: string): PasteResult {
-  const clean = text.replace(/\r\n?/g, '\n');
+  const clean = normalizeLatex(text);
   const trimmed = clean.trim();
 
   const htmlRows = html ? tableFromHtml(html) : null;

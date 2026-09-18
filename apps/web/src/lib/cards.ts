@@ -396,13 +396,13 @@ export function moveCard(cards: Card[], from: number, to: number): Card[] {
 }
 
 /** Wraps two cards into one two-column row. */
-export function makeColumns(left: string, right: string): string {
-  return `::: cols\n${left.trim()}\n|||\n${right.trim()}\n:::`;
+export function makeColumns(left: string, right: string, landscape = false): string {
+  return `::: cols${landscape ? ' landscape' : ''}\n${left.trim()}\n|||\n${right.trim()}\n:::`;
 }
 
 /** Splits a two-column row back into its two halves; null when not a row. */
 export function splitColumns(text: string): [string, string] | null {
-  const m = /^:::\s*cols[ \t]*\n([\s\S]*?)\n:::\s*$/.exec(text.trim());
+  const m = /^:::\s*cols(?:[ \t]+(?:landscape|orientation=landscape))?[ \t]*\n([\s\S]*?)\n:::\s*$/.exec(text.trim());
   if (!m) return null;
   const parts = (m[1] as string).split(/^\|\|\|[ \t]*$/m);
   if (parts.length !== 2) return null;

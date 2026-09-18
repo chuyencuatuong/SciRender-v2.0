@@ -14,9 +14,9 @@ import {
   type CanvasDoc,
   type CardTemplate,
 } from '~/lib/cards';
-import { setHeadingDepth } from '~/lib/card-forms';
+import { headingDepth, setHeadingDepth } from '~/lib/card-forms';
 import { isEditableTarget, listenForShortcuts, matchesShortcut } from '~/lib/shortcuts';
-import { detectPaste } from '~/lib/paste';
+import { detectPaste, parseBulkMarkdown } from '~/lib/paste';
 import { BadgeCheck, X } from 'lucide-react';
 import type { RenderState } from '~/hooks/useRender';
 import { useStore } from '~/state/store';
@@ -91,15 +91,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     null,
   );
   const [chartRequest, setChartRequest] = useState<{ index: number; table: string; label: string } | null>(null);
-  const [pendingPaste, setPendingPaste] = useState<{
-    text: string;
-    markdown: string;
-    label?: string;
-    kind: string;
-    target?: HTMLTextAreaElement | HTMLInputElement;
-    start?: number;
-    end?: number;
-  } | null>(null);
+  const [pasteToast, setPasteToast] = useState<{ label: string } | null>(null);
   const [deleteConfirmIndex, setDeleteConfirmIndex] = useState<number | null>(null);
 
   const reduced = useReducedMotion();
@@ -468,55 +460,75 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     async (e: ClipboardEvent): Promise<void> => {
       const data = e.clipboardData;
       if (!data) return;
-
       const file = Array.from(data.files).find((f) => f.type.startsWith('image/'));
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const activeCardEl = active?.closest<HTMLElement>('[data-card-id]');
+      const activeId = activeCardEl?.dataset.cardId ?? null;
+      const activeIndex = activeId ? doc.cards.findIndex((c) => c.id === activeId) : selected;
+      const insertionIndex = activeIndex >= 0 ? activeIndex + 1 : viewportInsertIndex();
+
       if (file) {
         e.preventDefault();
-        const stamped = new File([file], file.name || `anh-dan-${Date.now()}.png`, {
-          type: file.type,
-        });
+        const stamped = new File([file], file.name || `anh-dan-${Date.now()}.png`, { type: file.type });
         const [name] = await addAssets([stamped]);
         if (!name) return;
-        insertAt(
-          selected + 1,
-          `![Chú thích hình](asset:${name}){#fig:anh-${name} width=80%}`,
-          'Ảnh từ clipboard',
-        );
+        insertAt(insertionIndex, `![Chú thích hình](asset:${name}){#fig:anh-${name} width=80%}`, 'Ảnh từ clipboard');
+        setPasteToast({ label: 'Đã chèn Hình ảnh từ clipboard' });
+        window.setTimeout(() => setPasteToast(null), 1800);
         return;
       }
 
-      const active = document.activeElement as HTMLElement | null;
-      const inField =
-        active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement;
-      const fieldIsEmpty = inField && !(active as HTMLTextAreaElement).value.trim();
-      // Typing into a field that already has text keeps the plain paste a
-      // writer expects; everything else goes through recognition.
+      const inField = active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement;
+      const fieldIsEmpty = inField ? active.value.trim() === '' : true;
       if (inField && !fieldIsEmpty) return;
-
       const text = data.getData('text/plain');
       if (!text.trim()) return;
       const html = data.getData('text/html');
-      const richHtml = /<(?:p|div|span|table|thead|tbody|tr|ul|ol|pre|blockquote|h[1-6]|strong|em|a)\b/i.test(html);
-      const result = detectPaste(text, html || undefined);
 
-      if (inField && !fieldIsEmpty && !(richHtml || result.kind !== 'text')) return;
-
-      e.preventDefault();
-      if (result.kind === 'text' && !richHtml) {
-        insertAt(selected + 1, result.markdown);
-      } else {
-        setPendingPaste({
-          text,
-          markdown: result.markdown,
-          label: result.label,
-          kind: result.kind === 'text' ? 'rich text' : result.kind,
-          target: inField ? (active as HTMLTextAreaElement | HTMLInputElement) : undefined,
-          start: inField ? (active as HTMLTextAreaElement | HTMLInputElement).selectionStart ?? 0 : undefined,
-          end: inField ? (active as HTMLTextAreaElement | HTMLInputElement).selectionEnd ?? 0 : undefined,
-        });
+      if (!inField || fieldIsEmpty) {
+        const bulk = parseBulkMarkdown(text);
+        if (bulk && bulk.length > 1) {
+          e.preventDefault();
+          const cards = doc.cards.slice();
+          let at = insertionIndex;
+          for (const item of bulk) {
+            const card: Card = { id: nextId(), kind: item.cardKind, text: item.markdown, line: 0 };
+            cards.splice(Math.min(at, cards.length), 0, card);
+            at++;
+          }
+          setCards(cards);
+          const focusCard = cards[Math.min(at - 1, cards.length - 1)];
+          setSelected(Math.max(0, at - 1));
+          setActiveBlockId(focusCard?.id ?? null);
+          setPasteToast({ label: `Đã nhận ${bulk.length} khối từ nội dung AI` });
+          window.setTimeout(() => setPasteToast(null), 2200);
+          requestAnimationFrame(() => {
+            const first = document.querySelector<HTMLElement>(`[data-card-id="${focusCard?.id ?? ''}"]`);
+            first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+          return;
+        }
       }
+
+      const result = detectPaste(text, html || undefined);
+      if (result.kind === 'text' && !html) return;
+      e.preventDefault();
+      if (inField && active) {
+        const start = active.selectionStart ?? active.value.length;
+        const end = active.selectionEnd ?? start;
+        active.focus();
+        const inserted = result.markdown || text;
+        const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(active), 'value')?.set;
+        setter?.call(active, active.value.slice(0, start) + inserted + active.value.slice(end));
+        active.dispatchEvent(new Event('input', { bubbles: true }));
+        active.setSelectionRange?.(start + inserted.length, start + inserted.length);
+      } else {
+        insertAt(insertionIndex, result.markdown, result.label);
+      }
+      setPasteToast({ label: `Đã chèn ${result.label}` });
+      window.setTimeout(() => setPasteToast(null), 1800);
     },
-    [addAssets, insertAt, selected],
+    [addAssets, doc.cards, insertAt, selected, setActiveBlockId, setCards, viewportInsertIndex],
   );
 
   useEffect(() => {
@@ -692,7 +704,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
         const editor = target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement ? target : null;
         const card = currentDoc.cards[activeIndex];
         if (editor && card?.kind === 'paragraph' && editor.selectionStart === editor.selectionEnd) {
-          const cursor = editor.selectionStart;
+          const cursor = editor.selectionStart ?? 0;
           const lineStart = editor.value.lastIndexOf('\n', cursor - 1) + 1;
           const line = editor.value.slice(lineStart, cursor);
           const marker = /^(#{1,3}|>|[-*+]|\d+[.)])$/.exec(line)?.[1];
@@ -754,7 +766,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
       if (typing && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
         const editor = target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement ? target : null;
         if (editor && editor.selectionStart === editor.selectionEnd) {
-          const cursor = editor.selectionStart;
+          const cursor = editor.selectionStart ?? 0;
           const lineStart = editor.value.lastIndexOf('\n', cursor - 1) + 1;
           const lineBreak = editor.value.indexOf('\n', cursor);
           const lineEnd = lineBreak < 0 ? editor.value.length : lineBreak;
@@ -830,34 +842,6 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     };
   }, [splitDragging]);
 
-  const applyPendingPaste = (text: string): void => {
-    if (!pendingPaste) return;
-    const target = pendingPaste.target;
-    if (target && target.isConnected) {
-      target.focus();
-      const start = pendingPaste.start ?? target.selectionStart ?? 0;
-      const end = pendingPaste.end ?? target.selectionEnd ?? start;
-      target.setSelectionRange?.(start, end);
-      const inserted = text;
-      let handled = false;
-      try {
-        handled = document.execCommand('insertText', false, inserted);
-      } catch {
-        handled = false;
-      }
-      if (!handled) {
-        const next = target.value.slice(0, start) + inserted + target.value.slice(end);
-        const proto = target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-        setter?.call(target, next);
-        target.dispatchEvent(new Event('input', { bubbles: true }));
-        target.setSelectionRange?.(start + inserted.length, start + inserted.length);
-      }
-    } else {
-      insertAt(selected + 1, text, pendingPaste.label);
-    }
-    setPendingPaste(null);
-  };
 
   // The scrollable card list — one pane's worth of content. Split view mounts
   // this TWICE (independent scroll containers, independent DOM), both fed the
@@ -949,12 +933,14 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
                   labels={labels}
                   bibliography={render.result?.document.meta.bibliography}
                   onSelect={() => selectCard(index)}
+                  onDoubleClick={() => window.dispatchEvent(new CustomEvent('sr:preview-focus', { detail: { id: card.id } }))}
                   onChange={(text) => updateCard(index, text)}
                   onMove={(delta) => moveBy(index, delta)}
                   onDuplicate={() => duplicateAt(index)}
                   onDelete={() => requestDelete(index)}
                   onCreateChart={card.kind === 'table' ? () => requestChart(index) : undefined}
                   onUnmerge={() => unmerge(index)}
+                  onToggleLandscape={card.kind === 'columns' ? () => { const landscape = /\b(?:landscape|orientation=landscape)\b/.test(card.text); const next = landscape ? card.text.replace(/\s+(?:landscape|orientation=landscape)/, '') : card.text.replace(/^::: cols\b/, '::: cols landscape'); updateCard(index, next, 'columns'); } : undefined}
                   onMergeWithNext={() => mergeColumns(index, index + 1)}
                   onDragStart={() => { stopDragAutoScroll(); setDragBoth({ from: index, over: null, zone: null }); }}
                   onDragEnd={() => { stopDragAutoScroll(); setDragBoth(null); }}
@@ -1003,24 +989,20 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
           ))}
         </AnimatePresence>
 
-        {pendingPaste ? (
-          <div className="fixed bottom-6 left-1/2 z-[60] flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-1.5 rounded-xl border border-ink-900/[0.08] bg-[var(--sr-surface)] p-1.5 shadow-2xl">
-            <span className="px-2 text-[10.5px] text-ink-500">Đã nhận dạng: <strong>{pendingPaste.kind}</strong></span>
-            <button type="button" className="rounded-lg px-2 py-1.5 text-[10.5px] text-deep-700 hover:bg-sky-50" onClick={() => applyPendingPaste(pendingPaste.markdown)}>Theo định dạng SciRender</button>
-            <button type="button" className="rounded-lg px-2 py-1.5 text-[10.5px] text-ink-700 hover:bg-ink-900/[0.05]" onClick={() => applyPendingPaste(pendingPaste.text)}>Chỉ lấy văn bản</button>
-            <button type="button" className="rounded-lg px-2 py-1.5 text-[10.5px] text-ink-700 hover:bg-ink-900/[0.05]" onClick={() => applyPendingPaste(pendingPaste.text)}>Markdown thô</button>
-            <button type="button" aria-label="Bỏ dán" className="ml-0.5 grid h-6 w-6 place-items-center rounded text-ink-400 hover:bg-ink-900/[0.05]" onClick={() => setPendingPaste(null)}>×</button>
+        {pasteToast ? (
+          <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-xl border border-white/10 bg-[#161922]/95 px-3 py-2 text-[11px] text-white shadow-2xl backdrop-blur-md">
+            <span>{pasteToast.label}</span> <button type="button" onClick={undo} className="ml-2 font-medium text-sky-300 hover:text-sky-200">Hoàn tác</button>
           </div>
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2 pt-3">
           <InsertMenu
             compact
-            label="Thêm khối ở cuối"
+            label="Thêm khối"
             onInsert={(tpl: CardTemplate) => insertAt(viewportInsertIndex(), tpl.text)}
           />
           <span className="text-[11px] text-ink-400">
-            hoặc bấm vào một khối rồi Ctrl+V — app tự nhận dạng ảnh, bảng Excel, LaTeX, code
+            hoặc Ctrl+V — app tự nhận dạng ảnh, bảng, Mermaid, LaTeX, code và nội dung AI
           </span>
         </div>
       </div>

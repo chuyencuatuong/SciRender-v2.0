@@ -78,14 +78,14 @@ const THEME_VARS: Record<DiagramStudioTheme, Record<string, string>> = {
 
 export async function renderDiagramSvg(
   source: string,
-  options: { curve?: DiagramStudioCurve; theme?: DiagramStudioTheme; direction?: 'TB' | 'TD' | 'BT' | 'LR' | 'RL'; fontFamily?: string } = {},
+  options: { curve?: DiagramStudioCurve; theme?: DiagramStudioTheme; direction?: 'TB' | 'TD' | 'BT' | 'LR' | 'RL'; fontFamily?: string; nodeSpacing?: number; rankSpacing?: number } = {},
 ): Promise<string> {
   const mermaid = (await import('mermaid')).default;
   const curve = options.curve ?? 'basis';
   const theme = options.theme ?? 'academic';
   const direction = options.direction;
   const directedSource = direction ? applyDirection(source, direction) : source;
-  const fontFamily = options.fontFamily ?? 'Be Vietnam Pro, Arial, sans-serif';
+  const fontFamily = '"Times New Roman", Times, serif';
   const tv = THEME_VARS[theme];
   mermaid.initialize({
     startOnLoad: false,
@@ -93,12 +93,16 @@ export async function renderDiagramSvg(
     theme: 'base',
     fontFamily,
     themeVariables: { fontFamily, fontSize: '13px', ...tv },
-    flowchart: { htmlLabels: false, useMaxWidth: true, curve, nodeSpacing: 32, rankSpacing: 36, padding: 10 },
+    flowchart: { htmlLabels: false, useMaxWidth: true, curve, nodeSpacing: options.nodeSpacing ?? 32, rankSpacing: options.rankSpacing ?? 36, padding: 10 },
     sequence: { useMaxWidth: true },
     gantt: { useMaxWidth: true },
   });
   const id = `sr-studio-${renderSeq++}`;
-  return (await mermaid.render(id, directedSource)).svg;
+  const svg = (await mermaid.render(id, directedSource)).svg;
+  const root = /<svg\b[^>]*>/i.exec(svg);
+  if (!root) return svg;
+  const css = `<style>text, tspan, .nodeLabel, .edgeLabel, foreignObject, foreignObject * { font-family: \"Times New Roman\", Times, serif !important; }</style>`;
+  return svg.slice(0, (root.index ?? 0) + root[0].length) + css + svg.slice((root.index ?? 0) + root[0].length);
 }
 
 function applyDirection(source: string, direction: string): string {

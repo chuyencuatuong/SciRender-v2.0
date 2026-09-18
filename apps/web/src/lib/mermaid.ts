@@ -1,4 +1,5 @@
 import type { TemplateDescriptor } from '@scirender/template-engine';
+import { injectSvgAcademicFont } from '@scirender/figure-engine';
 
 let loader: Promise<typeof import('mermaid').default> | null = null;
 let seq = 0;
@@ -43,7 +44,7 @@ async function getMermaid(
   if (!loader) loader = import('mermaid').then((m) => m.default);
   const mermaid = await loader;
   const d = t.diagrams;
-  const fontFamily = d.fontFamily === 'body' ? t.typography.bodyFont : t.typography.headingFont;
+  const fontFamily = '"Times New Roman", Times, serif';
   const curve = overrides.curve ?? d.curve as MermaidCurve;
   const theme = overrides.theme ?? 'academic';
   const themeVars = MERMAID_THEME[theme];
@@ -100,6 +101,8 @@ function perpendicular(dir: string): string {
 function withDirection(source: string, dir: string): string {
   return source.replace(DIRECTION_RE, `$1$2$3${dir}`);
 }
+
+
 
 interface Natural {
   width: number;
@@ -174,7 +177,7 @@ export async function resolveMermaidBlocks(
     if (hit !== undefined) return hit;
     let svg: string;
     try {
-      svg = (await activeMermaid.render(`sr-mmd-${seq++}`, source)).svg;
+      svg = injectSvgAcademicFont((await activeMermaid.render(`sr-mmd-${seq++}`, source)).svg);
     } catch (err) {
       // P6 — a broken diagram is shown as broken, never as blank space.
       svg = `<div class="sr-unknown">Lỗi sơ đồ Mermaid: ${escapeHtml((err as Error).message)}</div>`;

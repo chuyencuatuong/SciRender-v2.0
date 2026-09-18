@@ -52,8 +52,6 @@ export function TopBar({ render }: Props): JSX.Element {
 
   const stale = source !== renderedSource;
   const result = render.result;
-  const warnings = result?.diagnostics.filter((d) => d.severity === 'warning').length ?? 0;
-  const errors = result?.diagnostics.filter((d) => d.severity === 'error').length ?? 0;
 
   const pageHtml = render.pages.map((p) => p.html);
   const footers = render.pages.map((p) => p.footer);
@@ -72,6 +70,7 @@ export function TopBar({ render }: Props): JSX.Element {
         window.alert(
           'Hộp thoại In của trình duyệt sẽ mở ra.\n\n' +
             'Ở mục "Destination" (Đích), chọn "Save as PDF" — KHÔNG chọn tên máy in — rồi bấm "Save".\n' +
+            'Chọn Margins: None (Không có) và bật Background graphics (Đồ họa nền) để giữ đúng khung bảng/nền.\n' +
             'Cách này cho PDF chữ thật, chọn và tìm được, không cần mạng.',
         );
         window.localStorage.setItem(PRINT_HINT_SEEN_KEY, '1');
@@ -187,23 +186,6 @@ export function TopBar({ render }: Props): JSX.Element {
         </div>
       </div>
 
-      <div className="hidden min-w-0 flex-1 items-center justify-center lg:flex">
-        <div className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-white/70 px-2 py-1 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
-          <span className="px-2 font-mono text-[10.5px] text-slate-500 dark:text-slate-400">{render.pages.length} trang</span>
-          <span className="h-3.5 w-px bg-slate-200 dark:bg-slate-700" />
-          <span className="px-2 font-mono text-[10.5px] text-slate-500 dark:text-slate-400">{result?.health.stats.words ?? 0} từ</span>
-          {errors > 0 || warnings > 0 ? (
-            <>
-              <span className="h-3.5 w-px bg-slate-200 dark:bg-slate-700" />
-              {errors > 0 ? (
-                <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10.5px] font-medium text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">{errors} lỗi</span>
-              ) : (
-                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-medium text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">{warnings} cảnh báo</span>
-              )}
-            </>
-          ) : null}
-        </div>
-      </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5 overflow-visible">
         <div className="flex items-center gap-1 overflow-visible">

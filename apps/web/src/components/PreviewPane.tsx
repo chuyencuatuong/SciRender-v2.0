@@ -36,6 +36,38 @@ export function PreviewPane({ render, onBack = null }: Props): JSX.Element {
 
   const stale = source !== renderedSource;
 
+  // A double-click from the canvas broadcasts a stable block id. The preview
+  // owns the actual scroll target because only it knows the paginated DOM.
+  useEffect(() => {
+    const onFocus = (e: Event): void => {
+      const id = (e as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      const host = scrollRef.current;
+      const target = host?.querySelector<HTMLElement>(`[data-sr-block-id=\"${CSS.escape(id)}\"]`);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('sr-preview-focus');
+      window.setTimeout(() => target.classList.remove('sr-preview-focus'), 1000);
+    };
+    window.addEventListener('sr:preview-focus', onFocus);
+    return () => window.removeEventListener('sr:preview-focus', onFocus);
+  }, [render.pages.length]);
+
+  // Ctrl/Meta + wheel zooms only the preview, never the browser.
+  useEffect(() => {
+    const host = scrollRef.current;
+    if (!host) return;
+    const onWheel = (e: WheelEvent): void => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const next = Math.max(0.25, Math.min(1.6, Number((prefs.zoom + (e.deltaY < 0 ? 0.05 : -0.05)).toFixed(2))));
+      setManualZoom(true);
+      setPref('zoom', next);
+    };
+    host.addEventListener('wheel', onWheel, { passive: false });
+    return () => host.removeEventListener('wheel', onWheel);
+  }, [prefs.zoom, setPref]);
+
   // Clicking anywhere in the rendered page jumps the editor to that source line.
   useEffect(() => {
     const host = scrollRef.current;

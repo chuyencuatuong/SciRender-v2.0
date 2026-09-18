@@ -13,14 +13,14 @@ import { useStore, type PanelId } from '~/state/store';
 
 export const ITEMS: Array<{ id: PanelId; label: string; icon: typeof ListTree }> = [
   { id: 'outline', label: 'Dàn ý', icon: ListTree },
-  { id: 'objects', label: 'Đối tượng', icon: Tag },
-  { id: 'diagnostics', label: 'Chẩn đoán', icon: Stethoscope },
-  { id: 'health', label: 'Sức khỏe tài liệu', icon: Gauge },
+  { id: 'references', label: 'Tài liệu tham khảo', icon: BookOpenText },
+  { id: 'objects', label: 'Quản lý đối tượng', icon: Tag },
+  { id: 'diagnostics', label: 'Kiểm tra & chẩn đoán', icon: Stethoscope },
+  { id: 'template', label: 'Cài đặt mẫu', icon: LayoutTemplate },
   { id: 'assets', label: 'Tài nguyên', icon: Image },
-  { id: 'template', label: 'Mẫu trình bày', icon: LayoutTemplate },
+  { id: 'health', label: 'Sức khỏe tài liệu', icon: Gauge },
   { id: 'library', label: 'Thư viện', icon: Library },
   { id: 'research', label: 'Dữ liệu nghiên cứu', icon: FlaskConical },
-  { id: 'references', label: 'Tài liệu tham khảo', icon: BookOpenText },
 ];
 
 /**
@@ -61,7 +61,7 @@ export function SideRail(): JSX.Element {
                 {errors}
               </span>
             ) : null}
-            <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 translate-x-[-4px] whitespace-nowrap rounded-[7px] bg-ink-900 px-2 py-1 text-[11px] text-white opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100">
+            <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 translate-x-[-4px] whitespace-nowrap rounded-[7px] bg-[#1e222d] px-2 py-1 text-[11px] text-white border border-white/10 shadow-xl opacity-0 transition-[transform,opacity] duration-150 group-hover:translate-x-0 group-hover:opacity-100">
               {label}
             </span>
           </button>

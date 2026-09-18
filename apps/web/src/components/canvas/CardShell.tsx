@@ -10,7 +10,7 @@ import {
   LineChart,
 } from 'lucide-react';
 import type { BibEntry, LabelRecord } from '@scirender/ast';
-import { detectKind, KIND_LABEL, splitColumns, type Card } from '~/lib/cards';
+import { detectKind, KIND_LABEL, makeColumns, splitColumns, type Card } from '~/lib/cards';
 import { CardEditor } from './CardEditors';
 
 export type DropZone = 'above' | 'below' | 'left' | 'right';
@@ -27,6 +27,7 @@ interface Props {
   labels?: Record<string, LabelRecord>;
   bibliography?: BibEntry[];
   onSelect: () => void;
+  onDoubleClick?: () => void;
   onChange: (text: string) => void;
   onMove: (delta: number) => void;
   onDuplicate: () => void;
@@ -40,6 +41,7 @@ interface Props {
   onDrop: () => void;
   onUndoRecognition: () => void;
   onSaveDiagramAsset?: (svg: string, label: string) => Promise<string>;
+  onToggleLandscape?: () => void;
 }
 
 const ZONE_RING: Record<DropZone, string> = {
@@ -93,6 +95,7 @@ export function CardShell(props: Props): JSX.Element {
         props.onDrop();
       }}
       onMouseDown={props.onSelect}
+      onDoubleClick={props.onDoubleClick}
       onFocusCapture={props.onSelect}
       data-card-id={card.id}
       data-active={selected}
@@ -122,12 +125,12 @@ export function CardShell(props: Props): JSX.Element {
           title="Kéo dọc để đổi thứ tự · kéo sang mép trái/phải khối khác để xếp hai cột"
           onMouseDown={() => setHandleDown(true)}
           onMouseUp={() => setHandleDown(false)}
-          className="grid h-[26px] w-[22px] cursor-grab place-items-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white active:cursor-grabbing dark:text-slate-600 dark:hover:bg-slate-200 dark:hover:text-slate-900"
+          className="grid h-[26px] w-[22px] cursor-grab place-items-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white active:cursor-grabbing"
         >
           <GripVertical size={13} />
         </span>
         <span className="mx-0.5 h-[15px] w-px bg-white/15 dark:bg-slate-300" />
-        <span className="px-1.5 text-[11.5px] text-white/80 dark:text-slate-700">{KIND_LABEL[card.kind]}</span>
+        <span className="px-1.5 text-[11.5px] text-white/80">{KIND_LABEL[card.kind]}</span>
         <span className="mx-0.5 h-[15px] w-px bg-white/15 dark:bg-slate-300" />
 
         {props.recognised ? (
@@ -155,9 +158,17 @@ export function CardShell(props: Props): JSX.Element {
             <ArrowDown size={12} />
           </IconBtn>
           {columns ? (
-            <IconBtn title="Tách thành hai khối riêng" onClick={props.onUnmerge}>
-              <Rows2 size={12} />
-            </IconBtn>
+            <>
+              <IconBtn title="Tách thành các khối riêng" onClick={props.onUnmerge}>
+                <Rows2 size={12} />
+              </IconBtn>
+              {props.onToggleLandscape ? (
+                <label title="Khổ giấy ngang cho toàn bộ khối Hai cột" className="inline-flex h-[26px] items-center gap-1 rounded-full px-1.5 text-[9px] text-white/70 hover:bg-white/10">
+                  <input type="checkbox" checked={/\b(?:landscape|orientation=landscape)\b/.test(card.text)} onChange={props.onToggleLandscape} />
+                  ngang
+                </label>
+              ) : null}
+            </>
           ) : (
             <IconBtn
               title="Ghép với khối dưới thành hàng hai cột"
@@ -194,10 +205,11 @@ export function CardShell(props: Props): JSX.Element {
                   text={part}
                   labels={props.labels}
                   bibliography={props.bibliography}
+                  suppressLandscape
                   onChange={(next) => {
                     const pair = columns.slice() as [string, string];
                     pair[i] = next;
-                    props.onChange(`::: cols\n${pair[0].trim()}\n|||\n${pair[1].trim()}\n:::`);
+                    props.onChange(makeColumns(pair[0], pair[1], /\b(?:landscape|orientation=landscape)\b/.test(card.text)));
                   }}
                 />
               </div>
@@ -231,7 +243,7 @@ function IconBtn({
       aria-label={title}
       disabled={disabled}
       onClick={onClick}
-      className={`grid h-[26px] w-[26px] place-items-center rounded-full text-white/70 transition disabled:opacity-25 dark:text-slate-600 ${
+      className={`grid h-[26px] w-[26px] place-items-center rounded-full text-white/70 transition disabled:opacity-25 ${
         danger ? 'hover:bg-white/10 hover:text-red-200 dark:hover:bg-red-100 dark:hover:text-red-700' : 'hover:bg-white/10 hover:text-white dark:hover:bg-slate-200 dark:hover:text-slate-900'
       }`}
     >

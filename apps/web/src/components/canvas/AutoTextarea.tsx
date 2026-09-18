@@ -89,6 +89,7 @@ export function AutoTextarea({
   bibliography,
 }: Props): JSX.Element {
   const ref = useRef<HTMLTextAreaElement | null>(null);
+  const highlightRef = useRef<HTMLPreElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const pendingCaret = useRef<number | null>(null);
   const [trigger, setTrigger] = useState<Trigger | null>(null);
@@ -349,33 +350,57 @@ export function AutoTextarea({
     }
   };
 
+  const highlightTokens = useMemo(() => {
+    if (mono || !value.includes('@')) return null;
+    const escape = (text: string): string => text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    const escaped = escape(value);
+    return escaped.replace(/(@(?:fig|tbl|eq|lst):[A-Za-z0-9_.-]+)/g, '<mark class="sr-ref-token">$1</mark>');
+  }, [mono, value]);
+
   const showPopover = trigger !== null && point !== null;
 
   return (
     <>
-      <textarea
-        ref={ref}
-        rows={minRows}
-        value={value}
-        aria-label={ariaLabel}
-        placeholder={placeholder}
-        spellCheck={false}
-        onChange={(e) => {
-          onChange(e.target.value);
-          sync(e.target);
-        }}
-        onKeyDown={onKeyDown}
-        onKeyUp={(e) => {
-          if (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End') sync(e.currentTarget);
-        }}
-        data-sr-autocomplete-open={trigger ? 'true' : 'false'}
-        onFocus={(e) => { lastActiveTextarea = e.currentTarget; sync(e.currentTarget); }}
-        onClick={(e) => { lastActiveTextarea = e.currentTarget; sync(e.currentTarget); }}
-        onBlur={() => setTrigger(null)}
-        className={`w-full resize-none border-0 bg-transparent p-0 text-[13px] leading-[1.55] text-ink-800 outline-none placeholder:text-ink-400 ${
-          mono ? 'font-mono text-[12px]' : ''
-        }`}
-      />
+      <div className="relative">
+        {highlightTokens ? (
+          <pre
+            ref={highlightRef}
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-0 m-0 overflow-hidden whitespace-pre-wrap break-words p-0 text-[13px] leading-[1.55] text-ink-800 ${mono ? 'font-mono text-[12px]' : ''}`}
+            dangerouslySetInnerHTML={{ __html: `${highlightTokens}\n` }}
+          />
+        ) : null}
+        <textarea
+          ref={ref}
+          rows={minRows}
+          value={value}
+          aria-label={ariaLabel}
+          placeholder={placeholder}
+          spellCheck={false}
+          onChange={(e) => {
+            onChange(e.target.value);
+            sync(e.target);
+          }}
+          onKeyDown={onKeyDown}
+          onKeyUp={(e) => {
+            if (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End') sync(e.currentTarget);
+          }}
+          onScroll={(e) => {
+            if (highlightRef.current) {
+              highlightRef.current.scrollTop = e.currentTarget.scrollTop;
+              highlightRef.current.scrollLeft = e.currentTarget.scrollLeft;
+            }
+          }}
+          data-sr-autocomplete-open={trigger ? 'true' : 'false'}
+          onFocus={(e) => { lastActiveTextarea = e.currentTarget; sync(e.currentTarget); }}
+          onClick={(e) => { lastActiveTextarea = e.currentTarget; sync(e.currentTarget); }}
+          onBlur={() => setTrigger(null)}
+          className={`${highlightTokens ? 'text-transparent caret-ink-800 selection:bg-sky-500/20 dark:caret-slate-100 dark:selection:bg-sky-500/20' : 'text-ink-800'} relative w-full resize-none border-0 bg-transparent p-0 text-[13px] leading-[1.55] outline-none placeholder:text-ink-400 ${mono ? 'font-mono text-[12px]' : ''}`}
+        />
+      </div>
 
       {showPopover
         ? createPortal(
