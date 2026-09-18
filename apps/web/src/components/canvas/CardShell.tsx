@@ -91,6 +91,7 @@ export function CardShell(props: Props): JSX.Element {
         props.onDrop();
       }}
       onMouseDown={props.onSelect}
+      onFocusCapture={props.onSelect}
       className={`group relative rounded-[12px] px-3.5 py-2 transition-[background,box-shadow] duration-200 ${
         selected ? 'bg-[var(--sr-surface)] shadow-card' : 'hover:bg-[rgb(var(--ink-50)/0.7)]'
       } ${dropZone ? ZONE_RING[dropZone] : ''}`}

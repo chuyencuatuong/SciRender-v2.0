@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Braces, Columns2, FileText, Redo2, Undo2 } from 'lucide-react';
 import { CARD_IN, useReducedMotion } from '~/lib/motion';
@@ -15,7 +15,7 @@ import {
   type CardTemplate,
 } from '~/lib/cards';
 import { setHeadingDepth } from '~/lib/card-forms';
-import { isEditableTarget, matchesShortcut } from '~/lib/shortcuts';
+import { isEditableTarget, listenForShortcuts, matchesShortcut } from '~/lib/shortcuts';
 import { detectPaste } from '~/lib/paste';
 import { BadgeCheck, X } from 'lucide-react';
 import type { RenderState } from '~/hooks/useRender';
@@ -78,6 +78,8 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   // render captured: a drag that starts and ends inside one tick would
   // otherwise see a stale null.
   const dragRef = useRef<Drag | null>(null);
+  const dragScrollRef = useRef<{ host: HTMLDivElement; clientY: number } | null>(null);
+  const dragScrollFrame = useRef<number | null>(null);
   const setDragBoth = (next: Drag | null): void => {
     dragRef.current = next;
     setDrag(next);
@@ -297,7 +299,51 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
 
   /* ----------------------------------------------------------------- drag */
 
+  const stopDragAutoScroll = useCallback((): void => {
+    dragScrollRef.current = null;
+    if (dragScrollFrame.current !== null) {
+      window.cancelAnimationFrame(dragScrollFrame.current);
+      dragScrollFrame.current = null;
+    }
+  }, []);
+
+  const stepDragAutoScroll = useCallback((): void => {
+    const state = dragScrollRef.current;
+    if (!state || !dragRef.current) {
+      dragScrollFrame.current = null;
+      return;
+    }
+    const rect = state.host.getBoundingClientRect();
+    const edge = 80;
+    const maxStep = 18;
+    const topDistance = state.clientY - rect.top;
+    const bottomDistance = rect.bottom - state.clientY;
+    let delta = 0;
+    if (topDistance < edge) {
+      delta = -Math.ceil(maxStep * Math.min(1, (edge - topDistance) / edge));
+    } else if (bottomDistance < edge) {
+      delta = Math.ceil(maxStep * Math.min(1, (edge - bottomDistance) / edge));
+    }
+    if (delta === 0) {
+      dragScrollFrame.current = null;
+      return;
+    }
+    state.host.scrollTop += delta;
+    dragScrollFrame.current = window.requestAnimationFrame(stepDragAutoScroll);
+  }, []);
+
+  const handleDragAutoScroll = useCallback((host: HTMLDivElement, clientY: number): void => {
+    if (!dragRef.current) return;
+    dragScrollRef.current = { host, clientY };
+    if (dragScrollFrame.current === null) {
+      dragScrollFrame.current = window.requestAnimationFrame(stepDragAutoScroll);
+    }
+  }, [stepDragAutoScroll]);
+
+  useEffect(() => stopDragAutoScroll, [stopDragAutoScroll]);
+
   const onDrop = (): void => {
+    stopDragAutoScroll();
     const current = dragRef.current;
     if (!current || current.over === null || current.zone === null) return;
     const { from, over, zone } = current;
@@ -307,7 +353,9 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
       mergeColumns(zone === 'left' ? from : over, zone === 'left' ? over : from);
       return;
     }
-    setCards(moveCard(doc.cards, from, zone === 'above' ? over : over + 1));
+    const target = zone === 'above' ? over : over + 1;
+    setCards(moveCard(doc.cards, from, target));
+    setSelected(Math.min(doc.cards.length - 1, Math.max(0, from < target ? target - 1 : target)));
   };
 
   /* ---------------------------------------------------------------- paste */
@@ -381,18 +429,51 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
 
   /* ------------------------------------------------------------- shortcuts */
 
+  // Keep one capture-phase listener for the lifetime of the Canvas. React re-renders
+  // frequently while typing; storing the latest state/actions in a ref avoids
+  // repeatedly attaching global keyboard listeners and eliminates stale closures.
+  const shortcutContextRef = useRef({
+    doc,
+    selected,
+    updateCard,
+    insertAt,
+    undo,
+    redo,
+    duplicateAt,
+    moveBy,
+    requestDelete,
+  });
+  shortcutContextRef.current = {
+    doc,
+    selected,
+    updateCard,
+    insertAt,
+    undo,
+    redo,
+    duplicateAt,
+    moveBy,
+    requestDelete,
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      const mod = e.ctrlKey || e.metaKey;
+      const context = shortcutContextRef.current;
+      const currentDoc = context.doc;
+      const currentSelected = context.selected;
+      // These are global-first commands; their own handlers also use capture phase.
+      if (matchesShortcut(e, 'command-palette') || matchesShortcut(e, 'shortcuts')) return;
       if (document.querySelector('[role="dialog"]')) return;
-      const target = e.target as HTMLElement | null;
+
+      const target = e.target instanceof HTMLElement ? e.target : null;
       const typing = isEditableTarget(target);
       const interactive = Boolean(target?.closest('button, select, option, [contenteditable="true"]'));
+      const focusedCardEl = target?.closest<HTMLElement>('[data-card-index]');
+      const parsedIndex = focusedCardEl ? Number(focusedCardEl.dataset.cardIndex) : NaN;
+      const activeIndex = Number.isInteger(parsedIndex) && parsedIndex >= 0 && parsedIndex < currentDoc.cards.length
+        ? parsedIndex
+        : currentSelected;
+      if (activeIndex !== currentSelected && Number.isInteger(parsedIndex)) setSelected(activeIndex);
 
-      // Ctrl+Shift+V is deliberately handled here rather than relying on the
-      // browser's rich clipboard path: it guarantees that HTML/style fragments
-      // never enter the Markdown source. Native execCommand fires the normal
-      // input event, so controlled React inputs remain in sync.
       if (typing && matchesShortcut(e, 'clean-paste')) {
         e.preventDefault();
         const clipboard = navigator.clipboard;
@@ -402,75 +483,91 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
           try {
             document.execCommand('insertText', false, text);
           } catch {
-            // Browsers without execCommand support simply leave the editor
-            // untouched; regular Ctrl+V remains available.
+            // Regular paste remains available on browsers without execCommand.
           }
         });
         return;
       }
 
-      // Word-style heading shortcuts operate on the selected semantic card.
-      // Do not hijack them inside table/figure form controls.
-      if (typing && mod && e.altKey && !e.shiftKey && ['0', '1', '2', '3'].includes(e.key)) {
-        const card = doc.cards[selected];
-        const textual = card && ['paragraph', 'heading', 'blockquote', 'list', 'callout'].includes(card.kind);
-        if (textual) {
-          e.preventDefault();
-          const depth = Number(e.key);
-          updateCard(selected, depth === 0 ? card!.text.replace(/^#{1,6}\s+/, '') : setHeadingDepth(card!.text, depth));
+      if (typing) {
+        const headingShortcuts: Array<{ id: 'paragraph' | 'heading-1' | 'heading-2' | 'heading-3'; depth: number }> = [
+          { id: 'heading-1', depth: 1 },
+          { id: 'heading-2', depth: 2 },
+          { id: 'heading-3', depth: 3 },
+          { id: 'paragraph', depth: 0 },
+        ];
+        const headingShortcut = headingShortcuts.find((shortcut) => matchesShortcut(e, shortcut.id));
+        if (headingShortcut) {
+          const card = currentDoc.cards[activeIndex];
+          const textual = card && ['paragraph', 'heading', 'blockquote', 'list', 'callout'].includes(card.kind);
+          if (textual) {
+            e.preventDefault();
+            const nextText = headingShortcut.depth === 0
+              ? card!.text.replace(/^#{1,6}\s+/, '')
+              : setHeadingDepth(card!.text, headingShortcut.depth);
+            context.updateCard(activeIndex, nextText);
+          }
+          return;
         }
+      }
+
+      if (matchesShortcut(e, 'page-break')) {
+        if (typing) {
+          e.preventDefault();
+          context.insertAt(activeIndex + 1, ':::pagebreak:::');
+        }
+        // Outside an editor, App owns Ctrl+Enter for render. Do not reinterpret
+        // it as the selected-card Enter behavior below.
         return;
       }
 
-      if (typing && matchesShortcut(e, 'page-break')) {
+      // Editing commands stay global even when the caret is inside a textarea.
+      // The old `if (typing && !e.altKey) return` ran before these cases and
+      // silently disabled Ctrl+Z/Ctrl+Y/Ctrl+D while writing.
+      if (matchesShortcut(e, 'undo')) {
         e.preventDefault();
-        insertAt(selected + 1, ':::pagebreak:::');
+        context.undo();
+        return;
+      }
+      if (matchesShortcut(e, 'redo')) {
+        e.preventDefault();
+        context.redo();
+        return;
+      }
+      if (matchesShortcut(e, 'duplicate')) {
+        e.preventDefault();
+        context.duplicateAt(activeIndex);
+        return;
+      }
+      if (matchesShortcut(e, 'move-up-down')) {
+        e.preventDefault();
+        context.moveBy(activeIndex, e.key === 'ArrowUp' ? -1 : 1);
         return;
       }
 
       if (typing && !e.altKey) return;
 
       if (!typing && !interactive && e.key === 'Enter') {
-        const card = doc.cards[selected];
+        const card = currentDoc.cards[activeIndex];
         if (card && ['figure', 'table', 'equation', 'codeBlock', 'diagram'].includes(card.kind)) {
           e.preventDefault();
-          insertAt(selected + 1, 'Nội dung đoạn văn.');
+          context.insertAt(activeIndex + 1, 'Nội dung đoạn văn.');
           return;
         }
       }
 
       if (!typing && !interactive && (e.key === 'Backspace' || e.key === 'Delete')) {
-        const card = doc.cards[selected];
+        const card = currentDoc.cards[activeIndex];
         if (card) {
           e.preventDefault();
-          requestDelete(selected);
+          context.requestDelete(activeIndex);
           return;
         }
       }
 
-      if (matchesShortcut(e, 'undo')) {
-        e.preventDefault();
-        undo();
-        return;
-      }
-      if (matchesShortcut(e, 'redo')) {
-        e.preventDefault();
-        redo();
-        return;
-      }
-      if (matchesShortcut(e, 'duplicate')) {
-        e.preventDefault();
-        duplicateAt(selected);
-        return;
-      }
-      if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-        e.preventDefault();
-        moveBy(selected, e.key === 'ArrowUp' ? -1 : 1);
-      }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  });
+    return listenForShortcuts(onKey);
+  }, []);
 
   // Clicking a diagnostic or an outline entry scrolls the matching card in.
   useEffect(() => {
@@ -548,7 +645,19 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   // exact same `doc`/`selected`/handlers, so editing in either pane edits the
   // one shared document (P1: the canvas is a view, never a second copy).
   const renderPane = (ref: React.RefObject<HTMLDivElement>): JSX.Element => (
-    <div ref={ref} className="sr-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-28 pt-6">
+    <div
+      ref={ref}
+      className="sr-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-28 pt-6"
+      onDragOver={(e) => {
+        e.preventDefault();
+        handleDragAutoScroll(e.currentTarget, e.clientY);
+      }}
+      onDragLeave={(e) => {
+        const nextTarget = e.relatedTarget;
+        if (!(nextTarget instanceof Node) || !e.currentTarget.contains(nextTarget)) stopDragAutoScroll();
+      }}
+      onDrop={stopDragAutoScroll}
+    >
       {/* 660 -> 720px: dòng chữ vẫn trong khoảng đọc thoải mái (~85-90 ký tự),
           chỉ nới thêm một chút để cột soạn thảo bớt trông "trống" trên màn
           rộng khi không chia đôi — không kéo full-width vì hại khả năng đọc. */}
@@ -601,57 +710,72 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
 
         <AnimatePresence initial={false}>
           {doc.cards.map((card, index) => (
-            <motion.div
-              key={card.id}
-              layout={reduced ? false : 'position'}
-              initial={reduced ? false : CARD_IN.initial}
-              animate={CARD_IN.animate}
-              exit={reduced ? undefined : CARD_IN.exit}
-              transition={CARD_IN.transition}
-              className="relative mb-2.5"
-            >
-              <CardShell
-                card={card}
-                index={index}
-                total={doc.cards.length}
-                selected={selected === index}
-                dropZone={drag?.over === index ? drag.zone : null}
-                recognised={recognised?.id === card.id ? recognised.label : null}
-                labels={labels}
-                bibliography={render.result?.document.meta.bibliography}
-                onSelect={() => setSelected(index)}
-                onChange={(text) => updateCard(index, text)}
-                onMove={(delta) => moveBy(index, delta)}
-                onDuplicate={() => duplicateAt(index)}
-                onDelete={() => requestDelete(index)}
-                onCreateChart={card.kind === 'table' ? () => requestChart(index) : undefined}
-                onUnmerge={() => unmerge(index)}
-                onMergeWithNext={() => mergeColumns(index, index + 1)}
-                onDragStart={() => setDragBoth({ from: index, over: null, zone: null })}
-                onDragEnd={() => setDragBoth(null)}
-                onDragOver={(zone) => {
-                  const d = dragRef.current;
-                  if (d) setDragBoth({ ...d, over: index, zone });
-                }}
-                onDrop={onDrop}
-                onUndoRecognition={() => {
-                  if (!recognised) return;
-                  const at = doc.cards.findIndex((c) => c.id === recognised.id);
-                  if (at >= 0) updateCard(at, recognised.raw);
-                  setRecognised(null);
-                }}
-              />
-              {deleteConfirmIndex === index ? (
-                <div className="absolute right-2 top-[-8px] z-40 w-[min(360px,90vw)] -translate-y-full rounded-xl border border-flag-200 bg-[var(--sr-surface)] p-3 shadow-xl">
-                  <div className="text-[11.5px] font-semibold text-flag-700">Khối này đang được tham chiếu</div>
-                  <p className="mt-1 text-[11px] leading-[1.45] text-ink-600">Xóa sẽ làm gãy các liên kết <code>@fig:…</code> hoặc <code>@tbl:…</code> đang có trong tài liệu.</p>
-                  <div className="mt-2.5 flex justify-end gap-1.5">
-                    <button type="button" className="sr-btn-ghost h-7 !px-2.5 text-[10.5px]" onClick={() => setDeleteConfirmIndex(null)}>Hủy</button>
-                    <button type="button" className="sr-btn-render h-7 !border-flag-500 !bg-flag-500 !px-2.5 text-[10.5px] text-white" onClick={() => removeAt(index)}>Xóa và chấp nhận gãy tham chiếu</button>
+            <Fragment key={card.id}>
+              <motion.div
+                layout={reduced ? false : 'position'}
+                initial={reduced ? false : CARD_IN.initial}
+                animate={CARD_IN.animate}
+                exit={reduced ? undefined : CARD_IN.exit}
+                transition={CARD_IN.transition}
+                className="relative mb-2.5"
+              >
+                <CardShell
+                  card={card}
+                  index={index}
+                  total={doc.cards.length}
+                  selected={selected === index}
+                  dropZone={drag?.over === index ? drag.zone : null}
+                  recognised={recognised?.id === card.id ? recognised.label : null}
+                  labels={labels}
+                  bibliography={render.result?.document.meta.bibliography}
+                  onSelect={() => setSelected(index)}
+                  onChange={(text) => updateCard(index, text)}
+                  onMove={(delta) => moveBy(index, delta)}
+                  onDuplicate={() => duplicateAt(index)}
+                  onDelete={() => requestDelete(index)}
+                  onCreateChart={card.kind === 'table' ? () => requestChart(index) : undefined}
+                  onUnmerge={() => unmerge(index)}
+                  onMergeWithNext={() => mergeColumns(index, index + 1)}
+                  onDragStart={() => { stopDragAutoScroll(); setDragBoth({ from: index, over: null, zone: null }); }}
+                  onDragEnd={() => { stopDragAutoScroll(); setDragBoth(null); }}
+                  onDragOver={(zone) => {
+                    const d = dragRef.current;
+                    if (d) setDragBoth({ ...d, over: index, zone });
+                  }}
+                  onDrop={onDrop}
+                  onUndoRecognition={() => {
+                    if (!recognised) return;
+                    const at = doc.cards.findIndex((c) => c.id === recognised.id);
+                    if (at >= 0) updateCard(at, recognised.raw);
+                    setRecognised(null);
+                  }}
+                />
+                {deleteConfirmIndex === index ? (
+                  <div className="absolute right-2 top-[-8px] z-40 w-[min(360px,90vw)] -translate-y-full rounded-xl border border-flag-200 bg-[var(--sr-surface)] p-3 shadow-xl">
+                    <div className="text-[11.5px] font-semibold text-flag-700">Khối này đang được tham chiếu</div>
+                    <p className="mt-1 text-[11px] leading-[1.45] text-ink-600">Xóa sẽ làm gãy các liên kết <code>@fig:…</code> hoặc <code>@tbl:…</code> đang có trong tài liệu.</p>
+                    <div className="mt-2.5 flex justify-end gap-1.5">
+                      <button type="button" className="sr-btn-ghost h-7 !px-2.5 text-[10.5px]" onClick={() => setDeleteConfirmIndex(null)}>Hủy</button>
+                      <button type="button" className="sr-btn-render h-7 !border-flag-500 !bg-flag-500 !px-2.5 text-[10.5px] text-white" onClick={() => removeAt(index)}>Xóa và chấp nhận gãy tham chiếu</button>
+                    </div>
+                  </div>
+                ) : null}
+              </motion.div>
+              {index < doc.cards.length - 1 ? (
+                <div className="group relative -my-1 flex h-4 items-center justify-center">
+                  <div className="pointer-events-none absolute inset-x-4 h-px bg-sky-500/0 transition-colors duration-150 group-hover:bg-sky-500/25" />
+                  <div className="relative z-10 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                    <InsertMenu
+                      compact
+                      iconOnly
+                      ariaLabel={`Chèn khối giữa khối ${index + 1} và ${index + 2}`}
+                      label="Chèn khối vào giữa"
+                      onInsert={(tpl: CardTemplate) => insertAt(index + 1, tpl.text)}
+                    />
                   </div>
                 </div>
               ) : null}
-            </motion.div>
+            </Fragment>
           ))}
         </AnimatePresence>
 

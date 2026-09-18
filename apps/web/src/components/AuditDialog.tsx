@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, FileText, Hash, Table2, X, XCircle } from 'lucide-react';
 import type { AuditCheck, AuditReport } from '@scirender/intelligence';
 import { useStore } from '~/state/store';
@@ -20,11 +21,11 @@ const GROUPS: Array<{ id: AuditCheck['group']; title: string }> = [
 ];
 
 export function AuditDialog({ open, onClose, render, stale, onRender }: Props): JSX.Element | null {
-  if (!open) return null;
-  const audit = render.audit;
   const requestGotoLine = useStore((s) => s.requestGotoLine);
+  if (!open || typeof document === 'undefined') return null;
+  const audit = render.audit;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
       role="dialog"
@@ -33,7 +34,7 @@ export function AuditDialog({ open, onClose, render, stale, onRender }: Props): 
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-ink-900/[0.1] bg-[var(--sr-surface)] shadow-2xl"
+        className="relative z-10 flex max-h-[calc(100dvh-2rem)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-ink-900/[0.1] bg-[var(--sr-surface)] shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center gap-3 border-b border-ink-900/[0.06] px-5 py-4">
@@ -71,7 +72,8 @@ export function AuditDialog({ open, onClose, render, stale, onRender }: Props): 
           <AuditBody audit={audit} onGoto={requestGotoLine} />
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

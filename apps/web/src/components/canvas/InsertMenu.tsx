@@ -9,6 +9,8 @@ interface Props {
   onInsert: (template: CardTemplate) => void;
   label?: string;
   compact?: boolean;
+  iconOnly?: boolean;
+  ariaLabel?: string;
 }
 
 /**
@@ -16,7 +18,7 @@ interface Props {
  * box, ranks accent-insensitively (typing "cong thuc" finds "Công thức"), and
  * pins whatever you reached for recently above everything else.
  */
-export function InsertMenu({ onInsert, label = 'Thêm khối', compact = false }: Props): JSX.Element {
+export function InsertMenu({ onInsert, label = 'Thêm khối', compact = false, iconOnly = false, ariaLabel }: Props): JSX.Element {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -81,17 +83,26 @@ export function InsertMenu({ onInsert, label = 'Thêm khối', compact = false }
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-label={ariaLabel ?? label}
+        title={iconOnly ? (ariaLabel ?? label) : undefined}
         className={
-          compact
+          iconOnly
+            ? 'inline-grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--sr-surface)] text-deep-700 shadow-card ring-1 ring-ink-900/[0.07] transition hover:bg-sky-50 hover:text-deep-600'
+            : compact
             ? 'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-[9px] bg-ink-900/[0.045] px-2.5 py-[5px] text-[11.5px] text-ink-600 transition hover:bg-sky-500/10 hover:text-deep-700'
             : 'inline-flex h-[27px] shrink-0 items-center gap-1 whitespace-nowrap rounded-[8px] bg-[var(--sr-surface)] px-2.5 text-[12px] font-medium text-deep-700 shadow-card transition hover:text-deep-600'
         }
       >
-        <Plus size={13} /> {label}
-        <ChevronDown
-          size={12}
-          className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
-        />
+        <Plus size={13} />
+        {!iconOnly ? (
+          <>
+            {label}
+            <ChevronDown
+              size={12}
+              className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+            />
+          </>
+        ) : null}
       </button>
 
       <AnimatePresence>

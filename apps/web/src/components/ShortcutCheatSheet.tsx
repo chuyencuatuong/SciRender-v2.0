@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Keyboard, X } from 'lucide-react';
-import { SHORTCUTS, matchesShortcut, type ShortcutDefinition } from '~/lib/shortcuts';
+import { SHORTCUTS, listenForShortcuts, matchesShortcut, type ShortcutDefinition } from '~/lib/shortcuts';
 
 interface Props {
   open: boolean;
@@ -17,8 +17,7 @@ export function ShortcutCheatSheet({ open, onClose, onToggle }: Props): JSX.Elem
       }
       if (e.key === 'Escape' && open) onClose();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenForShortcuts(onKey);
   }, [open, onClose, onToggle]);
 
   if (!open) return null;

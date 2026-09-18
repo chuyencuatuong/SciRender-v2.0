@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { listenForShortcuts } from '~/lib/shortcuts';
 import { CommandPalette } from '~/components/CommandPalette';
 import { ShortcutCheatSheet } from '~/components/ShortcutCheatSheet';
 import { TopBar } from '~/components/TopBar';
@@ -64,8 +65,7 @@ export function App(): JSX.Element {
         requestRender();
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenForShortcuts(onKey);
   }, [requestRender]);
 
   useEffect(() => {

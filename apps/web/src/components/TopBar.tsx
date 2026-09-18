@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { listenForShortcuts } from '~/lib/shortcuts';
 import {
   CheckCircle2,
   FileCode2,
@@ -58,6 +59,8 @@ export function TopBar({ render }: Props): JSX.Element {
   const pageHtml = render.pages.map((p) => p.html);
   const footers = render.pages.map((p) => p.footer);
 
+  const onPrintRef = useRef<() => void>(() => undefined);
+
   const onPrint = (): void => {
     if (!result || !render.pages.length) return;
     track('export.print', { pages: render.pages.length });
@@ -84,6 +87,7 @@ export function TopBar({ render }: Props): JSX.Element {
       documentTitle: result.document.meta.title || title,
     });
   };
+  onPrintRef.current = onPrint;
 
   const onExportHtml = async (): Promise<void> => {
     if (!result) return;
@@ -136,11 +140,10 @@ export function TopBar({ render }: Props): JSX.Element {
     const onKey = (e: KeyboardEvent): void => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'p') return;
       e.preventDefault();
-      onPrint();
+      onPrintRef.current();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  });
+    return listenForShortcuts(onKey);
+  }, []);
 
   // Anything outside this component — the Command Palette, say — asks for
   // "In / Lưu PDF" the same way: bump `printNonce` in the store. That keeps

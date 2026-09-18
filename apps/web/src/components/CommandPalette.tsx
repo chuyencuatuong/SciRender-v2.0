@@ -15,7 +15,7 @@ import { plainText, walk } from '@scirender/ast';
 import { CARD_TEMPLATES, foldDiacritics } from '~/lib/cards';
 import { REF_KIND_ICON, REF_KIND_LABEL } from '~/lib/refs';
 import { POP_IN, useReducedMotion } from '~/lib/motion';
-import { matchesShortcut } from '~/lib/shortcuts';
+import { listenForShortcuts, matchesShortcut } from '~/lib/shortcuts';
 import type { RenderState } from '~/hooks/useRender';
 import { ITEMS as PANEL_ITEMS } from './SideRail';
 import { useStore } from '~/state/store';
@@ -74,8 +74,7 @@ export function CommandPalette({ render }: Props): JSX.Element {
       }
       if (e.key === 'Escape' && open) setOpen(false);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return listenForShortcuts(onKey);
   }, [open]);
 
   useEffect(() => {
