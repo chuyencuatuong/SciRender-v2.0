@@ -79,6 +79,8 @@ export function compileCss(t: TemplateDescriptor): string {
    engine fills one column at a time so a break can be measured and controlled.
    The page body only lays the finished columns out side by side. */
 .sr-page-body{height:100%;overflow:hidden;position:relative;}
+.sr-page-landscape{width:${p.height};height:${p.width};page:landscape-page;}
+.sr-page-landscape .sr-page-body{height:100%;}
 .sr-columns{
   display:grid;
   grid-template-columns:repeat(var(--sr-columns,${p.columns}),1fr);
@@ -443,15 +445,17 @@ function round(n: number): number {
 export function compilePrintCss(t: TemplateDescriptor): string {
   const p = t.page;
   return `@page{size:${p.width} ${p.height};margin:0;}
+@page landscape-page{size:${p.height} ${p.width};margin:0;}
 @media print{
   html,body{margin:0!important;padding:0!important;background:#fff!important;}
   body *{visibility:hidden;}
   #sr-print-root,#sr-print-root *{visibility:visible;}
-  #sr-print-root{position:absolute;inset:0 auto auto 0;width:${p.width};}
+  #sr-print-root{position:absolute;inset:0 auto auto 0;width:max(${p.width},${p.height});}
   .sr-page{
     box-shadow:none!important;margin:0!important;border:0!important;
     break-after:page;page-break-after:always;
   }
+  .sr-page-landscape{page:landscape-page!important;width:${p.height}!important;height:${p.width}!important;}
   .sr-page:last-child{break-after:auto;page-break-after:auto;}
   .sr-no-print{display:none!important;}
 }

@@ -1,8 +1,12 @@
 import { compilePrintCss, type ResolvedTemplate } from '@scirender/template-engine';
 
+export type PageOrientation = 'portrait' | 'landscape';
+
 export interface PdfOptions {
   /** Inner HTML of each already-paginated page body. */
   pages: string[];
+  /** Orientation for each already-paginated page. */
+  pageOrientations?: PageOrientation[];
   template: ResolvedTemplate;
   footers?: string[];
   documentTitle?: string;
@@ -44,8 +48,12 @@ export async function downloadPdf(options: PdfOptions): Promise<PdfResult> {
     import('html2canvas').then((m) => m.default),
   ]);
 
-  const widthMm = toMm(template.descriptor.page.width, 210);
-  const heightMm = toMm(template.descriptor.page.height, 297);
+  const portraitWidthMm = toMm(template.descriptor.page.width, 210);
+  const portraitHeightMm = toMm(template.descriptor.page.height, 297);
+  const dims = (index: number): { widthMm: number; heightMm: number; orientation: 'portrait' | 'landscape' } =>
+    options.pageOrientations?.[index] === 'landscape'
+      ? { widthMm: portraitHeightMm, heightMm: portraitWidthMm, orientation: 'landscape' }
+      : { widthMm: portraitWidthMm, heightMm: portraitHeightMm, orientation: 'portrait' };
 
   const style = document.createElement('style');
   style.textContent = template.css + '\n' + compilePrintCss(template.descriptor);
@@ -60,7 +68,7 @@ export async function downloadPdf(options: PdfOptions): Promise<PdfResult> {
     .map((html, i) => {
       const footer = options.footers?.[i];
       return (
-        `<section class="sr-page sr-pdf-page">` +
+        `<section class="sr-page sr-pdf-page${options.pageOrientations?.[i] === 'landscape' ? ' sr-page-landscape' : ''}">` +
         `<div class="sr-page-body sr-doc">${html}</div>` +
         (footer ? `<div class="sr-page-footer">${escapeHtml(footer)}</div>` : '') +
         `</section>`
@@ -83,10 +91,11 @@ export async function downloadPdf(options: PdfOptions): Promise<PdfResult> {
     await nextFrame();
 
     const sheets = Array.from(host.querySelectorAll<HTMLElement>('.sr-pdf-page'));
+    const first = dims(0);
     const doc = new jsPDF({
       unit: 'mm',
-      format: [widthMm, heightMm],
-      orientation: widthMm > heightMm ? 'landscape' : 'portrait',
+      format: [first.widthMm, first.heightMm],
+      orientation: first.orientation,
       compress: true,
     });
     doc.setProperties({ title: options.documentTitle ?? 'SciRender' });
@@ -101,14 +110,15 @@ export async function downloadPdf(options: PdfOptions): Promise<PdfResult> {
         windowWidth: sheet.offsetWidth,
         windowHeight: sheet.offsetHeight,
       });
-      if (i > 0) doc.addPage([widthMm, heightMm], widthMm > heightMm ? 'landscape' : 'portrait');
+      const page = dims(i);
+      if (i > 0) doc.addPage([page.widthMm, page.heightMm], page.orientation);
       doc.addImage(
         canvas.toDataURL('image/jpeg', 0.94),
         'JPEG',
         0,
         0,
-        widthMm,
-        heightMm,
+        page.widthMm,
+        page.heightMm,
         undefined,
         'FAST',
       );

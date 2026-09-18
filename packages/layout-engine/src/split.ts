@@ -261,8 +261,12 @@ function computeRowSafety(rows: HTMLTableRowElement[], columns: number): boolean
         continue;
       }
       const cell = cells[cellIndex++];
-      const span = cell ? Math.max(1, Number.parseInt(cell.getAttribute('rowspan') ?? '1', 10) || 1) : 1;
-      if (span > 1) occupancy[col] = span - 1;
+      const rowSpan = cell ? Math.max(1, Number.parseInt(cell.getAttribute('rowspan') ?? '1', 10) || 1) : 1;
+      const colSpan = cell ? Math.max(1, Number.parseInt(cell.getAttribute('colspan') ?? '1', 10) || 1) : 1;
+      if (rowSpan > 1) {
+        for (let k = col; k < Math.min(columns, col + colSpan); k++) occupancy[k] = Math.max(occupancy[k] as number, rowSpan - 1);
+      }
+      if (colSpan > 1) col += colSpan - 1;
     }
     return occupancy.every((v) => v === 0);
   });
@@ -282,7 +286,14 @@ export function splitTable(
   );
   if (rows.length < minRows * 2) return null;
 
-  const columns = table.querySelector('thead tr')?.children.length ?? (rows[0]?.cells.length ?? 0);
+  const rowLogicalWidth = (row: HTMLTableRowElement): number =>
+    Array.from(row.cells).reduce((sum, cell) => sum + Math.max(1, cell.colSpan || 1), 0);
+  const headerRow = table.querySelector('thead tr') as HTMLTableRowElement | null;
+  const columns = Math.max(
+    headerRow ? rowLogicalWidth(headerRow) : 0,
+    ...rows.map(rowLogicalWidth),
+    1,
+  );
   const safeAfter = computeRowSafety(rows, columns);
 
   let naturalFit = 0;

@@ -22,6 +22,16 @@ const topbar = read('apps/web/src/components/TopBar.tsx');
 const css = read('apps/web/src/index.css');
 const store = read('apps/web/src/state/store.ts');
 
+const diagramStudio = read('apps/web/src/lib/diagram-studio.ts');
+const diagramForms = read('apps/web/src/lib/card-forms.ts');
+const parserBlocks = read('packages/parser/src/blocks.ts');
+const splitTable = read('packages/layout-engine/src/split.ts');
+const layout = read('packages/layout-engine/src/index.ts');
+const rendererHtml = read('packages/renderer-html/src/render-core.ts');
+const rendererCss = read('packages/template-engine/src/css.ts');
+const pdf = read('packages/renderer-pdf/src/pdf.ts');
+const print = read('packages/renderer-pdf/src/print.ts');
+
 check('audit modal centered flex backdrop', audit.includes('fixed inset-0 z-50 flex items-center justify-center'));
 check('audit modal portals to document.body', audit.includes('createPortal(') && audit.includes('document.body'));
 check('audit modal viewport-safe height', audit.includes('max-h-[calc(100dvh-2rem)] min-h-0 w-full max-w-2xl'));
@@ -53,8 +63,27 @@ check('Ctrl+Alt+0 can force empty heading to paragraph', canvas.includes("headin
 check('contextual insert stores anchor block id', store.includes('afterBlockId: s.activeBlockId') && store.includes('activeBlockId: string | null'));
 check('top InsertMenu uses viewport context', canvas.includes('<InsertMenu onInsert={(tpl) => insertAt(viewportInsertIndex(), tpl.text)} />'));
 check('new block auto-focuses and flashes', canvas.includes("scrollIntoView({ behavior: 'smooth', block: 'center' })") && canvas.includes('setFlashCardId(card.id)') && cardShell.includes('ring-2 ring-sky-400 animate-pulse'));
-check('per-card insert below control', cardShell.includes('onInsertBelow') && cardShell.includes('Thêm khối bên dưới'));
+check('floating toolbar has no rough plus button', !cardShell.includes('onInsertBelow') && !cardShell.includes('Thêm khối bên dưới') && !cardShell.includes('iconOnly'));
 check('reduced-motion compatible animation tokens', css.includes('transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease-out'));
+
+check('Shift+Enter split paragraph is wired into live shortcut context', canvas.includes("e.key === 'Enter' && e.shiftKey") && canvas.includes('context.splitParagraphAt') && canvas.includes('const splitParagraphAt'));
+check('paragraph split persists the left side and focuses the new paragraph', canvas.includes("kind: 'paragraph', text: right") && canvas.includes('setActiveBlockId(nextCard.id)'));
+check('table horizontal merge marker is parsed as colspan', parserBlocks.includes("raw === TABLE_HORIZONTAL_MERGE_MARKER") && parserBlocks.includes('owner.colspan = (owner.colspan ?? 1) + 1'));
+check('table vertical merge marker is parsed as rowspan', parserBlocks.includes("raw === TABLE_MERGE_MARKER") && parserBlocks.includes('ownerAbove.rowspan = (ownerAbove.rowspan ?? 1) + 1'));
+check('table multi-cell marquee + shift/meta selection exists', cardsEditors.includes('draggingRef.current') && cardsEditors.includes('e.shiftKey && anchorRef.current') && cardsEditors.includes('e.ctrlKey || e.metaKey'));
+check('table whole row/column selectors exist', cardsEditors.includes('selectWholeColumn') && cardsEditors.includes('selectWholeRow'));
+check('table TSV copy/paste exists', cardsEditors.includes("join('\\t')") && cardsEditors.includes('applyMatrix') && cardsEditors.includes('onPasteCapture'));
+check('table Delete clears the selected matrix', cardsEditors.includes("e.key === 'Delete' || e.key === 'Backspace'") && cardsEditors.includes("writeCellOn(next, cell, '')"));
+check('table keyboard navigation and Alt+Enter exist', cardsEditors.includes("e.key === 'Tab'") && cardsEditors.includes('e.shiftKey') && cardsEditors.includes("e.key === 'Enter'") && cardsEditors.includes("e.altKey && e.key === 'Enter'"));
+check('table split safety accounts for colspan and rowspan', splitTable.includes('colSpan') && splitTable.includes('rowSpan') && splitTable.includes('computeRowSafety'));
+check('table split logical width accounts for colspans', splitTable.includes('rowLogicalWidth') && splitTable.includes('Math.max(1, cell.colSpan || 1)'));
+check("diagram studio ships required presets", diagramStudio.includes("id: 'org'") && diagramStudio.includes("id: 'flowchart'") && diagramStudio.includes("id: 'system'") && diagramStudio.includes("id: 'mindmap'"));
+check('diagram studio supports direction, curve, theme', diagramStudio.includes('applyDirection') && diagramStudio.includes("curve?: DiagramStudioCurve") && diagramStudio.includes("theme?: DiagramStudioTheme"));
+check('diagram editor has landscape toggle and asset-save conversion', cardsEditors.includes('Khổ giấy ngang') && cardsEditors.includes('serializeFigure') && cardsEditors.includes('asset:${name}'));
+check('diagram IndexedDB asset path exists', store.includes('addGeneratedAsset') && store.includes('putAsset') && store.includes('asset.generated'));
+check('landscape page sizing reaches preview and renderer', rendererHtml.includes('data-sr-landscape') && layout.includes("type PageOrientation = 'portrait' | 'landscape'") && rendererCss.includes('.sr-page-landscape'));
+check('landscape browser print and direct PDF paths exist', print.includes('sr-page-landscape') && rendererCss.includes('landscape-page') && pdf.includes('doc.addPage([page.widthMm, page.heightMm], page.orientation)'));
+check('TopBar dropdown is explicit absolute overlay', topbar.includes('overflow-visible') && fs.readFileSync(path.join(root, 'apps/web/src/components/ui/Menu.tsx'), 'utf8').includes('top-[calc(100%+4px)]'));
 
 if (failures) process.exit(1);
 console.log('Native interaction source smoke: PASS');

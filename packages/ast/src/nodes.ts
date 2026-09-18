@@ -161,10 +161,11 @@ export interface FigureNode extends NodeBase {
 
 export interface TableCell {
   children: InlineNode[];
-  /** How many rows this cell visually spans downward, itself included. `1`
-   * (or `undefined`) means no span. Set only by the parser, from a body cell
-   * written as `^^` directly below it — never user-settable any other way. */
+  /** How many rows this cell visually spans downward, itself included. */
   rowspan?: number;
+  /** How many columns this cell visually spans to the right, itself included.
+   * Written as `>>` in covered source slots. */
+  colspan?: number;
   /** True when this slot is covered by a `rowspan` cell from a row above —
    * the renderer must skip it (no `<td>`) exactly as plain HTML rowspan
    * requires; the grid stays rectangular (every row still has as many cells
@@ -206,6 +207,8 @@ export interface DiagramNode extends NodeBase {
   number: string | null;
   /** `dir=TB|LR|BT|RL` from the caption attributes; null = use the template default. */
   direction: string | null;
+  /** Additional trailing attributes, e.g. curve/theme/landscape. */
+  attrs: Record<string, string>;
 }
 
 export interface ListItemNode extends NodeBase {

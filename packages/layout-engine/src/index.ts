@@ -43,9 +43,13 @@ export interface LayoutWarning {
   line: number | null;
 }
 
+export type PageOrientation = 'portrait' | 'landscape';
+
 export interface PaginateResult {
   /** Inner HTML of each page body, in order. */
   pages: string[];
+  /** Orientation for each page; body pages opt into landscape per block. */
+  pageOrientations: PageOrientation[];
   warnings: LayoutWarning[];
   /** nodeId -> 1-based page number. Powers "jump to page" from the outline. */
   pageOfNode: Record<string, number>;
@@ -106,7 +110,7 @@ export function paginate(
   host.style.position = 'absolute';
   host.style.left = '-100000px';
   host.style.top = '0';
-  host.style.width = `${options.contentWidthPx}px`;
+  host.style.width = `${Math.max(options.contentWidthPx, options.contentHeightPx)}px`;
   host.style.visibility = 'hidden';
   host.style.pointerEvents = 'none';
   host.setAttribute('aria-hidden', 'true');
@@ -126,10 +130,27 @@ export function paginate(
   }
 
   const columns: string[] = [];
+  const columnOrientations: PageOrientation[] = [];
   /** Full-width band printed above the columns of a page (a title block). */
   const bandOfPage: string[] = [];
-  let columnHeight = options.contentHeightPx;
-  let column = newColumn(host, options, columnWidth, columnHeight);
+  const portraitWidth = options.contentWidthPx;
+  const portraitHeight = options.contentHeightPx;
+  const landscapeWidth = options.contentHeightPx;
+  const landscapeHeight = options.contentWidthPx;
+  const pageWidth = (orientation: PageOrientation): number =>
+    orientation === 'landscape' ? landscapeWidth : portraitWidth;
+  const pageHeight = (orientation: PageOrientation): number =>
+    orientation === 'landscape' ? landscapeHeight : portraitHeight;
+  const widthForColumns = (orientation: PageOrientation): number => {
+    const width = pageWidth(orientation);
+    return columnsPerPage === 1
+      ? width
+      : (width - options.columnGapPx * (columnsPerPage - 1)) / columnsPerPage;
+  };
+
+  let orientation: PageOrientation = 'portrait';
+  let columnHeight = pageHeight(orientation);
+  let column = newColumn(host, options, widthForColumns(orientation), columnHeight);
   let columnIndex = 0;
   let guard = 0;
   const maxIterations = queue.length * 14 + 2000;
@@ -138,16 +159,27 @@ export function paginate(
 
   const commitColumn = (padToPage = false): void => {
     columns.push(column.html());
+    columnOrientations.push(orientation);
     columnIndex++;
     if (padToPage) {
       while (columnIndex % columnsPerPage !== 0) {
         columns.push('');
+        columnOrientations.push(orientation);
         columnIndex++;
       }
     }
-    // A new page starts with the full height again; a band, if any, shortens it.
-    if (columnIndex % columnsPerPage === 0) columnHeight = options.contentHeightPx;
-    column = newColumn(host, options, columnWidth, columnHeight);
+    if (columnIndex % columnsPerPage === 0) {
+      columnHeight = pageHeight(orientation);
+    }
+    column = newColumn(host, options, widthForColumns(orientation), columnHeight);
+  };
+
+  const setOrientation = (next: PageOrientation): void => {
+    if (orientation === next) return;
+    if (column.blockCount() > 0) commitColumn(true);
+    orientation = next;
+    columnHeight = pageHeight(orientation);
+    column = newColumn(host, options, widthForColumns(orientation), columnHeight);
   };
 
   /**
@@ -159,7 +191,7 @@ export function paginate(
     if (column.blockCount() > 0 || columnIndex % columnsPerPage !== 0) commitColumn(true);
     const probe = document.createElement('div');
     probe.className = 'sr-doc sr-span';
-    probe.style.width = `${options.contentWidthPx}px`;
+    probe.style.width = `${pageWidth(orientation)}px`;
     // flow-root so the band's own margins are measured, not collapsed away —
     // the printed .sr-span uses the same rule, so the heights agree.
     probe.style.display = 'flow-root';
@@ -172,8 +204,9 @@ export function paginate(
     const page = pageOfColumn(columnIndex) - 1;
     bandOfPage[page] = (bandOfPage[page] ?? '') + html;
     recordPage(block, page + 1, pageOfNode);
-    columnHeight = Math.max(options.contentHeightPx * 0.2, options.contentHeightPx - height);
-    column = newColumn(host, options, columnWidth, columnHeight);
+    const currentHeight = pageHeight(orientation);
+    columnHeight = Math.max(currentHeight * 0.2, currentHeight - height);
+    column = newColumn(host, options, widthForColumns(orientation), columnHeight);
   };
 
   while (queue.length) {
@@ -189,6 +222,9 @@ export function paginate(
     }
 
     const block = queue.shift() as Element;
+
+    const wantsLandscape = block.getAttribute('data-sr-landscape') === '1';
+    setOrientation(wantsLandscape ? 'landscape' : 'portrait');
 
     // A block that spans every column sits in a band above them.
     if (columnsPerPage > 1 && block.getAttribute('data-sr-span') === 'page') {
@@ -206,6 +242,7 @@ export function paginate(
 
     if (!column.overflows()) {
       recordPage(block, pageOfColumn(columnIndex), pageOfNode);
+      if (wantsLandscape) commitColumn(true);
       continue;
     }
 
@@ -221,7 +258,7 @@ export function paginate(
       if (!column.overflows()) {
         recordPage(head, pageOfColumn(columnIndex), pageOfNode);
         queue.unshift(tail);
-        commitColumn();
+        commitColumn(wantsLandscape);
         continue;
       }
       column.replace(head, block);
@@ -238,7 +275,7 @@ export function paginate(
           line: numAttr(block, 'data-sr-line'),
         });
         recordPage(block, pageOfColumn(columnIndex), pageOfNode);
-        commitColumn();
+        commitColumn(wantsLandscape);
         continue;
       }
       column.remove(block);
@@ -258,7 +295,7 @@ export function paginate(
       if (lineBoxes(head).length >= options.orphans && !column.overflows()) {
         recordPage(head, pageOfColumn(columnIndex), pageOfNode);
         queue.unshift(tail);
-        commitColumn();
+        commitColumn(wantsLandscape);
         continue;
       }
       column.replace(head, block);
@@ -284,17 +321,21 @@ export function paginate(
 
   if (column.blockCount() || !columns.length) {
     columns.push(column.html());
+    columnOrientations.push(orientation);
     columnIndex++;
   }
   while (columnIndex % columnsPerPage !== 0) {
     columns.push('');
+    columnOrientations.push(orientation);
     columnIndex++;
   }
   host.textContent = '';
 
   const pages: string[] = [];
+  const pageOrientations: PageOrientation[] = [];
   if (columnsPerPage === 1) {
     pages.push(...columns);
+    pageOrientations.push(...columnOrientations);
   } else {
     for (let i = 0; i < columns.length; i += columnsPerPage) {
       const group = columns.slice(i, i + columnsPerPage);
@@ -305,11 +346,13 @@ export function paginate(
             .map((c) => `<div class="sr-column">${c}</div>`)
             .join('')}</div>`,
       );
+      pageOrientations.push(columnOrientations[i] ?? 'portrait');
     }
   }
 
   return {
     pages,
+    pageOrientations,
     warnings,
     pageOfNode,
     durationMs:

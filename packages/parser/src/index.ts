@@ -3,7 +3,7 @@ import { emptyDocument, sortDiagnostics } from '@scirender/ast';
 import { parseFrontMatter } from './frontmatter.js';
 import { parseBlocks, toLines, type BlockParseState } from './blocks.js';
 
-export { TABLE_MERGE_MARKER } from './blocks.js';
+export { TABLE_HORIZONTAL_MERGE_MARKER, TABLE_MERGE_MARKER } from './blocks.js';
 
 export interface ParseResult {
   document: DocumentNode;

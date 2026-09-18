@@ -1,7 +1,10 @@
 import { compilePrintCss, type ResolvedTemplate } from '@scirender/template-engine';
 
+export type PageOrientation = 'portrait' | 'landscape';
+
 export interface PrintOptions {
   pages: string[];
+  pageOrientations?: PageOrientation[];
   template: ResolvedTemplate;
   /** Page-number labels, one per page. Omit for no footers. */
   footers?: string[];
@@ -40,7 +43,7 @@ export function printDocument(options: PrintOptions): void {
   root.innerHTML = pages
     .map((html, i) => {
       const footer = options.footers?.[i];
-      return `<section class="sr-page"><div class="sr-page-body sr-doc">${html}</div>${
+      return `<section class="sr-page${options.pageOrientations?.[i] === 'landscape' ? ' sr-page-landscape' : ''}"><div class="sr-page-body sr-doc">${html}</div>${
         footer ? `<div class="sr-page-footer">${escapeHtml(footer)}</div>` : ''
       }</section>`;
     })
@@ -95,7 +98,7 @@ export function exportStandaloneHtml(options: StandaloneOptions): string {
   const body = pages
     .map((html, i) => {
       const footer = options.footers?.[i];
-      return `<section class="sr-page"><div class="sr-page-body sr-doc">${html}</div>${
+      return `<section class="sr-page${options.pageOrientations?.[i] === 'landscape' ? ' sr-page-landscape' : ''}"><div class="sr-page-body sr-doc">${html}</div>${
         footer ? `<div class="sr-page-footer">${escapeHtml(footer)}</div>` : ''
       }</section>`;
     })

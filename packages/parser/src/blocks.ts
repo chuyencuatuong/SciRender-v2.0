@@ -38,6 +38,7 @@ const RE_PAGEBREAK = /^:::\s*pagebreak\s*:::$/i;
  * can offer a "merge with cell above" button that writes the same marker,
  * instead of the two sides drifting apart on what the syntax actually is. */
 export const TABLE_MERGE_MARKER = '^^';
+export const TABLE_HORIZONTAL_MERGE_MARKER = '>>';
 const RE_BULLET = /^(\s*)([-*+])\s+(.*)$/;
 const RE_ORDERED = /^(\s*)(\d{1,9})[.)]\s+(.*)$/;
 const RE_CAPTION = /^:\s+(.*)$/;
@@ -371,6 +372,7 @@ function readFence(
       label: cap?.spec.label ?? null,
       number: null,
       direction: ['TB', 'TD', 'BT', 'LR', 'RL'].includes(dir) ? dir : null,
+      attrs: { ...(cap?.spec.attrs ?? {}) },
     });
     if (cap) next = cap.next;
     return next;
@@ -531,7 +533,26 @@ function readTable(
   // this slot `covered` (no ink, no <td> at render time). `columnOwner` tracks
   // which cell currently owns each column, so a run of several `^^` rows all
   // extend the SAME top cell rather than chaining off one another.
-  const columnOwner: (TableCell | null)[] = new Array(headerCells.length).fill(null);
+  // Track the actual owner occupying each logical column. A horizontally
+  // merged owner can occupy multiple columns, so a `^^` marker must extend its
+  // rowspan exactly once per source row — not once per covered column.
+  let columnOwner: (TableCell | null)[] = new Array(headerCells.length).fill(null);
+
+  const buildHeader = (): TableCell[] => {
+    const owners: (TableCell | null)[] = new Array(headerCells.length).fill(null);
+    return Array.from({ length: headerCells.length }, (_, k) => {
+      const raw = (headerCells[k] ?? '').trim();
+      if (raw === TABLE_HORIZONTAL_MERGE_MARKER && owners[k - 1]) {
+        const owner = owners[k - 1] as TableCell;
+        owner.colspan = (owner.colspan ?? 1) + 1;
+        owners[k] = owner;
+        return { children: [], covered: true };
+      }
+      const cell: TableCell = { children: inlineOf(headerCells[k] ?? '', first, st) };
+      owners[k] = cell;
+      return cell;
+    });
+  };
 
   const rows: TableCell[][] = [];
   let j = i + 2;
@@ -548,19 +569,39 @@ function readTable(
         position: span(cur, cur),
       });
     }
+
+    const rowOwners: (TableCell | null)[] = new Array(headerCells.length).fill(null);
+    const extendedThisRow = new Set<TableCell>();
     rows.push(
       Array.from({ length: headerCells.length }, (_, k) => {
         const raw = (cells[k] ?? '').trim();
-        const owner = columnOwner[k];
-        if (raw === TABLE_MERGE_MARKER && owner) {
-          owner.rowspan = (owner.rowspan ?? 1) + 1;
+        const ownerAbove = columnOwner[k] ?? null;
+
+        if (raw === TABLE_MERGE_MARKER && ownerAbove) {
+          if (!extendedThisRow.has(ownerAbove)) {
+            ownerAbove.rowspan = (ownerAbove.rowspan ?? 1) + 1;
+            extendedThisRow.add(ownerAbove);
+          }
+          rowOwners[k] = ownerAbove;
           return { children: [], covered: true };
         }
+
+        // `>>` consumes the slot to the right of the owning cell. The owner may
+        // itself have come from a `^^` marker in this row, so this remains a
+        // rectangle even when rowspan + colspan intersect.
+        if (raw === TABLE_HORIZONTAL_MERGE_MARKER && rowOwners[k - 1]) {
+          const owner = rowOwners[k - 1] as TableCell;
+          owner.colspan = (owner.colspan ?? 1) + 1;
+          rowOwners[k] = owner;
+          return { children: [], covered: true };
+        }
+
         const cell: TableCell = { children: inlineOf(cells[k] ?? '', cur, st) };
-        columnOwner[k] = cell;
+        rowOwners[k] = cell;
         return cell;
       }),
     );
+    columnOwner = rowOwners;
     j++;
   }
 
@@ -571,7 +612,7 @@ function readTable(
     type: 'table',
     id: nid('table', pos, st),
     position: pos,
-    header: headerCells.map((c) => ({ children: inlineOf(c, first, st) })),
+    header: buildHeader(),
     rows,
     align,
     caption: cap?.caption ?? [],

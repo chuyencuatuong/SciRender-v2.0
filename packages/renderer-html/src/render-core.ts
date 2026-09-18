@@ -185,7 +185,7 @@ export function renderBlock(
           .filter((v) => Number.isInteger(v) && v >= 0),
       );
       const head = `<thead><tr>${norm.header
-        .map((c, i) => cellHtml('th', c, decimalCols.has(i) ? 'decimal' : norm.align[i] ?? 'default', t))
+        .map((c, i) => c.covered ? '' : cellHtml('th', c, decimalCols.has(i) ? 'decimal' : norm.align[i] ?? 'default', t))
         .join('')}</tr></thead>`;
       const body = `<tbody>${norm.rows
         .map(
@@ -220,7 +220,8 @@ export function renderBlock(
       );
       const table = `<table>${head}${body}</table>`;
       const inner = t.captions.tablePosition === 'above' ? `${cap}${table}` : `${table}${cap}`;
-      return `<div class="sr-table-wrap"${attrsOf(node)}>${inner}</div>`;
+      const landscape = node.attrs?.landscape === 'true' || node.attrs?.orientation === 'landscape' ? ' data-sr-landscape="1"' : '';
+      return `<div class="sr-table-wrap"${attrsOf(node)}${landscape}>${inner}</div>`;
     }
     case 'codeBlock': {
       const lines = node.value.split('\n');
@@ -261,7 +262,10 @@ export function renderBlock(
       const cap = node.caption.length
         ? captionHtml(t.labels.diagram, node.number, inline(node.caption, t), t, false)
         : '';
-      return `<div class="sr-diagram"${attrsOf(node)}><div class="sr-mermaid"${auto} data-sr-mermaid="${escapeAttr(
+      const diagramAttrs = node.attrs ?? {};
+      const attr = (key: string): string => diagramAttrs[key] ? ` data-sr-mermaid-${key}="${escapeAttr(diagramAttrs[key])}"` : '';
+      const landscape = diagramAttrs.landscape === 'true' || diagramAttrs.orientation === 'landscape' ? ' data-sr-landscape="1"' : '';
+      return `<div class="sr-diagram"${attrsOf(node)}${landscape}><div class="sr-mermaid"${auto}${attr('curve')}${attr('theme')} data-sr-mermaid="${escapeAttr(
         source,
       )}"></div>${cap}</div>`;
     }
@@ -283,6 +287,11 @@ export function renderBlock(
         .map((c) => renderBlock(c, t, assets))
         .join('')}</blockquote>`;
     case 'callout': {
+      if (node.variant === 'landscape') {
+        return `<div class="sr-landscape-block"${attrsOf(node)} data-sr-landscape="1">${node.children
+          .map((c) => renderBlock(c, t, assets))
+          .join('')}</div>`;
+      }
       const title = node.title
         ? `<div class="sr-callout-title">${escapeHtml(node.title)}</div>`
         : '';
@@ -330,6 +339,7 @@ function cellHtml(
 ): string {
   const style = alignStyle(align);
   const span = cell.rowspan && cell.rowspan > 1 ? ` rowspan="${cell.rowspan}"` : '';
+  const colspan = cell.colspan && cell.colspan > 1 ? ` colspan="${cell.colspan}"` : '';
   const raw = plainCellText(cell.children);
   const isFormula = Boolean(evaluated?.formula);
   const display = evaluated && !evaluated.error && evaluated.value != null ? evaluated.display : null;
@@ -337,7 +347,7 @@ function cellHtml(
   const content = decimal ?? (isFormula && evaluated ? escapeHtml(evaluated.display) : inline(cell.children, t));
   const title = isFormula && evaluated?.error ? ` title="${escapeAttr(evaluated.formula ?? raw)}"` : '';
   const cls = align === 'decimal' ? ' class="sr-decimal-cell"' : '';
-  return `<${tag}${span}${cls}${style ? ` style="${escapeAttr(style)}"` : ''}${title}>${content}</${tag}>`;
+  return `<${tag}${span}${colspan}${cls}${style ? ` style="${escapeAttr(style)}"` : ''}${title}>${content}</${tag}>`;
 }
 
 function decimalHtml(value: string): string {
