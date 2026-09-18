@@ -50,13 +50,17 @@ export function printDocument(options: PrintOptions): void {
   };
   window.addEventListener('afterprint', cleanup);
 
-  // Give the browser one frame to apply the print stylesheet before opening the
-  // dialog; otherwise Chromium occasionally measures the pre-print layout.
-  window.requestAnimationFrame(() => {
+  // Fonts are part of physical page geometry. Open the print dialog only after
+  // the document has reported them ready, then give the browser two frames to
+  // apply the print stylesheet before it snapshots the page.
+  const ready = (document.fonts?.ready ?? Promise.resolve()).catch(() => undefined);
+  void ready.then(() => {
     window.requestAnimationFrame(() => {
-      window.print();
-      // Safari never fires afterprint in some configurations.
-      window.setTimeout(cleanup, 1500);
+      window.requestAnimationFrame(() => {
+        window.print();
+        // Safari never fires afterprint in some configurations.
+        window.setTimeout(cleanup, 1500);
+      });
     });
   });
 }

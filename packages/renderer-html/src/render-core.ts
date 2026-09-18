@@ -28,10 +28,20 @@ export { anchorIdForLabel };
 /* ----------------------------------------------------------------- inline */
 
 export function inline(nodes: InlineNode[], t: TemplateDescriptor): string {
-  return nodes.map((n) => inlineOne(n, t)).join('');
+  return nodes.map((n, index) => inlineOne(n, t, shouldSuppressReferenceWord(nodes[index - 1], n, t))).join('');
 }
 
-function inlineOne(node: InlineNode, t: TemplateDescriptor): string {
+function shouldSuppressReferenceWord(previous: InlineNode | undefined, node: InlineNode, t: TemplateDescriptor): boolean {
+  if (!previous || previous.type !== 'text' || node.type !== 'crossRef' || !node.resolved) return false;
+  const word = refWord(node.resolved.kind, t);
+  if (!word) return false;
+  // Markdown commonly writes “Bảng @tbl:x”; crossRef already renders the
+  // semantic word (“Bảng 3.2”), so emitting it again creates “Bảng Bảng 3.2”.
+  const escaped = word.replace(/[.*+?^${}()|[\]{}\\-]/g, '\\$&');
+  return new RegExp(`(?:^|\\s)${escaped}\\s*$`, 'i').test(previous.value);
+}
+
+function inlineOne(node: InlineNode, t: TemplateDescriptor, suppressReferenceWord = false): string {
   switch (node.type) {
     case 'text':
       return escapeHtml(node.value);

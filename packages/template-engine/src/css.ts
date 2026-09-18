@@ -454,16 +454,19 @@ function round(n: number): number {
 /** Print stylesheet — drives the browser's own paged-media pipeline. */
 export function compilePrintCss(t: TemplateDescriptor): string {
   const p = t.page;
-  return `@page{size:210mm 297mm;margin:0!important;}
-@page landscape-page{size:297mm 210mm;margin:0!important;}
+  return `@page{size:${p.width} ${p.height};margin:0!important;}
+@page landscape-page{size:${p.height} ${p.width};margin:0!important;}
 @media print{
-  html,body{margin:0!important;padding:0!important;background:rgb(255 255 255)!important;}
+  html,body{width:100%!important;min-width:0!important;margin:0!important;padding:0!important;overflow:visible!important;background:rgb(255 255 255)!important;}
   *,*::before,*::after{ -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important;}
   a{color:inherit!important;text-decoration:none!important;}
+  #root{display:none!important;}
   body *{visibility:hidden;}
   #sr-print-root,#sr-print-root *{visibility:visible;}
-  #sr-print-root{position:absolute;inset:0 auto auto 0;width:max(${p.width},${p.height});}
+  #sr-print-root{position:static!important;inset:auto!important;display:block!important;width:100%!important;min-width:0!important;max-width:none!important;margin:0!important;padding:0!important;overflow:visible!important;}
+  .sr-pages{display:block!important;width:100%!important;min-width:0!important;margin:0!important;padding:0!important;}
   .sr-page{
+    width:${p.width}!important;height:${p.height}!important;
     box-shadow:none!important;margin:0!important;border:0!important;
     break-after:page;page-break-after:always;
   }

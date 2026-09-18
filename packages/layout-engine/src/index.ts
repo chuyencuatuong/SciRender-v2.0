@@ -256,10 +256,20 @@ export function paginate(
       const [head, tail] = structural;
       column.replace(block, head);
       if (!column.overflows()) {
-        recordPage(head, pageOfColumn(columnIndex), pageOfNode);
-        queue.unshift(tail);
-        commitColumn(wantsLandscape);
-        continue;
+        const expectedRows = tableRowCount(block);
+        const headRows = tableRowCount(head);
+        const tailRows = tableRowCount(tail);
+        const conserved =
+          expectedRows == null ||
+          (headRows != null && tailRows != null && headRows + tailRows === expectedRows);
+        if (conserved) {
+          recordPage(head, pageOfColumn(columnIndex), pageOfNode);
+          // The tail is a first-class continuation. Keep it on the queue until
+          // it has been fully consumed; never serialize a half-table and drop the remainder.
+          queue.unshift(tail);
+          commitColumn(wantsLandscape);
+          continue;
+        }
       }
       column.replace(head, block);
     }
@@ -471,6 +481,14 @@ function newColumn(
 }
 
 /* ------------------------------------------------------------------ helpers */
+
+function tableRowCount(block: Element): number | null {
+  const table = block.querySelector('table');
+  if (!table) return null;
+  const body = table.querySelector('tbody');
+  if (!body) return 0;
+  return Array.from(body.rows).length;
+}
 
 function fitOversizedDiagram(block: Element, limitBottom: number): boolean {
   const visual = block.querySelector<HTMLElement>('.sr-mermaid > svg, .sr-diagram-asset');

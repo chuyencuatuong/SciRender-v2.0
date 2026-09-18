@@ -87,7 +87,7 @@ check('TopBar dropdown is explicit absolute overlay', topbar.includes('overflow-
 check('@ reference syntax highlight + autocomplete', fs.readFileSync(path.join(root, 'apps/web/src/components/canvas/AutoTextarea.tsx'), 'utf8').includes('sr-ref-token') && auto.includes('detectTrigger') && auto.includes('mentionCandidates'));
 check('table context menu + fill handle', cardsEditors.includes('Căn trái') && cardsEditors.includes('Căn theo dấu thập phân') && cardsEditors.includes('Kéo để điền dữ liệu'));
 check('columns ungroup preserves landscape', read('apps/web/src/lib/cards.ts').includes('orientation=landscape') && cardShell.includes('makeColumns(pair[0], pair[1]'));
-check('print links + landscape page breaks', rendererHtml.includes('href="#') && rendererCss.includes('break-before:page') && (rendererCss.includes('size:297mm 210mm') || rendererCss.includes('size:A4 landscape')));
+check('print links + landscape page breaks', rendererHtml.includes('href="#') && rendererCss.includes('break-before:page') && rendererCss.includes('@page landscape-page{size:${p.height} ${p.width};margin:0!important;}'));
 
 if (failures) process.exit(1);
 console.log('Native interaction source smoke: PASS');

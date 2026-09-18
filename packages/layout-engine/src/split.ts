@@ -272,6 +272,24 @@ function computeRowSafety(rows: HTMLTableRowElement[], columns: number): boolean
   });
 }
 
+function stripContinuationSuffix(text: string, continuedLabel: string): string {
+  const suffix = `(${continuedLabel})`.trim();
+  if (!suffix) return text.trim();
+  const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(new RegExp(`\\s*${escaped}\\s*$`, 'i'), '').trim();
+}
+
+function clearFragmentIdentity(fragment: Element): void {
+  fragment.removeAttribute('id');
+  fragment.removeAttribute('data-sr-id');
+  fragment.removeAttribute('data-sr-block-id');
+  for (const el of Array.from(fragment.querySelectorAll('[id],[data-sr-id],[data-sr-block-id]'))) {
+    el.removeAttribute('id');
+    el.removeAttribute('data-sr-id');
+    el.removeAttribute('data-sr-block-id');
+  }
+}
+
 export function splitTable(
   wrapper: Element,
   availableBottom: number,
@@ -356,17 +374,23 @@ export function splitTable(
   const tailCap = captionOf(tail);
   if (cap) {
     if (!cap.above) headCap?.el.remove();
-    if (tailCap) tailCap.el.textContent = `${tailCap.el.textContent} (${continuedLabel})`;
+    if (tailCap) {
+      const base = stripContinuationSuffix(tailCap.el.textContent ?? '', continuedLabel);
+      tailCap.el.textContent = base ? `${base} (${continuedLabel})` : `(${continuedLabel})`;
+    }
   }
 
   const headRows = Array.from(head.querySelectorAll('tbody tr')).length;
   const tailRows = Array.from(tail.querySelectorAll('tbody tr')).length;
-  if (headRows !== fit || tailRows !== rows.length - fit || headRows + tailRows !== rows.length) return null;
+  const sourceRows = rows.length;
+  // Conservation invariant: every original row must exist in exactly one fragment.
+  if (headRows !== fit || tailRows !== sourceRows - fit || headRows + tailRows !== sourceRows) return null;
 
-  for (const el of Array.from(tail.querySelectorAll('[data-sr-id]'))) el.removeAttribute('data-sr-id');
-  tail.removeAttribute('data-sr-id');
+  clearFragmentIdentity(tail);
   head.setAttribute('data-sr-split', 'head');
   tail.setAttribute('data-sr-split', 'tail');
+  tail.setAttribute('data-sr-continuation', '1');
+  tail.setAttribute('data-sr-remaining-rows', String(tailRows));
   return [head, tail];
 }
 
