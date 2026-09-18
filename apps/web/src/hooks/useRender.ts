@@ -15,12 +15,14 @@ import { compile, type CompileResult } from '~/lib/pipeline';
 import { useStore } from '~/state/store';
 
 export type PageKind = 'cover' | 'front' | 'body';
+export type PageOrientation = 'portrait' | 'landscape';
 
 export interface RenderedPage {
   html: string;
   /** Already formatted: "" on covers, "iii" in front matter, "7" in the body. */
   footer: string;
   kind: PageKind;
+  orientation: PageOrientation;
 }
 
 export interface RenderState {
@@ -189,16 +191,18 @@ export function useRender(): RenderState {
 
       const d = t.descriptor;
       const pages: RenderedPage[] = [
-        ...result.coverPages.map((html) => ({ html, footer: '', kind: 'cover' as const })),
+        ...result.coverPages.map((html) => ({ html, footer: '', kind: 'cover' as const, orientation: 'portrait' as const })),
         ...frontPages.map((html, i) => ({
           html,
           footer: formatPageNumber(i + 1, d.layout.frontPageNumbers),
           kind: 'front' as const,
+          orientation: 'portrait' as const,
         })),
         ...body.pages.map((html, i) => ({
           html,
           footer: formatPageNumber(i + 1, d.layout.bodyPageNumbers),
           kind: 'body' as const,
+          orientation: body.pageOrientations[i] ?? 'portrait',
         })),
       ];
 

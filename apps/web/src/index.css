@@ -548,7 +548,7 @@ select.sr-input {
 }
 
 .sr-menu {
-  @apply absolute z-40 overflow-hidden rounded-xl border border-slate-200/80 py-1 dark:border-slate-700;
+  @apply absolute z-50 overflow-hidden rounded-xl border border-slate-200/80 py-1 dark:border-slate-700;
   background: rgb(255 255 255 / 0.96);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);

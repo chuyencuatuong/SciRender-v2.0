@@ -27,14 +27,29 @@ export interface MermaidResult {
  * actually contains a diagram. It ships with the app — nothing is downloaded
  * from the network at runtime (P5).
  */
-async function getMermaid(t: TemplateDescriptor): Promise<typeof import('mermaid').default> {
+type MermaidCurve = 'linear' | 'basis' | 'step';
+type MermaidTheme = 'academic' | 'obsidian' | 'blueprint';
+
+const MERMAID_THEME: Record<MermaidTheme, Record<string, string>> = {
+  academic: { primaryColor: '#eff6ff', primaryBorderColor: '#1d4ed8', primaryTextColor: '#0f172a', lineColor: '#dc2626', textColor: '#0f172a', mainBkg: '#ffffff', nodeBorder: '#1d4ed8', clusterBkg: '#f8fafc', clusterBorder: '#1e3a8a', edgeLabelBackground: '#ffffff' },
+  obsidian: { primaryColor: '#161922', primaryBorderColor: '#38bdf8', primaryTextColor: '#f8fafc', lineColor: '#94a3b8', textColor: '#f8fafc', mainBkg: '#161922', nodeBorder: '#38bdf8', clusterBkg: '#0e1017', clusterBorder: '#475569', edgeLabelBackground: '#161922' },
+  blueprint: { primaryColor: '#dbeafe', primaryBorderColor: '#1d4ed8', primaryTextColor: '#0f172a', lineColor: '#1d4ed8', textColor: '#0f172a', mainBkg: '#eff6ff', nodeBorder: '#1d4ed8', clusterBkg: '#e0f2fe', clusterBorder: '#2563eb', edgeLabelBackground: '#eff6ff' },
+};
+
+async function getMermaid(
+  t: TemplateDescriptor,
+  overrides: { curve?: MermaidCurve; theme?: MermaidTheme } = {},
+): Promise<typeof import('mermaid').default> {
   if (!loader) loader = import('mermaid').then((m) => m.default);
   const mermaid = await loader;
   const d = t.diagrams;
   const fontFamily = d.fontFamily === 'body' ? t.typography.bodyFont : t.typography.headingFont;
+  const curve = overrides.curve ?? d.curve as MermaidCurve;
+  const theme = overrides.theme ?? 'academic';
+  const themeVars = MERMAID_THEME[theme];
   const key = JSON.stringify([
-    fontFamily, d.fontSize, d.curve, d.nodeSpacing, d.rankSpacing,
-    d.wrappingWidth, t.colors.text, t.colors.rule,
+    fontFamily, d.fontSize, curve, d.nodeSpacing, d.rankSpacing,
+    d.wrappingWidth, t.colors.text, t.colors.rule, theme,
   ]);
   if (key !== configuredKey) {
     // Diagram labels must read as part of the document, not as a foreign
@@ -47,21 +62,12 @@ async function getMermaid(t: TemplateDescriptor): Promise<typeof import('mermaid
       themeVariables: {
         fontFamily,
         fontSize: d.fontSize,
-        primaryColor: '#ffffff',
-        primaryBorderColor: t.colors.rule,
-        primaryTextColor: t.colors.text,
-        lineColor: t.colors.text,
-        textColor: t.colors.text,
-        mainBkg: '#ffffff',
-        nodeBorder: t.colors.rule,
-        clusterBkg: '#ffffff',
-        clusterBorder: t.colors.rule,
-        edgeLabelBackground: '#ffffff',
+        ...themeVars,
       },
       flowchart: {
         htmlLabels: false,
         useMaxWidth: true,
-        curve: d.curve,
+        curve,
         nodeSpacing: d.nodeSpacing,
         rankSpacing: d.rankSpacing,
         padding: 10,
@@ -154,7 +160,6 @@ export async function resolveMermaidBlocks(
   metrics: DiagramFitMetrics,
 ): Promise<MermaidResult> {
   if (!hasMermaid(blocks)) return { blocks, warnings: [] };
-  const mermaid = await getMermaid(template);
   const host = document.createElement('div');
   const warnings: DiagramWarning[] = [];
 
@@ -162,13 +167,14 @@ export async function resolveMermaidBlocks(
   const maxW = metrics.contentWidthPx;
   const maxH = metrics.contentHeightPx * 0.86;
 
-  const renderOnce = async (source: string): Promise<string> => {
-    const key = `${configuredKey.length}:${hash(source)}`;
+  const renderOnce = async (source: string, cfg: { curve?: MermaidCurve; theme?: MermaidTheme } = {}): Promise<string> => {
+    const activeMermaid = await getMermaid(template, cfg);
+    const key = `${configuredKey}:${cfg.curve ?? ''}:${cfg.theme ?? ''}:${hash(source)}`;
     const hit = cache.get(key);
     if (hit !== undefined) return hit;
     let svg: string;
     try {
-      svg = (await mermaid.render(`sr-mmd-${seq++}`, source)).svg;
+      svg = (await activeMermaid.render(`sr-mmd-${seq++}`, source)).svg;
     } catch (err) {
       // P6 — a broken diagram is shown as broken, never as blank space.
       svg = `<div class="sr-unknown">Lỗi sơ đồ Mermaid: ${escapeHtml((err as Error).message)}</div>`;
@@ -191,22 +197,29 @@ export async function resolveMermaidBlocks(
     for (const target of Array.from(host.querySelectorAll<HTMLElement>('.sr-mermaid[data-sr-mermaid]'))) {
       const source = target.getAttribute('data-sr-mermaid') ?? '';
       const auto = target.getAttribute('data-sr-mermaid-auto') === '1';
+      const curve = target.getAttribute('data-sr-mermaid-curve') as MermaidCurve | null;
+      const theme = target.getAttribute('data-sr-mermaid-theme') as MermaidTheme | null;
+      const targetLandscape = target.closest<HTMLElement>('[data-sr-landscape]')?.getAttribute('data-sr-landscape') === '1';
+      const targetMaxW = targetLandscape ? metrics.contentHeightPx : maxW;
+      const targetMaxH = targetLandscape ? metrics.contentWidthPx * 0.86 : maxH;
       target.removeAttribute('data-sr-mermaid');
       target.removeAttribute('data-sr-mermaid-auto');
+      target.removeAttribute('data-sr-mermaid-curve');
+      target.removeAttribute('data-sr-mermaid-theme');
       if (!source.trim()) continue;
 
-      let svg = await renderOnce(source);
+      let svg = await renderOnce(source, { curve: curve ?? undefined, theme: theme ?? undefined });
       let size = naturalSize(svg);
-      let scale = size ? fitScale(size, maxW, maxH) : 1;
+      let scale = size ? fitScale(size, targetMaxW, targetMaxH) : 1;
       let chosen = currentDirection(source);
 
       if (auto && size && scale < 1 && chosen) {
         const altDir = perpendicular(chosen);
         const altSource = withDirection(source, altDir);
-        const altSvg = await renderOnce(altSource);
+        const altSvg = await renderOnce(altSource, { curve: curve ?? undefined, theme: theme ?? undefined });
         const altSize = naturalSize(altSvg);
         if (altSize) {
-          const altScale = fitScale(altSize, maxW, maxH);
+          const altScale = fitScale(altSize, targetMaxW, targetMaxH);
           if (altScale > scale + 0.01) {
             svg = altSvg;
             size = altSize;

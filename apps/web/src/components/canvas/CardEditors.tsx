@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpToLine, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpToLine, Check, Code2, Columns3, Plus, Save, Trash2, WandSparkles } from 'lucide-react';
 import type { BibEntry, LabelRecord } from '@scirender/ast';
 import { renderMath } from '@scirender/equation-engine';
 import { evaluateGrid } from '@scirender/table-engine';
-import { TABLE_MERGE_MARKER } from '@scirender/parser';
+import { TABLE_MERGE_MARKER, TABLE_HORIZONTAL_MERGE_MARKER } from '@scirender/parser';
 import type { CardKind } from '~/lib/cards';
 import {
   headingDepth,
@@ -23,6 +23,7 @@ import {
 } from '~/lib/card-forms';
 import { useStore } from '~/state/store';
 import { AutoTextarea } from './AutoTextarea';
+import { DIAGRAM_PRESETS, renderDiagramSvg, type DiagramStudioCurve, type DiagramStudioTheme } from '~/lib/diagram-studio';
 
 export interface EditorProps {
   kind: CardKind;
@@ -32,6 +33,7 @@ export interface EditorProps {
    * `@`-mention popover (Hạng mục 1). Absent while nothing has been rendered yet. */
   labels?: Record<string, LabelRecord>;
   bibliography?: BibEntry[];
+  onSaveDiagramAsset?: (svg: string, label: string) => Promise<string>;
 }
 
 /**
@@ -239,38 +241,146 @@ const DIRECTIONS: Array<[string, string]> = [
   ['RL', 'ngang ngược (RL)'],
 ];
 
-function DiagramEditor({ text, onChange, kind, labels, bibliography }: EditorProps): JSX.Element {
+function DiagramEditor({ text, onChange, kind, labels, bibliography, onSaveDiagramAsset }: EditorProps): JSX.Element {
   const form = parseDiagram(text);
+  const [tab, setTab] = useState<'code' | 'preset' | 'preview'>('code');
+  const [preview, setPreview] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const renderSeqRef = useRef(0);
+  const source = form?.source ?? '';
+  const direction = (form?.direction || undefined) as 'TB' | 'TD' | 'BT' | 'LR' | 'RL' | undefined;
+  const curve = form?.curve ?? 'basis';
+  const theme = form?.theme ?? 'academic';
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async (): Promise<void> => {
+      if (!source.trim()) {
+        setPreview('');
+        return;
+      }
+      const seq = ++renderSeqRef.current;
+      try {
+        const svg = await renderDiagramSvg(source, { curve, theme, direction });
+        if (!cancelled && seq === renderSeqRef.current) setPreview(svg);
+      } catch (err) {
+        if (!cancelled && seq === renderSeqRef.current) {
+          setPreview(`<div class="p-3 text-[11px] text-flag-600">Lỗi Mermaid: ${String((err as Error).message)}</div>`);
+        }
+      }
+    };
+    void run();
+    return () => { cancelled = true; };
+  }, [source, curve, theme, direction]);
+
   if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} bibliography={bibliography} />;
+
+  const setForm = (patch: Partial<typeof form>): void => onChange(serializeDiagram({ ...form, ...patch }));
+  const choosePreset = (source: string): void => {
+    setForm({ source });
+    setTab('code');
+  };
+  const saveAsset = async (): Promise<void> => {
+    if (!onSaveDiagramAsset || !form.source.trim()) return;
+    setBusy(true);
+    try {
+      const svg = await renderDiagramSvg(form.source, { curve: form.curve, theme: form.theme, direction: form.direction || undefined });
+      const name = await onSaveDiagramAsset(svg, form.label || 'dia:technical-diagram');
+      if (name) {
+        const label = form.label || `fig:diagram-${Date.now()}`;
+        onChange(serializeFigure({
+          alt: form.caption || 'Sơ đồ kỹ thuật',
+          src: `asset:${name}`,
+          label,
+          width: '',
+        }));
+      }
+      setSaved(Boolean(name));
+      window.setTimeout(() => setSaved(false), 1600);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const directions: Array<{ value: string; label: string; icon: React.ReactNode }> = [
+    { value: 'TB', label: 'TD', icon: <ArrowDown size={12} /> },
+    { value: 'BT', label: 'BT', icon: <ArrowUp size={12} /> },
+    { value: 'LR', label: 'LR', icon: <ArrowRight size={12} /> },
+    { value: 'RL', label: 'RL', icon: <ArrowLeft size={12} /> },
+  ];
+  const curves: Array<[DiagramStudioCurve, string]> = [['linear', 'Thẳng'], ['basis', 'Smooth'], ['step', 'Orthogonal']];
+  const themes: Array<[DiagramStudioTheme, string]> = [['academic', 'Academic / Bách Khoa'], ['obsidian', 'Obsidian Slate'], ['blueprint', 'Blueprint']];
+
   return (
     <div className="space-y-2">
-      <select
-        className="sr-input h-7 !w-[170px] text-[12px]"
-        value={form.direction}
-        aria-label="Chiều sơ đồ"
-        onChange={(e) => onChange(serializeDiagram({ ...form, direction: e.target.value }))}
-      >
-        {DIRECTIONS.map(([v, l]) => (
-          <option key={v || 'auto'} value={v}>
-            {l}
-          </option>
-        ))}
-      </select>
-      <div className="rounded-[10px] bg-ink-50 px-3 py-2">
-        <AutoTextarea
-          value={form.source}
-          mono
-          ariaLabel="Mã Mermaid"
-          bibliography={bibliography}
-          onChange={(source) => onChange(serializeDiagram({ ...form, source }))}
-        />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-900">
+          {(['code', 'preset', 'preview'] as const).map((k) => (
+            <button key={k} type="button" onClick={() => setTab(k)} className={`inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] ${tab === k ? 'bg-white font-medium text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white' : 'text-slate-500'}`}>
+              {k === 'code' ? <Code2 size={12} /> : k === 'preset' ? <WandSparkles size={12} /> : <Columns3 size={12} />}
+              {k === 'code' ? 'Code-first' : k === 'preset' ? 'Thư viện mẫu' : 'Xem trước'}
+            </button>
+          ))}
+        </div>
+        <label className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2.5 py-1 text-[11px] text-slate-600 dark:border-slate-700 dark:text-slate-300">
+          <input type="checkbox" checked={form.landscape} onChange={(e) => setForm({ landscape: e.target.checked })} />
+          Khổ giấy ngang
+        </label>
       </div>
-      <CaptionField
-        caption={form.caption}
-        label={form.label}
-        labelHint="dia:ten-nhan"
-        onChange={(caption, label) => onChange(serializeDiagram({ ...form, caption, label }))}
-      />
+
+      {tab === 'preset' ? (
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {DIAGRAM_PRESETS.map((preset) => (
+            <button key={preset.id} type="button" onClick={() => choosePreset(preset.source)} className="rounded-lg border border-slate-200 bg-[var(--sr-surface)] p-2.5 text-left transition hover:border-sky-400/50 hover:bg-sky-50/40 dark:border-slate-700 dark:hover:bg-slate-800">
+              <div className="text-[11.5px] font-medium text-ink-800">{preset.label}</div>
+              <div className="mt-0.5 text-[10.5px] text-ink-400">{preset.hint}</div>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {tab === 'code' || tab === 'preview' ? (
+        <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(260px,.9fr)]">
+          <div className="rounded-xl border border-white/10 bg-[#0e1017] p-2.5 shadow-sm dark:border-white/10">
+            <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
+              <Code2 size={11} /> Mermaid / AI Code
+            </div>
+            <AutoTextarea value={form.source} mono ariaLabel="Mã Mermaid" bibliography={bibliography} onChange={(source) => setForm({ source })} />
+          </div>
+          <div className="min-h-[120px] overflow-auto rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700">
+            {preview ? <div dangerouslySetInnerHTML={{ __html: preview }} /> : <div className="grid min-h-[90px] place-items-center text-[11px] text-slate-400">Dán mã Mermaid để xem SVG.</div>}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid gap-2 rounded-xl border border-slate-200/80 bg-[var(--sr-surface)] p-2.5 dark:border-slate-700">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-400">Hướng</span>
+          {directions.map((d) => (
+            <button key={d.value} type="button" onClick={() => setForm({ direction: d.value })} aria-pressed={form.direction === d.value} className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10.5px] ${form.direction === d.value ? 'bg-sky-500/12 text-sky-700 ring-1 ring-sky-400/30 dark:text-sky-300' : 'text-ink-500 hover:bg-ink-900/[0.05]'}`}>
+              {d.icon}{d.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-400">Đường nối</span>
+          {curves.map(([value, label]) => (
+            <button key={value} type="button" onClick={() => setForm({ curve: value })} aria-pressed={form.curve === value} className={`rounded-full px-2 py-1 text-[10.5px] ${form.curve === value ? 'bg-sky-500/12 text-sky-700 ring-1 ring-sky-400/30 dark:text-sky-300' : 'text-ink-500 hover:bg-ink-900/[0.05]'}`}>{label}</button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-400">Theme</span>
+          {themes.map(([value, label]) => (
+            <button key={value} type="button" onClick={() => setForm({ theme: value })} aria-pressed={form.theme === value} className={`rounded-full px-2 py-1 text-[10.5px] ${form.theme === value ? 'bg-sky-500/12 text-sky-700 ring-1 ring-sky-400/30 dark:text-sky-300' : 'text-ink-500 hover:bg-ink-900/[0.05]'}`}>{label}</button>
+          ))}
+        </div>
+        <CaptionField caption={form.caption} label={form.label} labelHint="dia:ten-nhan" onChange={(caption, label) => setForm({ caption, label })} />
+        {onSaveDiagramAsset ? (
+          <button type="button" disabled={busy} onClick={() => void saveAsset()} className="inline-flex h-7 w-fit items-center gap-1.5 rounded-lg border border-sky-400/30 bg-sky-500/10 px-2.5 text-[10.5px] font-medium text-sky-700 dark:text-sky-300">
+            {saved ? <Check size={12} /> : <Save size={12} />}{saved ? 'Đã lưu Asset SVG' : busy ? 'Đang lưu…' : 'Lưu SVG vào Asset'}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -343,168 +453,330 @@ const ALIGNS: Array<[CellAlign, string]> = [
   ['decimal', '1.2'],
 ];
 
+type CellRef = { row: number; col: number };
+const cellKey = (cell: CellRef): string => `${cell.row}:${cell.col}`;
+
 function TableEditor({ text, onChange, kind, labels, bibliography }: EditorProps): JSX.Element {
   const form = parseTable(text);
+  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
+  const anchorRef = useRef<CellRef | null>(null);
+  const draggingRef = useRef(false);
+  const [dragging, setDragging] = useState(false);
+  useEffect(() => {
+    if (!dragging) return;
+    const up = (): void => { draggingRef.current = false; setDragging(false); };
+    window.addEventListener('mouseup', up);
+    return () => window.removeEventListener('mouseup', up);
+  }, [dragging]);
   if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} bibliography={bibliography} />;
   const width = form.header.length;
+  const totalRows = form.rows.length + 1;
   const evaluated = evaluateGrid({ header: form.header, rows: form.rows });
 
-  const push = (next: TableForm): void => onChange(serializeTable(next));
-
-  const setCell = (row: number, col: number, value: string): void => {
-    if (row === -1) {
-      const header = form.header.slice();
-      header[col] = value;
-      push({ ...form, header });
+  const getValue = (cell: CellRef): string => cell.row === -1 ? (form.header[cell.col] ?? '') : (form.rows[cell.row]?.[cell.col] ?? '');
+  const allRefs = (): CellRef[] => [
+    ...Array.from({ length: width }, (_, col) => ({ row: -1, col })),
+    ...form.rows.flatMap((_, row) => Array.from({ length: width }, (_, col) => ({ row, col }))),
+  ];
+  const rect = (a: CellRef, b: CellRef): Set<string> => {
+    const r1 = Math.min(a.row, b.row); const r2 = Math.max(a.row, b.row);
+    const c1 = Math.min(a.col, b.col); const c2 = Math.max(a.col, b.col);
+    return new Set(allRefs().filter((c) => c.row >= r1 && c.row <= r2 && c.col >= c1 && c.col <= c2).map(cellKey));
+  };
+  const setSelection = (next: Set<string>, anchor?: CellRef): void => {
+    setSelectedCells(next);
+    if (anchor) anchorRef.current = anchor;
+  };
+  const selectWholeColumn = (col: number): Set<string> =>
+    new Set(allRefs().filter((cell) => cell.col === col).map(cellKey));
+  const selectWholeRow = (row: number): Set<string> =>
+    new Set(allRefs().filter((cell) => cell.row === row).map(cellKey));
+  const selectCell = (cell: CellRef, e: React.MouseEvent): void => {
+    e.stopPropagation();
+    const meta = e.ctrlKey || e.metaKey;
+    if (cell.row === -1) {
+      if (e.shiftKey && anchorRef.current) {
+        const c1 = Math.min(anchorRef.current.col, cell.col);
+        const c2 = Math.max(anchorRef.current.col, cell.col);
+        const next = new Set<string>();
+        for (let c = c1; c <= c2; c++) selectWholeColumn(c).forEach((k) => next.add(k));
+        setSelection(next, cell);
+      } else if (meta) {
+        const next = new Set(selectedCells);
+        selectWholeColumn(cell.col).forEach((k) => next.has(k) ? next.delete(k) : next.add(k));
+        setSelection(next, cell);
+      } else {
+        setSelection(selectWholeColumn(cell.col), cell);
+      }
+      draggingRef.current = false;
+      setDragging(false);
       return;
     }
-    const rows = form.rows.map((r) => r.slice());
-    const target = rows[row] ?? [];
-    target[col] = value;
-    rows[row] = target;
-    push({ ...form, rows });
+    if (e.shiftKey && anchorRef.current) {
+      setSelection(rect(anchorRef.current, cell));
+    } else if (meta) {
+      const next = new Set(selectedCells);
+      const k = cellKey(cell);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      setSelection(next, cell);
+    } else {
+      setSelection(new Set([cellKey(cell)]), cell);
+    }
+    draggingRef.current = !meta && !e.shiftKey;
+    setDragging(draggingRef.current);
+  };
+  const dragEnter = (cell: CellRef): void => {
+    if (!draggingRef.current || !anchorRef.current) return;
+    setSelectedCells(rect(anchorRef.current, cell));
   };
 
-  const addRow = (): void =>
-    push({ ...form, rows: [...form.rows, Array.from({ length: width }, () => '')] });
-  const addCol = (): void =>
-    push({
-      ...form,
-      header: [...form.header, ''],
-      align: [...form.align, 'default'],
-      rows: form.rows.map((r) => [...r, '']),
-    });
-  const dropRow = (i: number): void =>
-    push({ ...form, rows: form.rows.filter((_, k) => k !== i) });
-  const dropCol = (i: number): void =>
-    push({
-      ...form,
-      header: form.header.filter((_, k) => k !== i),
-      align: form.align.filter((_, k) => k !== i),
-      rows: form.rows.map((r) => r.filter((_, k) => k !== i)),
-    });
+  const push = (next: TableForm): void => onChange(serializeTable(next));
+  const writeCellOn = (base: TableForm, cell: CellRef, value: string): TableForm => {
+    if (cell.row === -1) {
+      const header = base.header.slice();
+      header[cell.col] = value;
+      return { ...base, header };
+    }
+    const rows = base.rows.map((r) => r.slice());
+    const row = rows[cell.row] ?? Array.from({ length: width }, () => '');
+    row[cell.col] = value;
+    rows[cell.row] = row;
+    return { ...base, rows };
+  };
+  const writeCell = (cell: CellRef, value: string): TableForm => writeCellOn(form, cell, value);
+  const applyMatrix = (start: CellRef, matrix: string[][]): void => {
+    let next = { ...form, header: form.header.slice(), rows: form.rows.map((r) => r.slice()) };
+    const neededRows = Math.max(0, start.row + matrix.length - next.rows.length);
+    if (neededRows) next.rows.push(...Array.from({ length: neededRows }, () => Array.from({ length: width }, () => '')));
+    const neededCols = Math.max(0, start.col + Math.max(0, ...matrix.map((r) => r.length)) - width);
+    if (neededCols) {
+      next.header.push(...Array.from({ length: neededCols }, () => ''));
+      next.align.push(...Array.from({ length: neededCols }, () => 'default'));
+      next.rows = next.rows.map((r) => [...r, ...Array.from({ length: neededCols }, () => '')]);
+    }
+    matrix.forEach((row, ri) => row.forEach((value, ci) => {
+      const r = start.row + ri;
+      const c = start.col + ci;
+      if (r === -1) next.header[c] = value;
+      else if (r >= 0) next.rows[r]![c] = value;
+    }));
+    push(next);
+  };
+  const selectedList = Array.from(selectedCells).map((k) => { const [row, col] = k.split(':').map(Number); return { row, col }; });
+  const bounds = selectedList.length ? {
+    r1: Math.min(...selectedList.map((c) => c.row)), r2: Math.max(...selectedList.map((c) => c.row)),
+    c1: Math.min(...selectedList.map((c) => c.col)), c2: Math.max(...selectedList.map((c) => c.col)),
+  } : null;
+  const rectangularSelection = Boolean(
+    bounds && selectedCells.size === (bounds.r2 - bounds.r1 + 1) * (bounds.c2 - bounds.c1 + 1),
+  );
+  const horizontalMerge = Boolean(rectangularSelection && bounds && bounds.r1 === bounds.r2 && bounds.c2 > bounds.c1 && bounds.r1 >= 0);
+  const verticalMerge = Boolean(rectangularSelection && bounds && bounds.c1 === bounds.c2 && bounds.r2 > bounds.r1 && bounds.r1 >= 0);
+
+  const mergeSelected = (mode: 'horizontal' | 'vertical'): void => {
+    if (!bounds) return;
+    let next = { ...form, header: form.header.slice(), rows: form.rows.map((r) => r.slice()) };
+    if (mode === 'horizontal' && horizontalMerge) {
+      for (let c = bounds.c1 + 1; c <= bounds.c2; c++) next.rows[bounds.r1]![c] = TABLE_HORIZONTAL_MERGE_MARKER;
+    }
+    if (mode === 'vertical' && verticalMerge) {
+      for (let r = bounds.r1 + 1; r <= bounds.r2; r++) next.rows[r]![bounds.c1] = TABLE_MERGE_MARKER;
+    }
+    push(next);
+  };
+
+  const onTableKeyDownCapture = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    const target = e.target as HTMLElement;
+    const input = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ? target : null;
+    if (e.key === ' ' && input) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && selectedCells.size > 1) {
+      e.preventDefault();
+      if (!bounds) return;
+      const rows: string[] = [];
+      for (let r = bounds.r1; r <= bounds.r2; r++) {
+        const vals: string[] = [];
+        for (let c = bounds.c1; c <= bounds.c2; c++) vals.push(selectedCells.has(`${r}:${c}`) ? getValue({ row: r, col: c }) : '');
+        rows.push(vals.join('\t'));
+      }
+      e.nativeEvent.clipboardData?.setData('text/plain', rows.join('\n'));
+      void navigator.clipboard?.writeText(rows.join('\n')).catch(() => undefined);
+      return;
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCells.size > 1) {
+      e.preventDefault();
+      let next = { ...form, header: form.header.slice(), rows: form.rows.map((r) => r.slice()) };
+      selectedList.forEach((cell) => { next = writeCellOn(next, cell, ''); });
+      push(next);
+      return;
+    }
+    const sourceCell = input?.closest<HTMLElement>('[data-sr-cell]')?.dataset.srCell;
+    const sourceRef = sourceCell ? (() => { const [row, col] = sourceCell.split(':').map(Number); return { row, col }; })() : null;
+    const focus = sourceRef && Number.isFinite(sourceRef.row) && Number.isFinite(sourceRef.col) ? sourceRef : selectedList[0];
+    if (!focus) return;
+    const nav = (row: number, col: number, select = false): void => {
+      const maxRow = form.rows.length - 1;
+      const clampedCol = Math.max(0, Math.min(width - 1, col));
+      if (row === -1 || row > maxRow) return;
+      if (select) {
+        const next = rect(focus, { row, col: clampedCol }); setSelectedCells(next);
+      } else {
+        setSelection(new Set([cellKey({ row, col: clampedCol })]), { row, col: clampedCol });
+      }
+      requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLElement>(`[data-sr-cell="${row}:${clampedCol}"] input`);
+        el?.focus();
+        if (el instanceof HTMLInputElement) el.setSelectionRange(el.value.length, el.value.length);
+      });
+    };
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const dir = e.shiftKey ? -1 : 1;
+      let row = focus.row; let col = focus.col + dir;
+      if (col >= width) { col = 0; row += 1; }
+      if (col < 0) { col = width - 1; row -= 1; }
+      if (row > form.rows.length - 1) {
+        push({ ...form, rows: [...form.rows, Array.from({ length: width }, () => '')] });
+        row = form.rows.length;
+      }
+      if (row >= 0) nav(row, col);
+      return;
+    }
+    if (e.key === 'Enter' && input && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      nav(focus.row === -1 ? 0 : focus.row + 1, focus.col);
+      return;
+    }
+    if (e.altKey && e.key === 'Enter' && input) {
+      e.preventDefault();
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? start;
+      const value = input.value.slice(0, start) + '<br>' + input.value.slice(end);
+      push(writeCell(focus, value));
+      requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLElement>(`[data-sr-cell="${focus.row}:${focus.col}"] input`);
+        if (el instanceof HTMLInputElement) { el.focus(); const at = start + 4; el.setSelectionRange(at, at); }
+      });
+      return;
+    }
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && input && input.selectionStart === 0 && input.selectionEnd === 0 && e.key === 'ArrowLeft') return;
+  };
+
+  const renderCell = (cell: CellRef, value: string, merged = false, header = false): JSX.Element => (
+    <th
+      key={cellKey(cell)}
+      data-sr-cell={cellKey(cell)}
+      onMouseDown={(e) => selectCell(cell, e)}
+      onMouseEnter={() => dragEnter(cell)}
+      className={`${header ? 'bg-ink-50' : 'bg-[var(--sr-card)]'} border-b border-ink-900/[0.06] p-0 align-top ${selectedCells.has(cellKey(cell)) ? 'bg-sky-500/15 ring-1 ring-inset ring-sky-400/40' : ''}`}
+    >
+      <div className="flex items-center gap-1">
+        {header ? null : cell.row > 0 ? (
+          <button type="button" className={`shrink-0 px-1 ${value === TABLE_MERGE_MARKER ? 'text-sky-500' : 'text-ink-300 hover:text-sky-600'}`} title="Gộp với ô phía trên" onClick={(e) => { e.stopPropagation(); const next = writeCell(cell, value === TABLE_MERGE_MARKER ? '' : TABLE_MERGE_MARKER); push(next); }}><ArrowUpToLine size={11} /></button>
+        ) : null}
+        <input
+          className="w-full min-w-[72px] bg-transparent px-1.5 py-1 text-[12px] outline-none"
+          value={value}
+          disabled={merged}
+          aria-label={header ? `Tiêu đề cột ${cell.col + 1}` : `Ô dòng ${cell.row + 1} cột ${cell.col + 1}`}
+          onChange={(e) => push(writeCell(cell, e.target.value))}
+        />
+        {header && width > 1 ? (
+          <button type="button" className="px-1 text-ink-300 hover:text-flag-600" title="Xóa cột" onClick={(e) => { e.stopPropagation(); const c = cell.col; push({ ...form, header: form.header.filter((_, k) => k !== c), align: form.align.filter((_, k) => k !== c), rows: form.rows.map((r) => r.filter((_, k) => k !== c)) }); }}><Trash2 size={10} /></button>
+        ) : null}
+      </div>
+    </th>
+  );
 
   return (
-    <div className="space-y-2">
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[12px]">
+    <div data-sr-table-editor-active className="space-y-2" onMouseUp={() => { draggingRef.current = false; setDragging(false); }} onKeyDownCapture={onTableKeyDownCapture} onCopyCapture={(e) => {
+      if (selectedCells.size <= 1 || !bounds) return;
+      e.preventDefault();
+      const textOut = Array.from({ length: bounds.r2 - bounds.r1 + 1 }, (_, ri) => Array.from({ length: bounds.c2 - bounds.c1 + 1 }, (_, ci) => selectedCells.has(`${bounds.r1 + ri}:${bounds.c1 + ci}`) ? getValue({ row: bounds.r1 + ri, col: bounds.c1 + ci }) : '').join('\t')).join('\n');
+      e.clipboardData.setData('text/plain', textOut);
+    }} onPasteCapture={(e) => {
+      const start = bounds ? { row: bounds.r1, col: bounds.c1 } : anchorRef.current;
+      const textData = e.clipboardData.getData('text/plain');
+      if (!start || (!textData.includes('\t') && !textData.includes('\n'))) return;
+      e.preventDefault();
+      applyMatrix(start, textData.replace(/\r/g, '').split('\n').map((r) => r.split('\t')));
+    }}>
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-ink-400">{selectedCells.size ? `${selectedCells.size} ô đang chọn` : 'Chọn vùng ô'}</span>
+        {selectedCells.size > 1 && (horizontalMerge || verticalMerge) ? (
+          <div className="ml-auto flex gap-1">
+            {horizontalMerge ? <button type="button" onClick={() => mergeSelected('horizontal')} className="rounded-md bg-sky-500/10 px-2 py-1 text-[10px] font-medium text-sky-700 dark:text-sky-300">⇆ Gộp ngang</button> : null}
+            {verticalMerge ? <button type="button" onClick={() => mergeSelected('vertical')} className="rounded-md bg-sky-500/10 px-2 py-1 text-[10px] font-medium text-sky-700 dark:text-sky-300">⇵ Gộp dọc</button> : null}
+          </div>
+        ) : null}
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-700">
+        <table className="w-full border-collapse text-[12px]" onDragStart={(e) => e.preventDefault()}>
           <thead>
             <tr>
-              {form.header.map((h, c) => (
-                <th key={c} className="border-b border-ink-900/[0.08] bg-ink-50 p-0 align-top first:rounded-tl-[8px] last:rounded-tr-[8px]">
-                  <input
-                    className="w-full min-w-[80px] bg-transparent px-1.5 py-1 font-semibold outline-none"
-                    value={h}
-                    aria-label={`Tiêu đề cột ${c + 1}`}
-                    onChange={(e) => setCell(-1, c, e.target.value)}
-                  />
-                  <div className="flex items-center justify-between border-t border-ink-900/[0.06] px-1 py-0.5">
-                    <select
-                      className="bg-transparent text-[10px] text-ink-500 outline-none"
-                      value={form.align[c] ?? 'default'}
-                      aria-label={`Căn lề cột ${c + 1}`}
-                      onChange={(e) => {
-                        const align = form.align.slice();
-                        align[c] = e.target.value as CellAlign;
-                        push({ ...form, align });
-                      }}
-                    >
-                      {ALIGNS.map(([v, l]) => (
-                        <option key={v} value={v}>
-                          {l}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="text-ink-400 hover:text-flag-600 disabled:opacity-25"
-                      title={width > 1 ? 'Xóa cột' : 'Bảng phải còn ít nhất một cột'}
-                      disabled={width <= 1}
-                      onClick={() => dropCol(c)}
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  </div>
-                </th>
-              ))}
+              <th className="w-8 border-b border-ink-900/[0.06] bg-ink-50 p-1 text-center text-[9px] text-ink-400">#</th>
+              {form.header.map((h, c) => renderCell({ row: -1, col: c }, h, h === TABLE_HORIZONTAL_MERGE_MARKER, true))}
             </tr>
           </thead>
           <tbody>
             {form.rows.map((row, r) => (
               <tr key={r}>
+                <th
+                  className="w-8 cursor-pointer select-none bg-ink-50 px-1 py-1 text-center font-mono text-[9px] text-ink-400 hover:bg-sky-500/10"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    const meta = e.ctrlKey || e.metaKey;
+                    if (e.shiftKey && anchorRef.current) {
+                      const r1 = Math.min(anchorRef.current.row, r);
+                      const r2 = Math.max(anchorRef.current.row, r);
+                      const next = new Set<string>();
+                      for (let rr = r1; rr <= r2; rr++) selectWholeRow(rr).forEach((k) => next.add(k));
+                      setSelection(next, { row: r, col: 0 });
+                    } else if (meta) {
+                      const next = new Set(selectedCells);
+                      selectWholeRow(r).forEach((k) => next.has(k) ? next.delete(k) : next.add(k));
+                      setSelection(next, { row: r, col: 0 });
+                    } else {
+                      setSelection(selectWholeRow(r), { row: r, col: 0 });
+                    }
+                    draggingRef.current = false;
+                    setDragging(false);
+                  }}
+                  title={`Chọn hàng ${r + 1}`}
+                >{r + 1}</th>
                 {Array.from({ length: width }, (_, c) => {
-                  const merged = (row[c] ?? '') === TABLE_MERGE_MARKER;
+                  const value = row[c] ?? '';
+                  const merged = value === TABLE_MERGE_MARKER || value === TABLE_HORIZONTAL_MERGE_MARKER;
+                  const formula = evaluated.evaluations[r]?.[c]?.formula;
                   return (
-                  <td key={c} className="border-b border-ink-900/[0.045] p-0 align-top">
-                    <div className="flex items-center">
-                      {r > 0 ? (
-                        <button
-                          type="button"
-                          className={`shrink-0 px-1 ${merged ? 'text-deep-600' : 'text-ink-300 hover:text-deep-600'}`}
-                          title={
-                            merged
-                              ? 'Đang gộp với ô phía trên — bấm để bỏ gộp'
-                              : 'Gộp với ô phía trên (dòng nhóm)'
-                          }
-                          onClick={() => setCell(r, c, merged ? '' : TABLE_MERGE_MARKER)}
-                        >
-                          <ArrowUpToLine size={11} />
-                        </button>
-                      ) : null}
-                      <div className="min-w-0 flex-1">
-                        <input
-                          className="w-full min-w-[80px] bg-transparent px-1.5 py-1 outline-none disabled:text-ink-300"
-                          value={row[c] ?? ''}
-                          disabled={merged}
-                          placeholder={merged ? '(gộp với ô trên)' : undefined}
-                          aria-label={`Ô dòng ${r + 1} cột ${c + 1}`}
-                          onChange={(e) => setCell(r, c, e.target.value)}
-                        />
-                        {evaluated.evaluations[r]?.[c]?.formula ? (
-                          <div
-                            className={`truncate px-1.5 pb-1 text-[9.5px] ${
-                              evaluated.evaluations[r]?.[c]?.error ? 'text-flag-600' : 'text-emerald-600'
-                            }`}
-                            title={evaluated.evaluations[r]?.[c]?.error ?? undefined}
-                          >
-                            → {evaluated.values[r]?.[c]}
-                          </div>
-                        ) : null}
+                    <td key={c} data-sr-cell={`${r}:${c}`} onMouseDown={(e) => { e.stopPropagation(); selectCell({ row: r, col: c }, e); }} onMouseEnter={() => dragEnter({ row: r, col: c })} className={`border-b border-ink-900/[0.045] p-0 align-top ${selectedCells.has(`${r}:${c}`) ? 'bg-sky-500/25 ring-1 ring-inset ring-sky-400/50' : ''}`}>
+                      <div className="flex items-center">
+                        {r > 0 ? <button type="button" className={`shrink-0 px-1 ${value === TABLE_MERGE_MARKER ? 'text-sky-500' : 'text-ink-300 hover:text-sky-600'}`} title={value === TABLE_MERGE_MARKER ? 'Bỏ gộp dọc' : 'Gộp dọc với ô trên'} onClick={(e) => { e.stopPropagation(); push(writeCell({ row: r, col: c }, value === TABLE_MERGE_MARKER ? '' : TABLE_MERGE_MARKER)); }}><ArrowUpToLine size={11} /></button> : null}
+                        <input className="w-full min-w-[72px] bg-transparent px-1.5 py-1 outline-none" value={value} disabled={merged} placeholder={merged ? (value === TABLE_HORIZONTAL_MERGE_MARKER ? '(gộp ngang)' : '(gộp dọc)') : undefined} aria-label={`Ô dòng ${r + 1} cột ${c + 1}`} onChange={(e) => push(writeCell({ row: r, col: c }, e.target.value))} />
+                        {formula ? <div className={`max-w-[90px] truncate px-1 text-[9px] ${evaluated.evaluations[r]?.[c]?.error ? 'text-flag-600' : 'text-emerald-600'}`}>→ {evaluated.values[r]?.[c]}</div> : null}
+                        {c === width - 1 ? <button type="button" className="px-1 text-ink-300 hover:text-flag-600" title="Xóa dòng" onClick={(e) => { e.stopPropagation(); push({ ...form, rows: form.rows.filter((_, k) => k !== r) }); }}><Trash2 size={10} /></button> : null}
                       </div>
-                      {c === width - 1 ? (
-                        <button
-                          type="button"
-                          className="px-1 text-ink-300 hover:text-flag-600 disabled:opacity-25"
-                          title={form.rows.length > 1 ? 'Xóa dòng' : 'Bảng phải còn ít nhất một dòng'}
-                          disabled={form.rows.length <= 1}
-                          onClick={() => dropRow(r)}
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      ) : null}
-                    </div>
-                  </td>
+                    </td>
                   );
                 })}
               </tr>
             ))}
+            <tr>
+              <td className="bg-ink-50" />
+              <td colSpan={width} className="p-1.5 text-center">
+                <button type="button" onClick={() => push({ ...form, rows: [...form.rows, Array.from({ length: width }, () => '')] })} className="inline-flex items-center gap-1 rounded-md border border-dashed border-slate-300 px-2.5 py-1 text-[10.5px] font-medium text-slate-500 hover:border-sky-400 hover:text-sky-600 dark:border-slate-700"><Plus size={11} /> thêm hàng</button>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
-      <div className="flex gap-1.5">
-        <MiniBtn onClick={addRow}>
-          <Plus size={11} /> dòng
-        </MiniBtn>
-        <MiniBtn onClick={addCol}>
-          <Plus size={11} /> cột
-        </MiniBtn>
+      <div className="flex flex-wrap gap-1.5">
+        <MiniBtn onClick={() => push({ ...form, header: [...form.header, ''], align: [...form.align, 'default'], rows: form.rows.map((r) => [...r, '']) })}><Plus size={11} /> cột</MiniBtn>
+        <label className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2.5 py-1 text-[10.5px] text-slate-600 dark:border-slate-700 dark:text-slate-300">
+          <input type="checkbox" checked={form.attrs.orientation === 'landscape'} onChange={(e) => push({ ...form, attrs: { ...form.attrs, ...(e.target.checked ? { orientation: 'landscape' } : (() => { const a = { ...form.attrs }; delete a.orientation; delete a.landscape; return a; })()) } })} />
+          Khổ giấy ngang (Landscape)
+        </label>
       </div>
-      <CaptionField
-        caption={form.caption}
-        label={form.label}
-        labelHint="tbl:ten-nhan"
-        onChange={(caption, label) => push({ ...form, caption, label })}
-      />
+      <CaptionField caption={form.caption} label={form.label} labelHint="tbl:ten-nhan" onChange={(caption, label) => push({ ...form, caption, label })} />
     </div>
   );
 }

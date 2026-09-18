@@ -10,9 +10,8 @@ import {
   LineChart,
 } from 'lucide-react';
 import type { BibEntry, LabelRecord } from '@scirender/ast';
-import { detectKind, KIND_LABEL, splitColumns, type Card, type CardTemplate } from '~/lib/cards';
+import { detectKind, KIND_LABEL, splitColumns, type Card } from '~/lib/cards';
 import { CardEditor } from './CardEditors';
-import { InsertMenu } from './InsertMenu';
 
 export type DropZone = 'above' | 'below' | 'left' | 'right';
 
@@ -40,7 +39,7 @@ interface Props {
   onDragOver: (zone: DropZone) => void;
   onDrop: () => void;
   onUndoRecognition: () => void;
-  onInsertBelow: (template: CardTemplate) => void;
+  onSaveDiagramAsset?: (svg: string, label: string) => Promise<string>;
 }
 
 const ZONE_RING: Record<DropZone, string> = {
@@ -113,7 +112,7 @@ export function CardShell(props: Props): JSX.Element {
       />
 
       <header
-        className="sr-floating-toolbar pointer-events-none absolute -top-3 right-2 z-20 flex h-[30px] items-center gap-px rounded-full border border-slate-700/30 px-1 text-white opacity-0 dark:bg-slate-100 dark:text-slate-900 transition-[opacity,transform] duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[on=true]:pointer-events-auto data-[on=true]:opacity-100 dark:border-slate-300/40"
+        className="sr-floating-toolbar pointer-events-none absolute -top-3 right-2 z-20 flex h-[28px] items-center gap-px rounded-full border border-white/10 bg-[#161922]/90 px-1 text-white opacity-0 shadow-lg backdrop-blur-md transition-[opacity,transform] duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[on=true]:pointer-events-auto data-[on=true]:opacity-100 dark:text-white"
         data-on={selected}
       >
         <span
@@ -173,13 +172,6 @@ export function CardShell(props: Props): JSX.Element {
               <LineChart size={12} />
             </IconBtn>
           ) : null}
-          <InsertMenu
-            compact
-            iconOnly
-            ariaLabel={`Thêm khối bên dưới khối ${index + 1}`}
-            label="Thêm khối bên dưới"
-            onInsert={props.onInsertBelow}
-          />
           <IconBtn title="Nhân bản (Ctrl+D)" onClick={props.onDuplicate}>
             <Copy size={12} />
           </IconBtn>
@@ -212,7 +204,7 @@ export function CardShell(props: Props): JSX.Element {
             ))}
           </div>
         ) : (
-          <CardEditor kind={card.kind} text={card.text} labels={props.labels} bibliography={props.bibliography} onChange={props.onChange} />
+          <CardEditor kind={card.kind} text={card.text} labels={props.labels} bibliography={props.bibliography} onSaveDiagramAsset={props.onSaveDiagramAsset} onChange={props.onChange} />
         )}
       </div>
     </article>

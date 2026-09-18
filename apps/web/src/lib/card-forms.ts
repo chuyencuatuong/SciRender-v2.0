@@ -84,8 +84,12 @@ export function serializeCode(form: CodeForm): string {
 export interface DiagramForm {
   source: string;
   direction: string;
+  curve: 'linear' | 'basis' | 'step';
+  theme: 'academic' | 'obsidian' | 'blueprint';
+  landscape: boolean;
   caption: string;
   label: string;
+  attrs: Record<string, string>;
 }
 
 export function parseDiagram(text: string): DiagramForm | null {
@@ -93,21 +97,32 @@ export function parseDiagram(text: string): DiagramForm | null {
   const m = /^```mermaid[ \t]*\n([\s\S]*?)\n?```[ \t]*$/.exec(body.trim());
   if (!m) return null;
   const dir = /\bdir=(TB|TD|BT|LR|RL)\b/.exec(caption);
-  return {
-    source: m[1] ?? '',
-    direction: dir ? (dir[1] as string) : '',
-    caption: caption.replace(/\s*\bdir=(TB|TD|BT|LR|RL)\b/, '').trim(),
-    label,
-  };
+  const curve = /\bcurve=(linear|basis|step)\b/.exec(caption)?.[1] as DiagramForm['curve'] | undefined;
+  const theme = /\btheme=(academic|obsidian|blueprint)\b/.exec(caption)?.[1] as DiagramForm['theme'] | undefined;
+  const landscape = /\b(?:landscape|orientation=landscape)\b/.test(caption);
+  const attrs: Record<string, string> = {};
+  if (dir) attrs.dir = dir[1] as string;
+  if (curve) attrs.curve = curve;
+  if (theme) attrs.theme = theme;
+  if (landscape) attrs.landscape = 'true';
+  const cleanCaption = caption
+    .replace(/\s*\bdir=(TB|TD|BT|LR|RL)\b/, '')
+    .replace(/\s*\bcurve=(linear|basis|step)\b/, '')
+    .replace(/\s*\btheme=(academic|obsidian|blueprint)\b/, '')
+    .replace(/\s*\b(?:landscape|orientation=landscape)\b/, '')
+    .trim();
+  return { source: m[1] ?? '', direction: dir ? (dir[1] as string) : '', curve: curve ?? 'basis', theme: theme ?? 'academic', landscape, caption: cleanCaption, label, attrs };
 }
 
 export function serializeDiagram(form: DiagramForm): string {
-  const label = form.label
-    ? ` {#${form.label}${form.direction ? ` dir=${form.direction}` : ''}}`
-    : form.direction
-      ? ` {dir=${form.direction}}`
-      : '';
-  const cap = form.caption || label ? `\n\n: ${form.caption}${label}` : '';
+  const bits = [
+    form.label ? `#${form.label}` : '',
+    form.direction ? `dir=${form.direction}` : '',
+    form.curve ? `curve=${form.curve}` : '',
+    form.theme ? `theme=${form.theme}` : '',
+    form.landscape ? 'landscape' : '',
+  ].filter(Boolean).join(' ');
+  const cap = form.caption || bits ? `\n\n: ${form.caption}${bits ? ` {${bits}}` : ''}` : '';
   return `\`\`\`mermaid\n${form.source.replace(/\s+$/, '')}\n\`\`\`${cap}`;
 }
 

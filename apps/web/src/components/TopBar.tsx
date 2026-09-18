@@ -57,6 +57,7 @@ export function TopBar({ render }: Props): JSX.Element {
 
   const pageHtml = render.pages.map((p) => p.html);
   const footers = render.pages.map((p) => p.footer);
+  const pageOrientations = render.pages.map((p) => p.orientation);
 
   const onPrintRef = useRef<() => void>(() => undefined);
 
@@ -83,6 +84,7 @@ export function TopBar({ render }: Props): JSX.Element {
       pages: pageHtml,
       template: result.template,
       footers,
+      pageOrientations,
       documentTitle: result.document.meta.title || title,
     });
   };
@@ -95,6 +97,7 @@ export function TopBar({ render }: Props): JSX.Element {
       pages: pageHtml.length ? pageHtml : result.blocks,
       template: result.template,
       footers,
+      pageOrientations,
       documentTitle: result.document.meta.title || title,
       katexCss,
       extraCss: fontsCss,
@@ -160,7 +163,7 @@ export function TopBar({ render }: Props): JSX.Element {
   return (
     <header
       data-sr-topbar
-      className="sr-chrome relative z-50 flex h-[60px] shrink-0 items-center gap-3 border-b px-3"
+      className="sr-chrome relative z-50 flex h-14 shrink-0 items-center gap-3 overflow-visible border-b px-3"
     >
       <div className="flex min-w-0 shrink-0 items-center gap-2.5">
         <div className="flex shrink-0 items-center gap-2">
@@ -202,8 +205,8 @@ export function TopBar({ render }: Props): JSX.Element {
         </div>
       </div>
 
-      <div className="ml-auto flex shrink-0 items-center gap-1.5">
-        <div className="flex items-center gap-1 overflow-x-auto">
+      <div className="ml-auto flex shrink-0 items-center gap-1.5 overflow-visible">
+        <div className="flex items-center gap-1 overflow-visible">
         <button
           className={stale ? 'sr-btn-render' : 'sr-btn-ghost'}
           onClick={requestRender}

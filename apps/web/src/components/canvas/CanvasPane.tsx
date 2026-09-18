@@ -245,6 +245,38 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     setChartRequest({ index, table: card.text, label: `fig:chart-${n}` });
   };
 
+  const splitParagraphAt = (index: number, _at: number, left: string, right: string): void => {
+    const current = doc.cards[index];
+    if (!current) return;
+    const cards = doc.cards.slice();
+    cards[index] = { ...current, kind: 'paragraph', text: left };
+    const nextCard: Card = { id: nextId(), kind: 'paragraph', text: right, line: current.line };
+    cards.splice(index + 1, 0, nextCard);
+    if (doc.cards[index]) {
+      undoStack.current = [...undoStack.current.slice(-49), doc];
+      redoStack.current = [];
+    }
+    setDoc({ ...doc, cards });
+    const text = toSource({ ...doc, cards });
+    mine.current = text;
+    setSource(text);
+    setSelected(index + 1);
+    setActiveBlockId(nextCard.id);
+    requestAnimationFrame(() => {
+      const cardEl = Array.from(document.querySelectorAll<HTMLElement>('[data-card-id]')).find(
+        (el) => el.dataset.cardId === nextCard.id,
+      );
+      cardEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const editor = cardEl?.querySelector<HTMLTextAreaElement | HTMLInputElement>(
+        'textarea, input[type="text"], input:not([type])',
+      );
+      editor?.focus({ preventScroll: true });
+      editor?.setSelectionRange?.(0, 0);
+    });
+    setFlashCardId(nextCard.id);
+    window.setTimeout(() => setFlashCardId((currentId) => currentId === nextCard.id ? null : currentId), 1500);
+  };
+
   const insertAt = (index: number, text: string, label?: string): void => {
     const cards = doc.cards.slice();
     const at = Math.max(0, Math.min(index, cards.length));
@@ -522,6 +554,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     selectCard,
     focusCardEditor,
     selectAdjacentCard,
+    splitParagraphAt,
   });
   shortcutContextRef.current = {
     doc,
@@ -536,6 +569,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     selectCard,
     focusCardEditor,
     selectAdjacentCard,
+    splitParagraphAt,
   };
 
   useEffect(() => {
@@ -630,6 +664,29 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
 
       const autoCompleteOpen = target?.dataset.srAutocompleteOpen === 'true';
       if (autoCompleteOpen) return;
+
+      const inTableEditor = Boolean(target?.closest('[data-sr-table-editor-active]'));
+      if (inTableEditor) return;
+
+      if (typing && e.key === 'Enter' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const card = currentDoc.cards[activeIndex];
+        const editor = target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement ? target : null;
+        if (card?.kind === 'paragraph' && editor) {
+          e.preventDefault();
+          const at = editor.selectionStart ?? editor.value.length;
+          const left = editor.value.slice(0, at);
+          const right = editor.value.slice(at);
+          const cards = currentDoc.cards.slice();
+          const current = cards[activeIndex];
+          if (current) {
+            cards[activeIndex] = { ...current, text: left };
+            const newCard: Card = { id: nextId(), kind: 'paragraph', text: right, line: current.line };
+            cards.splice(activeIndex + 1, 0, newCard);
+            context.splitParagraphAt(activeIndex, at, left, right);
+          }
+          return;
+        }
+      }
 
       if (typing && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key === ' ') {
         const editor = target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement ? target : null;
@@ -906,7 +963,10 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
                     if (d) setDragBoth({ ...d, over: index, zone });
                   }}
                   onDrop={onDrop}
-                  onInsertBelow={(tpl) => insertAt(index + 1, tpl.text)}
+                  onSaveDiagramAsset={async (svg, label) => {
+                    const safe = label.replace(/^dia:/, '') || `diagram-${index + 1}`;
+                    return addGeneratedAsset(svg, `diagram-${safe}.svg`, 'image/svg+xml');
+                  }}
                   onUndoRecognition={() => {
                     if (!recognised) return;
                     const at = doc.cards.findIndex((c) => c.id === recognised.id);

@@ -210,7 +210,7 @@ function MenuList({
           animate={POP_IN.animate}
           exit={reduced ? undefined : POP_IN.exit}
           transition={POP_IN.transition}
-          className={`sr-menu mt-1.5 origin-top ${align === 'right' ? 'right-0' : 'left-0'}`}
+          className={`sr-menu absolute top-[calc(100%+4px)] mt-0 origin-top ${align === 'right' ? 'right-0' : 'left-0'}`}
         >
           {items.map((item, i) => {
             if (item === 'separator') {

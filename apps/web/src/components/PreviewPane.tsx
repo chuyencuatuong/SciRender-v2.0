@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, Loader2, Maximize2, Minus, Play, Plus } from 'lucide-react';
-import type { PageKind, RenderState } from '~/hooks/useRender';
+import type { PageKind, PageOrientation, RenderState } from '~/hooks/useRender';
 import { useStore } from '~/state/store';
 
 interface Props {
@@ -142,14 +142,17 @@ export function PreviewPane({ render, onBack = null }: Props): JSX.Element {
             className="flex flex-col items-center gap-6 py-8"
             style={{ zoom: prefs.zoom }}
           >
-            {(pages.length ? pages : [{ html: '', footer: '', kind: 'body' as PageKind }]).map(
+            {(pages.length ? pages : [{ html: '', footer: '', kind: 'body' as PageKind, orientation: 'portrait' as PageOrientation }]).map(
               (page, i) => (
                 <div key={i} className="flex flex-col items-center gap-1">
                   <section
-                    className={`sr-page sr-page-shell${page.kind === 'cover' ? ' sr-page-cover' : ''}`}
+                    className={`sr-page sr-page-shell${page.kind === 'cover' ? ' sr-page-cover' : ''}${page.orientation === 'landscape' ? ' sr-page-landscape' : ''}`}
                     style={
                       t
-                        ? { width: t.descriptor.page.width, height: t.descriptor.page.height }
+                        ? {
+                            width: page.orientation === 'landscape' ? t.descriptor.page.height : t.descriptor.page.width,
+                            height: page.orientation === 'landscape' ? t.descriptor.page.width : t.descriptor.page.height,
+                          }
                         : undefined
                     }
                   >
