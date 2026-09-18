@@ -405,6 +405,8 @@ function readColumns(
   st: BlockParseState,
 ): number {
   const first = lines[i] as SrcLine;
+  const firstHeader = first.text.trim().replace(/^:::\s*cols\b/i, '').trim();
+  const landscape = /(?:^|\s)(?:landscape|orientation=landscape)(?:\s|$)/i.test(firstHeader);
   const groups: SrcLine[][] = [[]];
   let j = i + 1;
   let closed = false;
@@ -441,6 +443,7 @@ function readColumns(
     id: nid('columns', pos, st),
     position: pos,
     columns: groups.map((g) => parseBlocks(g, st)),
+    landscape,
   });
   return closed ? j + 1 : j;
 }
@@ -499,10 +502,27 @@ function splitRow(text: string): string[] {
   if (t.endsWith('|') && !t.endsWith('\\|')) t = t.slice(0, -1);
   const cells: string[] = [];
   let cur = '';
+  let inMath = false;
+  let mathFence = '';
   for (let i = 0; i < t.length; i++) {
     const ch = t[i] as string;
     if (ch === '\\' && t[i + 1] === '|') { cur += '|'; i++; continue; }
-    if (ch === '|') { cells.push(cur); cur = ''; continue; }
+    if (ch === '$') {
+      if (t[i + 1] === '$') {
+        inMath = !inMath;
+        mathFence = inMath ? '$$' : '';
+        cur += '$$';
+        i++;
+        continue;
+      }
+      if (!inMath || mathFence !== '$$') {
+        inMath = !inMath;
+        mathFence = inMath ? '$' : '';
+      }
+      cur += ch;
+      continue;
+    }
+    if (ch === '|' && !inMath) { cells.push(cur); cur = ''; continue; }
     cur += ch;
   }
   cells.push(cur);
@@ -650,7 +670,24 @@ function readFigure(
   const src = (m[2] ?? '').trim();
   const spec = specOf(m[3]) ?? { label: null, classes: [], attrs: {}, unnumbered: false };
   const cap = readCaptionLine(lines, i + 1, st);
-  const pos = span(line, line);
+  const label = cap?.spec.label ?? spec.label;
+  const pos = span(line, cap ? (lines[cap.next - 1] ?? line) as SrcLine : line);
+  if (label?.startsWith('dia:') && src.startsWith('asset:')) {
+    out.push({
+      type: 'diagram',
+      id: nid('diagram', pos, st),
+      position: pos,
+      engine: 'mermaid',
+      value: '',
+      src,
+      caption: cap ? cap.caption : inlineOf(alt, line, st, 2),
+      label,
+      number: null,
+      direction: null,
+      attrs: { ...spec.attrs, ...(cap?.spec.attrs ?? {}) },
+    });
+    return cap ? cap.next : i + 1;
+  }
   out.push({
     type: 'figure',
     id: nid('figure', pos, st),
@@ -658,7 +695,7 @@ function readFigure(
     src,
     alt,
     caption: cap ? cap.caption : inlineOf(alt, line, st, 2),
-    label: cap?.spec.label ?? spec.label,
+    label,
     number: null,
     attrs: { ...spec.attrs, ...(cap?.spec.attrs ?? {}) },
   });

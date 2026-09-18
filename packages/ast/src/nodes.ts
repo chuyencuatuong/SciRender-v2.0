@@ -201,7 +201,10 @@ export interface DiagramNode extends NodeBase {
   type: 'diagram';
   /** Currently only `mermaid`. */
   engine: 'mermaid';
+  /** Mermaid source. Empty when the diagram is backed by a saved SVG asset. */
   value: string;
+  /** Optional IndexedDB asset key, stored as `asset:<name>` in Markdown. */
+  src?: string;
   caption: InlineNode[];
   label: string | null;
   number: string | null;
@@ -241,6 +244,8 @@ export interface ColumnsNode extends NodeBase {
   type: 'columns';
   /** One entry per column; two in practice, but the shape allows more. */
   columns: BlockNode[][];
+  /** Optional page orientation for the whole two-column row. */
+  landscape?: boolean;
 }
 
 export interface ThematicBreakNode extends NodeBase {

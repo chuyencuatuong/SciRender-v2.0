@@ -79,7 +79,7 @@ export function compileCss(t: TemplateDescriptor): string {
    engine fills one column at a time so a break can be measured and controlled.
    The page body only lays the finished columns out side by side. */
 .sr-page-body{height:100%;overflow:hidden;position:relative;}
-.sr-page-landscape{width:${p.height};height:${p.width};page:landscape-page;}
+.sr-page-landscape{width:${p.height};height:${p.width};page:landscape-page;break-before:page;break-after:page;}
 .sr-page-landscape .sr-page-body{height:100%;}
 .sr-columns{
   display:grid;
@@ -244,12 +244,12 @@ ${headingRules}
 .sr-doc pre{
   ${code.background ? 'background:var(--sr-code-bg);' : 'background:none;'}
   ${code.border ? 'border:1px solid var(--sr-rule);' : 'border:0;'}
-  padding:${code.border ? '6pt 8pt' : '0'};
+  padding:${code.border ? '0.75rem 0.5rem' : '0.75rem 0'};
   margin:0;
   overflow-x:${code.wrap ? 'visible' : 'auto'};
   font-family:var(--sr-mono-font);
   font-size:${code.fontSize};
-  line-height:1.35;
+  line-height:1.5rem !important;
   text-align:left;text-indent:0;
   white-space:${code.wrap ? 'pre-wrap' : 'pre'};
   ${code.wrap ? 'overflow-wrap:break-word;word-break:break-word;' : ''}
@@ -257,9 +257,10 @@ ${headingRules}
 }
 .sr-doc .sr-code-lines{display:grid;grid-template-columns:auto 1fr;gap:0 8pt;}
 .sr-doc .sr-code-gutter{
-  font-family:var(--sr-mono-font);font-size:${code.fontSize};line-height:1.35;
+  font-family:'JetBrains Mono',monospace !important;font-size:${code.fontSize};line-height:1.5rem !important;
   text-align:right;color:var(--sr-muted);user-select:none;white-space:pre;
-  border-right:1px solid var(--sr-rule);padding-right:6pt;
+  border-right:1px solid var(--sr-rule);padding:.75rem 6pt .75rem 0;
+  min-height:100%;overflow:visible !important;
 }
 .sr-doc code{font-family:var(--sr-mono-font);font-size:.9em;}
 .sr-doc pre code{font-size:1em;}
@@ -302,6 +303,10 @@ ${
 .sr-doc .sr-code-lang{
   font-family:var(--sr-body-font);font-size:.85em;color:var(--sr-muted);
   text-align:left;text-indent:0;margin:0 0 3pt;
+}
+.sr-doc caption.sr-code-caption, .sr-doc figcaption.sr-code-caption, .sr-doc .sr-code-caption{
+  display:block;width:100%;margin-top:.5rem;line-height:1.4;font-size:11pt;
+  font-family:"Times New Roman",Times,serif;height:auto !important;min-height:1.5em;
 }
 
 /* --------------------------------------------------- quotes & callouts */
@@ -416,11 +421,16 @@ ${
 .sr-doc .sr-mermaid svg{max-width:100%;height:auto;}
 .sr-doc .sr-mermaid svg text,
 .sr-doc .sr-mermaid svg .nodeLabel,
-.sr-doc .sr-mermaid svg .edgeLabel{
-  font-family:${t.diagrams.fontFamily === 'body' ? 'var(--sr-body-font)' : 'var(--sr-heading-font)'} !important;
+.sr-doc .sr-mermaid svg text,
+.sr-doc .sr-mermaid svg tspan,
+.sr-doc .sr-mermaid svg .nodeLabel,
+.sr-doc .sr-mermaid svg .edgeLabel,
+.sr-doc .sr-mermaid svg foreignObject{
+  font-family:"Times New Roman",Times,serif !important;
   font-size:${t.diagrams.fontSize} !important;
   fill:var(--sr-text) !important;
 }
+.sr-doc .sr-diagram-asset{display:block;max-width:100%;height:auto;margin:0 auto;}
 .sr-doc .sr-unknown{
   border:1px dashed #c2410c;background:#fff8f3;color:#9a3412;padding:.4em .6em;
   font-family:var(--sr-mono-font);font-size:.82em;white-space:pre-wrap;text-indent:0;
@@ -444,10 +454,12 @@ function round(n: number): number {
 /** Print stylesheet — drives the browser's own paged-media pipeline. */
 export function compilePrintCss(t: TemplateDescriptor): string {
   const p = t.page;
-  return `@page{size:${p.width} ${p.height};margin:0;}
-@page landscape-page{size:${p.height} ${p.width};margin:0;}
+  return `@page{size:A4 portrait;margin:0!important;}
+@page landscape-page{size:A4 landscape;margin:0!important;}
 @media print{
   html,body{margin:0!important;padding:0!important;background:#fff!important;}
+  *,*::before,*::after{ -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important;}
+  a{color:inherit!important;text-decoration:none!important;}
   body *{visibility:hidden;}
   #sr-print-root,#sr-print-root *{visibility:visible;}
   #sr-print-root{position:absolute;inset:0 auto auto 0;width:max(${p.width},${p.height});}

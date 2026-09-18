@@ -26,6 +26,14 @@ export function resolveFigureSrc(src: string, assets: AssetMap): ResolvedFigureS
   return { url: url ?? trimmed, kind: 'relative', missing: !url };
 }
 
+
+/** Inject the publication font into self-contained SVG assets (Mermaid/charts). */
+export function injectSvgAcademicFont(svg: string): string {
+  const css = '<style>text, tspan, .nodeLabel, .edgeLabel, foreignObject, foreignObject * { font-family: "Times New Roman", Times, serif !important; }</style>';
+  if (/<style[^>]*>/i.test(svg)) return svg.replace(/<\/svg>\s*$/i, `${css}</svg>`);
+  return svg.replace(/<svg([^>]*)>/i, '<svg$1>' + css);
+}
+
 export function figureStyle(attrs: Record<string, string>): string {
   const parts: string[] = [];
   const width = attrs.width;

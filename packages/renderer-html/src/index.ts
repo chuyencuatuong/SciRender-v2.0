@@ -231,7 +231,7 @@ function renderReferences(doc: DocumentNode, t: TemplateDescriptor): string[] {
   if (!items.length) return [];
   const style = t.headings.levels[0];
   return [
-    `<h1 data-sr-id="body-references" data-sr-type="heading"${
+    `<h1 id="body-references" data-sr-id="body-references" data-sr-type="heading"${
       style?.pageBreakBefore ? ' data-sr-break="page"' : ''
     }>${escapeHtml(t.labels.references)}</h1>`,
     `<ul class="sr-reference-list" data-sr-id="body-reference-list" data-sr-type="referenceList">${items.join(

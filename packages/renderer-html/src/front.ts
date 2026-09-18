@@ -6,17 +6,19 @@ import {
   type TemplateDescriptor,
 } from '@scirender/template-engine';
 import { escapeAttr, escapeHtml } from './escape.js';
-import { inline } from './render-core.js';
+import { anchorIdForLabel, inline } from './render-core.js';
 
 export interface OutlineEntry {
   id: string;
   depth: number;
+  href: string;
   /** Text as it should appear in the table of contents, number included. */
   text: string;
 }
 
 export interface ListEntry {
   id: string;
+  href: string;
   /** "Hình 1.1" etc., already formatted. */
   label: string;
   text: string;
@@ -44,6 +46,7 @@ export function collectOutline(doc: DocumentNode, t: TemplateDescriptor): Outlin
     out.push({
       id: n.id,
       depth: n.depth,
+      href: n.label ? anchorIdForLabel(n.label) : `sr-node-${n.id}`,
       text: numberText ? `${numberText}  ${title}` : title,
     });
     return undefined;
@@ -57,12 +60,14 @@ export function collectFigures(doc: DocumentNode, t: TemplateDescriptor): ListEn
     if (n.type === 'figure') {
       out.push({
         id: n.id,
+        href: n.label ? anchorIdForLabel(n.label) : `sr-node-${n.id}`,
         label: `${t.labels.figure} ${n.number ?? ''}`.trim(),
         text: n.caption.length ? inline(n.caption, t) : escapeHtml(n.alt),
       });
     } else if (n.type === 'diagram' && n.caption.length) {
       out.push({
         id: n.id,
+        href: n.label ? anchorIdForLabel(n.label) : `sr-node-${n.id}`,
         label: `${t.labels.diagram} ${n.number ?? ''}`.trim(),
         text: inline(n.caption, t),
       });
@@ -78,6 +83,7 @@ export function collectTables(doc: DocumentNode, t: TemplateDescriptor): ListEnt
     if (n.type !== 'table') return undefined;
     out.push({
       id: n.id,
+      href: n.label ? anchorIdForLabel(n.label) : `sr-node-${n.id}`,
       label: `${t.labels.table} ${n.number ?? ''}`.trim(),
       text: inline(n.caption, t),
     });
@@ -125,7 +131,7 @@ function renderSection(
   input: FrontInput,
 ): string {
   const title = (label: string): string =>
-    `<div class="sr-front-title" data-sr-id="front-${kind}" data-sr-type="frontTitle" data-sr-break="page">${escapeHtml(
+    `<div id="front-${kind}" class="sr-front-title" data-sr-id="front-${kind}" data-sr-type="frontTitle" data-sr-break="page">${escapeHtml(
       label,
     )}</div>`;
 
@@ -153,6 +159,8 @@ function renderSection(
             labelOf(t, later),
             pageText(input.numbers.frontPageOf[later], t.layout.frontPageNumbers),
             1,
+            false,
+            `front-${later}`,
           ),
         );
       }
@@ -162,6 +170,8 @@ function renderSection(
             entry.text,
             pageText(input.numbers.bodyPageOf[entry.id], t.layout.bodyPageNumbers),
             entry.depth,
+            false,
+            entry.href,
           ),
         );
       }
@@ -171,6 +181,8 @@ function renderSection(
             t.labels.references,
             pageText(input.numbers.referencesPage, t.layout.bodyPageNumbers),
             1,
+            false,
+            'body-references',
           ),
         );
       }
@@ -185,6 +197,7 @@ function renderSection(
           pageText(input.numbers.bodyPageOf[f.id], t.layout.bodyPageNumbers),
           1,
           true,
+          f.href,
         ),
       );
       return title(t.labels.figureList) + `<ul class="sr-list">${rows.join('')}</ul>`;
@@ -197,6 +210,7 @@ function renderSection(
           pageText(input.numbers.bodyPageOf[f.id], t.layout.bodyPageNumbers),
           1,
           true,
+          f.href,
         ),
       );
       return title(t.labels.tableList) + `<ul class="sr-list">${rows.join('')}</ul>`;
@@ -256,9 +270,10 @@ function pageText(page: number | undefined, style: string): string {
   return formatPageNumber(page, style as Parameters<typeof formatPageNumber>[1]);
 }
 
-function listRow(text: string, page: string, depth: number, rawText = false): string {
+function listRow(text: string, page: string, depth: number, rawText = false, href?: string): string {
   const label = rawText ? text : escapeHtml(text);
-  return `<li class="sr-toc-${Math.min(4, depth)}"><span class="sr-list-row"><span class="sr-list-text">${label}</span><span class="sr-list-fill"></span><span class="sr-list-page">${escapeAttr(
+  const linked = href ? `<a href="#${escapeAttr(href)}">${label}</a>` : label;
+  return `<li class="sr-toc-${Math.min(4, depth)}"><span class="sr-list-row"><span class="sr-list-text">${linked}</span><span class="sr-list-fill"></span><span class="sr-list-page">${escapeAttr(
     page,
   )}</span></span></li>`;
 }

@@ -11,9 +11,19 @@ export interface CoreOptions {
   assets: AssetMap;
 }
 
-export function attrsOf(node: BlockNode): string {
-  return ` data-sr-id="${escapeAttr(node.id)}" data-sr-line="${node.position.start.line}" data-sr-type="${node.type}"`;
+function anchorIdForLabel(label: string): string {
+  const clean = label.trim().replace(/[^A-Za-z0-9_.:-]+/g, '-');
+  return clean ? clean.replace(':', '-') : '';
 }
+
+export function attrsOf(node: BlockNode): string {
+  const label = 'label' in node && typeof node.label === 'string' ? node.label : '';
+  const anchor = label ? anchorIdForLabel(label) : `sr-node-${node.id}`;
+  const id = anchor ? ` id="${escapeAttr(anchor)}"` : '';
+  return `${id} data-sr-id="${escapeAttr(node.id)}" data-sr-block-id="${escapeAttr(node.id)}" data-sr-line="${node.position.start.line}" data-sr-type="${node.type}"`;
+}
+
+export { anchorIdForLabel };
 
 /* ----------------------------------------------------------------- inline */
 
@@ -52,9 +62,11 @@ function inlineOne(node: InlineNode, t: TemplateDescriptor): string {
       const word = refWord(node.resolved.kind, t);
       const num =
         node.resolved.kind === 'eq' ? `(${node.resolved.number})` : node.resolved.number;
-      return `<span class="sr-crossref" data-sr-ref="${escapeAttr(node.label)}">${
+      const href = anchorIdForLabel(node.label);
+      const target = href ? ` href="#${escapeAttr(href)}"` : '';
+      return `<a class="sr-crossref" data-sr-ref="${escapeAttr(node.label)}"${target}>${
         word ? `${escapeHtml(word)}&nbsp;` : ''
-      }${escapeHtml(num)}</span>`;
+      }${escapeHtml(num)}</a>`;
     }
     case 'citation': {
       const authorYearStyle = t.citation.style === 'author-year';
@@ -98,6 +110,7 @@ export function captionHtml(
   text: string,
   t: TemplateDescriptor,
   above: boolean,
+  extraClass = '',
 ): string {
   if (!text && !number) return '';
   const label = number
@@ -105,7 +118,8 @@ export function captionHtml(
         t.captions.separator,
       )}</span>`
     : '';
-  const cls = above ? 'sr-caption sr-caption-above' : 'sr-caption';
+  const baseCls = above ? 'sr-caption sr-caption-above' : 'sr-caption';
+  const cls = extraClass ? `${baseCls} ${extraClass}` : baseCls;
   return `<figcaption class="${cls}">${label}${text}</figcaption>`;
 }
 
@@ -206,6 +220,7 @@ export function renderBlock(
                       decimalCols.has(i) ? 'decimal' : norm.align[i] ?? 'default',
                       t,
                       evaluated.evaluations[ri]?.[i],
+                      node.attrs?.['number-format'] ?? 'auto',
                     ),
               )
               .join('')}</tr>`,
@@ -248,6 +263,7 @@ export function renderBlock(
         inline(node.caption, t),
         t,
         t.captions.listingPosition === 'above',
+        'sr-code-caption',
       );
       const inner =
         t.captions.listingPosition === 'above' ? `${cap}${withGutter}` : `${withGutter}${cap}`;
@@ -265,6 +281,14 @@ export function renderBlock(
       const diagramAttrs = node.attrs ?? {};
       const attr = (key: string): string => diagramAttrs[key] ? ` data-sr-mermaid-${key}="${escapeAttr(diagramAttrs[key])}"` : '';
       const landscape = diagramAttrs.landscape === 'true' || diagramAttrs.orientation === 'landscape' ? ' data-sr-landscape="1"' : '';
+      if (node.src) {
+        const resolved = resolveFigureSrc(node.src, assets);
+        const url = safeUrl(resolved.url);
+        const img = url
+          ? `<img class="sr-diagram-asset" src="${escapeAttr(url)}" alt="${escapeAttr(node.label ?? 'Sơ đồ kỹ thuật')}">`
+          : `<div class="sr-unknown">Thiếu tài nguyên sơ đồ: ${escapeHtml(node.src)}</div>`;
+        return `<div class="sr-diagram"${attrsOf(node)}${landscape}>${img}${cap}</div>`;
+      }
       return `<div class="sr-diagram"${attrsOf(node)}${landscape}><div class="sr-mermaid"${auto}${attr('curve')}${attr('theme')} data-sr-mermaid="${escapeAttr(
         source,
       )}"></div>${cap}</div>`;
@@ -308,9 +332,10 @@ export function renderBlock(
             `<div class="sr-col">${col.map((c) => renderBlock(c, t, assets)).join('')}</div>`,
         )
         .join('');
+      const landscape = node.landscape ? ' data-sr-landscape="1"' : '';
       return `<div class="sr-colrow" style="--sr-colrow:${node.columns.length}"${attrsOf(
         node,
-      )}>${cells}</div>`;
+      )}${landscape}>${cells}</div>`;
     }
     case 'thematicBreak':
       return `<hr${attrsOf(node)}>`;
@@ -336,18 +361,27 @@ function cellHtml(
   align: Parameters<typeof alignStyle>[0],
   t: TemplateDescriptor,
   evaluated?: { value: number | null; display: string; formula: string | null; error: string | null },
+  numberFormat = 'auto',
 ): string {
   const style = alignStyle(align);
   const span = cell.rowspan && cell.rowspan > 1 ? ` rowspan="${cell.rowspan}"` : '';
   const colspan = cell.colspan && cell.colspan > 1 ? ` colspan="${cell.colspan}"` : '';
   const raw = plainCellText(cell.children);
   const isFormula = Boolean(evaluated?.formula);
-  const display = evaluated && !evaluated.error && evaluated.value != null ? evaluated.display : null;
+  const display = evaluated && !evaluated.error && evaluated.value != null ? formatNumberDisplay(evaluated.value, evaluated.display, numberFormat) : null;
   const decimal = align === 'decimal' && display != null ? decimalHtml(display) : null;
-  const content = decimal ?? (isFormula && evaluated ? escapeHtml(evaluated.display) : inline(cell.children, t));
+  const renderedInline = inline(cell.children, t).replace(/&lt;br\s*\/?&gt;/gi, '<br/>');
+  const content = decimal ?? (isFormula && evaluated ? escapeHtml(evaluated.display) : renderedInline);
   const title = isFormula && evaluated?.error ? ` title="${escapeAttr(evaluated.formula ?? raw)}"` : '';
   const cls = align === 'decimal' ? ' class="sr-decimal-cell"' : '';
   return `<${tag}${span}${colspan}${cls}${style ? ` style="${escapeAttr(style)}"` : ''}${title}>${content}</${tag}>`;
+}
+
+function formatNumberDisplay(value: number, fallback: string, format: string): string {
+  if (!Number.isFinite(value) || format === 'auto') return fallback;
+  if (!/^0\.(?:0{1,3})$/.test(format)) return fallback;
+  const digits = format.length - 2;
+  return value.toFixed(digits);
 }
 
 function decimalHtml(value: string): string {

@@ -39,7 +39,7 @@ check('audit findings have independent scrolling', audit.includes('flex-1 overfl
 check('command palette uses Ctrl+Shift+P/F1 registry', command.includes("matchesShortcut(e, 'command-palette')"));
 check('Ctrl+K is hyperlink action', auto.includes("matchesShortcut(e, 'hyperlink')"));
 check('Ctrl+Shift+V clean paste path', canvas.includes("matchesShortcut(e, 'clean-paste')"));
-check('rich paste micro-toolbar', canvas.includes('Theo định dạng SciRender') && canvas.includes('Markdown thô'));
+check('zero-prompt smart paste + undo toast', canvas.includes('parseBulkMarkdown(text)') && canvas.includes('Đã nhận') && canvas.includes('Hoàn tác'));
 check('semantic Enter creates paragraph after non-text block', canvas.includes("['figure', 'table', 'equation', 'codeBlock', 'diagram']") && canvas.includes("insertAt(activeIndex + 1, 'Nội dung đoạn văn.')"));
 check('referenced delete confirmation exists', canvas.includes('deleteConfirmIndex') && canvas.includes('Khối này đang được tham chiếu'));
 check('Ctrl+Alt heading registry entries', shortcuts.includes("Ctrl+Alt+1") && shortcuts.includes("Ctrl+Alt+0"));
@@ -84,6 +84,10 @@ check('diagram IndexedDB asset path exists', store.includes('addGeneratedAsset')
 check('landscape page sizing reaches preview and renderer', rendererHtml.includes('data-sr-landscape') && layout.includes("type PageOrientation = 'portrait' | 'landscape'") && rendererCss.includes('.sr-page-landscape'));
 check('landscape browser print and direct PDF paths exist', print.includes('sr-page-landscape') && rendererCss.includes('landscape-page') && pdf.includes('doc.addPage([page.widthMm, page.heightMm], page.orientation)'));
 check('TopBar dropdown is explicit absolute overlay', topbar.includes('overflow-visible') && fs.readFileSync(path.join(root, 'apps/web/src/components/ui/Menu.tsx'), 'utf8').includes('top-[calc(100%+4px)]'));
+check('@ reference syntax highlight + autocomplete', fs.readFileSync(path.join(root, 'apps/web/src/components/canvas/AutoTextarea.tsx'), 'utf8').includes('sr-ref-token') && auto.includes('detectTrigger') && auto.includes('mentionCandidates'));
+check('table context menu + fill handle', cardsEditors.includes('Căn trái') && cardsEditors.includes('Căn theo dấu thập phân') && cardsEditors.includes('Kéo để điền dữ liệu'));
+check('columns ungroup preserves landscape', read('apps/web/src/lib/cards.ts').includes('orientation=landscape') && cardShell.includes('makeColumns(pair[0], pair[1]'));
+check('print links + landscape page breaks', rendererHtml.includes('href="#') && rendererCss.includes('break-before:page') && rendererCss.includes('size:A4 landscape'));
 
 if (failures) process.exit(1);
 console.log('Native interaction source smoke: PASS');
