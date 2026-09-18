@@ -73,6 +73,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
 
   const [doc, setDoc] = useState<CanvasDoc>(() => toCards(source));
   const [selected, setSelected] = useState(0);
+  const [flashCardId, setFlashCardId] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   // The drop handler must read what the drag actually is, not what the last
   // render captured: a drag that starts and ends inside one tick would
@@ -108,6 +109,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   const listRef = useRef<HTMLDivElement | null>(null);
   const insertBlockSeen = useRef(insertBlockRequest?.nonce ?? 0);
   const citationInsertSeen = useRef(citationInsertRequest?.nonce ?? 0);
+  const setActiveBlockId = useStore((s) => s.setActiveBlockId);
 
   // Split view: two independently-scrolled panes of the SAME document, one
   // above the other — for keeping an eye on two places in a long report at
@@ -132,6 +134,50 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     undoStack.current = [];
     redoStack.current = [];
   }, [source, docId]);
+
+  const selectCard = useCallback((index: number): void => {
+    const next = Math.max(0, Math.min(index, doc.cards.length - 1));
+    setSelected(next);
+    setActiveBlockId(doc.cards[next]?.id ?? null);
+  }, [doc.cards, setActiveBlockId]);
+
+  const focusCardEditor = useCallback((index: number, caret: 'start' | 'end', origin?: HTMLElement | null): void => {
+    if (index < 0 || index >= doc.cards.length) return;
+    const host = origin?.closest<HTMLElement>('.sr-scroll') ?? null;
+    const roots = host ? [host] : [listRef.current, listRef2.current].filter(Boolean) as HTMLDivElement[];
+    let cardEl: HTMLElement | null = null;
+    for (const root of roots) {
+      cardEl = Array.from(root.querySelectorAll<HTMLElement>('[data-card-index]')).find(
+        (el) => Number(el.dataset.cardIndex) === index,
+      ) ?? null;
+      if (cardEl) break;
+    }
+    if (!cardEl) return;
+    cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const editor = cardEl.querySelector<HTMLTextAreaElement | HTMLInputElement>(
+      'textarea, input[type="text"], input:not([type])',
+    );
+    if (!editor) return;
+    editor.focus({ preventScroll: true });
+    const at = caret === 'end' ? editor.value.length : 0;
+    editor.setSelectionRange?.(at, at);
+  }, [doc.cards.length]);
+
+  const viewportInsertIndex = useCallback((): number => {
+    const activeEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const activeHost = activeEl?.closest<HTMLDivElement>('.sr-scroll');
+    const hosts = activeHost ? [activeHost] : [listRef.current, listRef2.current].filter(Boolean) as HTMLDivElement[];
+    const host = hosts[0];
+    if (!host || !doc.cards.length) return doc.cards.length;
+    const hostRect = host.getBoundingClientRect();
+    const viewportCenter = hostRect.top + hostRect.height / 2;
+    const visible = Array.from(host.querySelectorAll<HTMLElement>('[data-card-index]')).map((el) => {
+      const rect = el.getBoundingClientRect();
+      return { index: Number(el.dataset.cardIndex), distance: Math.abs((rect.top + rect.bottom) / 2 - viewportCenter) };
+    });
+    const nearest = visible.sort((a, b) => a.distance - b.distance)[0];
+    return nearest ? Math.min(doc.cards.length, nearest.index + 1) : doc.cards.length;
+  }, [doc.cards.length]);
 
   const commit = useCallback(
     (next: CanvasDoc, options: { history?: boolean } = {}): void => {
@@ -175,11 +221,13 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
 
   /* ------------------------------------------------------------ card edits */
 
-  const updateCard = (index: number, text: string): void => {
+  const updateCard = (index: number, text: string, forcedKind?: Card['kind']): void => {
     const cards = doc.cards.slice();
     const card = cards[index];
     if (!card) return;
-    cards[index] = { ...card, text, kind: detectKind(text) };
+    const preserveEmptyHeading = card.kind === 'heading' && !forcedKind && !text.replace(/^#{1,6}[ \t]?/, '').trim();
+    const nextText = preserveEmptyHeading ? `${'#'.repeat(headingDepth(card.text) || 1)} ` : text;
+    cards[index] = { ...card, text: nextText, kind: forcedKind ?? (preserveEmptyHeading ? 'heading' : detectKind(nextText)) };
     setCards(cards);
   };
 
@@ -199,10 +247,28 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
 
   const insertAt = (index: number, text: string, label?: string): void => {
     const cards = doc.cards.slice();
+    const at = Math.max(0, Math.min(index, cards.length));
     const card: Card = { id: nextId(), kind: detectKind(text), text, line: 0 };
-    cards.splice(index, 0, card);
+    cards.splice(at, 0, card);
     setCards(cards);
-    setSelected(index);
+    setSelected(at);
+    setActiveBlockId(card.id);
+    requestAnimationFrame(() => {
+      const cardEl = Array.from(document.querySelectorAll<HTMLElement>('[data-card-id]')).find(
+        (el) => el.dataset.cardId === card.id,
+      );
+      cardEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const editor = cardEl?.querySelector<HTMLTextAreaElement | HTMLInputElement>(
+        'textarea, input[type="text"], input:not([type])',
+      );
+      editor?.focus({ preventScroll: true });
+      if (editor) {
+        const atCaret = editor.value.length;
+        editor.setSelectionRange?.(atCaret, atCaret);
+      }
+    });
+    setFlashCardId(card.id);
+    window.setTimeout(() => setFlashCardId((current) => current === card.id ? null : current), 1500);
     if (label) setRecognised({ id: card.id, label, raw: text });
   };
 
@@ -218,7 +284,10 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     const tpl = CARD_TEMPLATES.find((t) => t.id === insertBlockRequest?.templateId);
     if (!tpl) return;
     noteBlockUsed(tpl.id);
-    insertAt(doc.cards.length, tpl.text);
+    const anchorId = insertBlockRequest?.afterBlockId ?? null;
+    const anchorIndex = anchorId ? doc.cards.findIndex((c) => c.id === anchorId) : -1;
+    const at = anchorIndex >= 0 ? anchorIndex + 1 : viewportInsertIndex();
+    insertAt(at, tpl.text);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insertBlockRequest?.nonce]);
 
@@ -232,8 +301,11 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   }, [citationInsertRequest?.nonce]);
 
   const removeAt = (index: number): void => {
-    setCards(doc.cards.filter((_, i) => i !== index));
-    setSelected(Math.max(0, Math.min(index - 1, doc.cards.length - 2)));
+    const cards = doc.cards.filter((_, i) => i !== index);
+    setCards(cards);
+    const next = Math.max(0, Math.min(index - 1, cards.length - 1));
+    setSelected(next);
+    setActiveBlockId(cards[next]?.id ?? null);
     setDeleteConfirmIndex(null);
   };
 
@@ -250,7 +322,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     const hasReferences = new RegExp(`@${escaped}(?![\\w:-])`).test(source);
     if (hasReferences) {
       setDeleteConfirmIndex(index);
-      setSelected(index);
+      selectCard(index);
       return;
     }
     removeAt(index);
@@ -262,13 +334,13 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     const cards = doc.cards.slice();
     cards.splice(index + 1, 0, { ...card, id: nextId() });
     setCards(cards);
-    setSelected(index + 1);
+    selectCard(index + 1);
   };
 
   const moveBy = (index: number, delta: number): void => {
     const to = index + delta + (delta > 0 ? 1 : 0);
     setCards(moveCard(doc.cards, index, to));
-    setSelected(Math.min(doc.cards.length - 1, Math.max(0, index + delta)));
+    selectCard(Math.min(doc.cards.length - 1, Math.max(0, index + delta)));
   };
 
   const mergeColumns = (a: number, b: number): void => {
@@ -280,7 +352,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     const at = Math.min(a, b);
     cards.splice(at, 0, { id: nextId(), kind: 'columns', text, line: left.line });
     setCards(cards);
-    setSelected(at);
+    selectCard(at);
   };
 
   const unmerge = (index: number): void => {
@@ -355,7 +427,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     }
     const target = zone === 'above' ? over : over + 1;
     setCards(moveCard(doc.cards, from, target));
-    setSelected(Math.min(doc.cards.length - 1, Math.max(0, from < target ? target - 1 : target)));
+    selectCard(Math.min(doc.cards.length - 1, Math.max(0, from < target ? target - 1 : target)));
   };
 
   /* ---------------------------------------------------------------- paste */
@@ -427,6 +499,11 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     return () => hosts.forEach((h) => h.removeEventListener('paste', handler));
   }, [smartPaste, splitView]);
 
+  const selectAdjacentCard = useCallback((index: number, caret: 'start' | 'end', origin: HTMLElement | null): void => {
+    selectCard(index);
+    requestAnimationFrame(() => focusCardEditor(index, caret, origin));
+  }, [focusCardEditor, selectCard]);
+
   /* ------------------------------------------------------------- shortcuts */
 
   // Keep one capture-phase listener for the lifetime of the Canvas. React re-renders
@@ -442,6 +519,9 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     duplicateAt,
     moveBy,
     requestDelete,
+    selectCard,
+    focusCardEditor,
+    selectAdjacentCard,
   });
   shortcutContextRef.current = {
     doc,
@@ -453,6 +533,9 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     duplicateAt,
     moveBy,
     requestDelete,
+    selectCard,
+    focusCardEditor,
+    selectAdjacentCard,
   };
 
   useEffect(() => {
@@ -472,7 +555,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
       const activeIndex = Number.isInteger(parsedIndex) && parsedIndex >= 0 && parsedIndex < currentDoc.cards.length
         ? parsedIndex
         : currentSelected;
-      if (activeIndex !== currentSelected && Number.isInteger(parsedIndex)) setSelected(activeIndex);
+      if (activeIndex !== currentSelected && Number.isInteger(parsedIndex)) context.selectCard(activeIndex);
 
       if (typing && matchesShortcut(e, 'clean-paste')) {
         e.preventDefault();
@@ -503,9 +586,9 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
           if (textual) {
             e.preventDefault();
             const nextText = headingShortcut.depth === 0
-              ? card!.text.replace(/^#{1,6}\s+/, '')
+              ? card!.text.replace(/^#{1,6}[ \t]?/, '')
               : setHeadingDepth(card!.text, headingShortcut.depth);
-            context.updateCard(activeIndex, nextText);
+            context.updateCard(activeIndex, nextText, headingShortcut.depth === 0 ? 'paragraph' : undefined);
           }
           return;
         }
@@ -545,18 +628,97 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
         return;
       }
 
-      if (typing && !e.altKey) return;
+      const autoCompleteOpen = target?.dataset.srAutocompleteOpen === 'true';
+      if (autoCompleteOpen) return;
 
-      if (!typing && !interactive && e.key === 'Enter') {
+      if (typing && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key === ' ') {
+        const editor = target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement ? target : null;
         const card = currentDoc.cards[activeIndex];
-        if (card && ['figure', 'table', 'equation', 'codeBlock', 'diagram'].includes(card.kind)) {
+        if (editor && card?.kind === 'paragraph' && editor.selectionStart === editor.selectionEnd) {
+          const cursor = editor.selectionStart;
+          const lineStart = editor.value.lastIndexOf('\n', cursor - 1) + 1;
+          const line = editor.value.slice(lineStart, cursor);
+          const marker = /^(#{1,3}|>|[-*+]|\d+[.)])$/.exec(line)?.[1];
+          if (marker) {
+            e.preventDefault();
+            const markerText = `${marker} `;
+            context.updateCard(activeIndex, markerText);
+            requestAnimationFrame(() => {
+              const cardEl = editor.closest<HTMLElement>('[data-card-index]');
+              const field = cardEl?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+                'input[type="text"], input:not([type]), textarea',
+              );
+              field?.focus({ preventScroll: true });
+              const pos = markerText.length;
+              field?.setSelectionRange?.(pos, pos);
+            });
+            return;
+          }
+        }
+      }
+
+      if (typing && e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        const card = currentDoc.cards[activeIndex];
+        if (card && (card.kind === 'heading' || ['figure', 'table', 'equation', 'codeBlock', 'diagram'].includes(card.kind))) {
           e.preventDefault();
           context.insertAt(activeIndex + 1, 'Nội dung đoạn văn.');
           return;
         }
       }
 
-      if (!typing && !interactive && (e.key === 'Backspace' || e.key === 'Delete')) {
+      if (typing && e.key === 'Backspace' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        const editor = target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement ? target : null;
+        const card = currentDoc.cards[activeIndex];
+        if (editor && card && editor.selectionStart === 0 && editor.selectionEnd === 0) {
+          if (card.kind === 'heading') {
+            const body = card.text.replace(/^#{1,6}[ \t]?/, '');
+            // An empty heading is still a heading marker: backspace must not make
+            // the block disappear while the author is starting a new title.
+            if (!body.trim()) return;
+            e.preventDefault();
+            context.updateCard(activeIndex, body);
+            requestAnimationFrame(() => context.focusCardEditor(activeIndex, 'start', target));
+            return;
+          }
+          if (card.kind === 'paragraph' && editor.value.length === 0) {
+            if (currentDoc.cards.length <= 1) return;
+            e.preventDefault();
+            context.requestDelete(activeIndex);
+            const prev = Math.max(0, activeIndex - 1);
+            const prevId = currentDoc.cards[prev]?.id;
+            if (prevId) {
+              requestAnimationFrame(() => focusCardEditor(prev, 'end', target));
+            }
+            return;
+          }
+        }
+      }
+
+      if (typing && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        const editor = target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement ? target : null;
+        if (editor && editor.selectionStart === editor.selectionEnd) {
+          const cursor = editor.selectionStart;
+          const lineStart = editor.value.lastIndexOf('\n', cursor - 1) + 1;
+          const lineBreak = editor.value.indexOf('\n', cursor);
+          const lineEnd = lineBreak < 0 ? editor.value.length : lineBreak;
+          const firstLine = cursor === lineStart;
+          const lastLine = lineBreak < 0 && cursor === lineEnd;
+          if (e.key === 'ArrowUp' && firstLine && activeIndex > 0) {
+            e.preventDefault();
+            context.selectAdjacentCard(activeIndex - 1, 'end', target);
+            return;
+          }
+          if (e.key === 'ArrowDown' && lastLine && activeIndex < currentDoc.cards.length - 1) {
+            e.preventDefault();
+            context.selectAdjacentCard(activeIndex + 1, 'start', target);
+            return;
+          }
+        }
+      }
+
+      if (typing && !e.altKey) return;
+
+      if (!typing && !interactive && e.key === 'Backspace') {
         const card = currentDoc.cards[activeIndex];
         if (card) {
           e.preventDefault();
@@ -577,7 +739,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
       return c.line <= gotoLine.line && (!next || next.line > gotoLine.line);
     });
     if (index < 0) return;
-    setSelected(index);
+    selectCard(index);
     for (const ref of [listRef, listRef2]) {
       ref.current
         ?.querySelector(`[data-card-index="${index}"]`)
@@ -724,11 +886,12 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
                   index={index}
                   total={doc.cards.length}
                   selected={selected === index}
+                  flash={flashCardId === card.id}
                   dropZone={drag?.over === index ? drag.zone : null}
                   recognised={recognised?.id === card.id ? recognised.label : null}
                   labels={labels}
                   bibliography={render.result?.document.meta.bibliography}
-                  onSelect={() => setSelected(index)}
+                  onSelect={() => selectCard(index)}
                   onChange={(text) => updateCard(index, text)}
                   onMove={(delta) => moveBy(index, delta)}
                   onDuplicate={() => duplicateAt(index)}
@@ -743,6 +906,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
                     if (d) setDragBoth({ ...d, over: index, zone });
                   }}
                   onDrop={onDrop}
+                  onInsertBelow={(tpl) => insertAt(index + 1, tpl.text)}
                   onUndoRecognition={() => {
                     if (!recognised) return;
                     const at = doc.cards.findIndex((c) => c.id === recognised.id);
@@ -793,7 +957,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
           <InsertMenu
             compact
             label="Thêm khối ở cuối"
-            onInsert={(tpl: CardTemplate) => insertAt(doc.cards.length, tpl.text)}
+            onInsert={(tpl: CardTemplate) => insertAt(viewportInsertIndex(), tpl.text)}
           />
           <span className="text-[11px] text-ink-400">
             hoặc bấm vào một khối rồi Ctrl+V — app tự nhận dạng ảnh, bảng Excel, LaTeX, code
@@ -806,7 +970,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   return (
     <>
       <div className="sr-canvas-toolbar flex h-11 shrink-0 items-center gap-1.5 overflow-hidden border-b border-slate-200/80 px-3 dark:border-slate-800">
-        <InsertMenu onInsert={(tpl) => insertAt(doc.cards.length, tpl.text)} />
+        <InsertMenu onInsert={(tpl) => insertAt(viewportInsertIndex(), tpl.text)} />
         <button
           type="button"
           onClick={() => setSplitView((v) => !v)}

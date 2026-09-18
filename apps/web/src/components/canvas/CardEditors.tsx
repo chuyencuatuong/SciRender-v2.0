@@ -98,7 +98,9 @@ const DEPTHS = [1, 2, 3, 4];
 
 function HeadingEditor({ text, onChange }: EditorProps): JSX.Element {
   const depth = headingDepth(text) || 1;
-  const body = text.trim().replace(/^#{1,6}\s+/, '');
+  // Never trim the editable body: trailing spaces are real caret input.
+  // Trimming here caused the last character/space to disappear on each render.
+  const body = text.replace(/^#{1,6}[ \t]?/, '');
   return (
     <div className="flex items-start gap-2">
       <select

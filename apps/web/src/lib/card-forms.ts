@@ -298,9 +298,11 @@ export function serializeTable(form: TableForm): string {
 /* ----------------------------------------------------------------- heading */
 
 export function headingDepth(text: string): number {
-  return /^(#{1,6})\s/.exec(text.trim())?.[1]?.length ?? 0;
+  return /^(#{1,6})[ \t]/.exec(text)?.[1]?.length ?? 0;
 }
 
 export function setHeadingDepth(text: string, depth: number): string {
-  return text.trim().replace(/^#{1,6}\s+/, `${'#'.repeat(depth)} `);
+  const safeDepth = Math.max(1, Math.min(6, Math.round(depth)));
+  const body = text.replace(/^#{1,6}[ \t]?/, '');
+  return `${'#'.repeat(safeDepth)} ${body}`;
 }

@@ -34,7 +34,7 @@ export function SidePanel({ render, floating }: Props): JSX.Element {
         aria-hidden={!open}
         className={
           floating
-            ? `fixed bottom-[30px] left-[56px] top-[60px] z-[41] w-[min(300px,84vw)] flex-col rounded-r-2xl bg-sr-card shadow-elevation-float transition duration-200 ${
+            ? `fixed bottom-[30px] left-[56px] top-[60px] z-[41] w-[min(300px,84vw)] flex-col rounded-r-2xl bg-sr-card shadow-elevation-float transition-[transform,opacity] duration-200 ${
                 open ? 'flex translate-x-0 opacity-100' : 'pointer-events-none flex -translate-x-2 opacity-0'
               }`
             : `sr-chrome flex w-[272px] shrink-0 flex-col border-r transition-[margin-left,opacity] duration-300 ${
@@ -57,7 +57,7 @@ export function SidePanel({ render, floating }: Props): JSX.Element {
         <button
           aria-label="Đóng bảng bên"
           onClick={() => setPanelOpen(false)}
-          className={`fixed inset-0 z-40 bg-ink-900/25 transition-opacity duration-200 ${
+          className={`fixed inset-0 z-40 bg-ink-900/25 transition-[opacity] duration-200 ${
             open ? 'opacity-100' : 'pointer-events-none opacity-0'
           }`}
         />

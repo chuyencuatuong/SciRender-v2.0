@@ -10,8 +10,9 @@ import {
   LineChart,
 } from 'lucide-react';
 import type { BibEntry, LabelRecord } from '@scirender/ast';
-import { detectKind, KIND_LABEL, splitColumns, type Card } from '~/lib/cards';
+import { detectKind, KIND_LABEL, splitColumns, type Card, type CardTemplate } from '~/lib/cards';
 import { CardEditor } from './CardEditors';
+import { InsertMenu } from './InsertMenu';
 
 export type DropZone = 'above' | 'below' | 'left' | 'right';
 
@@ -20,6 +21,7 @@ interface Props {
   index: number;
   total: number;
   selected: boolean;
+  flash?: boolean;
   dropZone: DropZone | null;
   recognised: string | null;
   /** The document's labelled objects — see `EditorProps.labels`. */
@@ -38,6 +40,7 @@ interface Props {
   onDragOver: (zone: DropZone) => void;
   onDrop: () => void;
   onUndoRecognition: () => void;
+  onInsertBelow: (template: CardTemplate) => void;
 }
 
 const ZONE_RING: Record<DropZone, string> = {
@@ -92,10 +95,13 @@ export function CardShell(props: Props): JSX.Element {
       }}
       onMouseDown={props.onSelect}
       onFocusCapture={props.onSelect}
+      data-card-id={card.id}
       data-active={selected}
       className={`sr-card-shell group relative px-3.5 py-3 transition-[border-color,box-shadow,transform] duration-200 ${
         selected ? 'translate-y-[-1px]' : ''
-      } ${dropZone ? ZONE_RING[dropZone] : ''}`}
+      } ${dropZone ? ZONE_RING[dropZone] : ''} ${
+        props.flash ? 'ring-2 ring-sky-400 animate-pulse' : ''
+      }`}
     >
       {/* Thanh chỉ dấu bên trái thay cho cái khung: khối phẳng lì cho tới khi
           bạn chạm vào nó. */}
@@ -167,6 +173,13 @@ export function CardShell(props: Props): JSX.Element {
               <LineChart size={12} />
             </IconBtn>
           ) : null}
+          <InsertMenu
+            compact
+            iconOnly
+            ariaLabel={`Thêm khối bên dưới khối ${index + 1}`}
+            label="Thêm khối bên dưới"
+            onInsert={props.onInsertBelow}
+          />
           <IconBtn title="Nhân bản (Ctrl+D)" onClick={props.onDuplicate}>
             <Copy size={12} />
           </IconBtn>

@@ -76,9 +76,10 @@ export interface AppState {
   coverAdded: number | null;
   /** Bumped to ask TopBar's print flow to run — see `requestPrint`. */
   printNonce: number;
-  /** Set by the Command Palette; `CanvasPane` owns the actual insert (its
-   * card array is local state, not in this store) and watches the nonce. */
-  insertBlockRequest: { templateId: string; nonce: number } | null;
+  /** The last editor block that owns keyboard focus/selection. */
+  activeBlockId: string | null;
+  /** Set by the Command Palette; CanvasPane owns the actual insert. */
+  insertBlockRequest: { templateId: string; afterBlockId: string | null; nonce: number } | null;
   citationInsertRequest: { text: string; nonce: number } | null;
 
   init: () => Promise<void>;
@@ -109,8 +110,9 @@ export interface AppState {
    * same) — from anywhere, e.g. the Command Palette, without a second copy
    * of `onPrint`'s print-dialog logic (P4). */
   requestPrint: () => void;
-  /** Asks `CanvasPane` to append one block, by `CardTemplate` id — what the
-   * Command Palette's "Chèn khối" actions call. */
+  /** Records the block currently being edited so top-level insertion remains contextual. */
+  setActiveBlockId: (id: string | null) => void;
+  /** Asks `CanvasPane` to insert one block by template id at the active context. */
   requestInsertBlock: (templateId: string) => void;
   requestCitationInsert: (keys: string[]) => void;
   importBibTeX: (text: string) => { added: number; updated: number; total: number; errors: string[]; warnings: string[] };
@@ -169,6 +171,7 @@ export const useStore = create<AppState>((set, get) => ({
   gotoLine: null,
   coverAdded: null,
   printNonce: 0,
+  activeBlockId: null,
   insertBlockRequest: null,
   citationInsertRequest: null,
 
@@ -311,6 +314,7 @@ export const useStore = create<AppState>((set, get) => ({
       assetMap: { ...BUILTIN_ASSETS },
       dirty: true,
       savedAt: null,
+      activeBlockId: null,
     }));
     get().setPref('lastDocumentId', id);
     await get().save();
@@ -337,6 +341,7 @@ export const useStore = create<AppState>((set, get) => ({
       assetMap: merged,
       dirty: false,
       savedAt: doc.updatedAt,
+      activeBlockId: null,
     }));
     get().setPref('lastDocumentId', doc.id);
     track('document.open', { assets: assets.length, bytes: doc.source.length });
@@ -442,9 +447,17 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => ({ printNonce: s.printNonce + 1 }));
   },
 
+  setActiveBlockId(id) {
+    set({ activeBlockId: id });
+  },
+
   requestInsertBlock(templateId) {
     set((s) => ({
-      insertBlockRequest: { templateId, nonce: (s.insertBlockRequest?.nonce ?? 0) + 1 },
+      insertBlockRequest: {
+        templateId,
+        afterBlockId: s.activeBlockId,
+        nonce: (s.insertBlockRequest?.nonce ?? 0) + 1,
+      },
     }));
   },
 

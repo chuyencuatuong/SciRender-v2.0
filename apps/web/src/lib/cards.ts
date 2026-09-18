@@ -365,10 +365,12 @@ export const KIND_LABEL: Record<CardKind, string> = {
 
 /** Re-detects the kind of a card after its text was edited. */
 export function detectKind(text: string): CardKind {
-  const t = text.trim();
+  const raw = text.replace(/\r\n?/g, '\n');
+  const t = raw.trim();
   if (!t) return 'paragraph';
   if (/^\[\^[A-Za-z0-9_-]+\]:/.test(t)) return 'footnote';
-  if (/^#{1,6}\s/.test(t)) return 'heading';
+  // Keep the in-progress marker (`# `) as a heading while the user is still typing.
+  if (/^#{1,6}(?:[ \t]+|$)/.test(raw)) return 'heading';
   if (/^:::\s*pagebreak\s*:::$/i.test(t)) return 'pageBreak';
   if (/^:::\s*cols\b/.test(t)) return 'columns';
   if (/^:::/.test(t)) return 'callout';
@@ -377,8 +379,8 @@ export function detectKind(text: string): CardKind {
   if (/^(```|~~~)/.test(t)) return 'codeBlock';
   if (/^!\[/.test(t)) return 'figure';
   if (/^\|/.test(t)) return 'table';
-  if (/^>/.test(t)) return 'blockquote';
-  if (/^(\s*[-*+]\s|\s*\d{1,9}[.)]\s)/.test(t)) return 'list';
+  if(/^>[ \t]+/.test(raw)) return 'blockquote';
+  if (/^(\s*[-*+]\s|\s*\d{1,9}[.)]\s)/.test(raw)) return 'list';
   if (/^ {0,3}((\*\s*){3,}|(-\s*){3,}|(_\s*){3,})$/.test(t)) return 'thematicBreak';
   return 'paragraph';
 }

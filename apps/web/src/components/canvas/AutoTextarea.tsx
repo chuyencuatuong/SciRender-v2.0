@@ -368,6 +368,7 @@ export function AutoTextarea({
         onKeyUp={(e) => {
           if (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End') sync(e.currentTarget);
         }}
+        data-sr-autocomplete-open={trigger ? 'true' : 'false'}
         onFocus={(e) => { lastActiveTextarea = e.currentTarget; sync(e.currentTarget); }}
         onClick={(e) => { lastActiveTextarea = e.currentTarget; sync(e.currentTarget); }}
         onBlur={() => setTrigger(null)}

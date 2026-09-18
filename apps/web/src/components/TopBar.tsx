@@ -12,6 +12,7 @@ import {
   Save,
   Sun,
   Upload,
+  Atom,
 } from 'lucide-react';
 import { exportStandaloneHtml, printDocument, slug } from '@scirender/renderer-pdf';
 import { importBundle, exportBundle } from '@scirender/storage';
@@ -162,9 +163,10 @@ export function TopBar({ render }: Props): JSX.Element {
       className="sr-chrome relative z-50 flex h-[60px] shrink-0 items-center gap-3 border-b px-3"
     >
       <div className="flex min-w-0 shrink-0 items-center gap-2.5">
-        <div className="flex shrink-0 items-baseline gap-2">
-          <span className="font-serif text-[20px] font-normal tracking-[-0.015em] text-ink-900">
-            Sci<i className="font-light not-italic text-sky-600 dark:text-sky-400">Render</i>
+        <div className="flex shrink-0 items-center gap-2">
+          <Atom aria-hidden="true" size={17} strokeWidth={1.8} className="sr-logo-mark shrink-0 text-sky-600 dark:text-sky-300" />
+          <span className="font-serif text-[20px] font-normal tracking-[-0.015em] text-slate-950 dark:text-slate-50">
+            Sci<i className="font-light not-italic text-sky-600 dark:text-sky-300">Render</i>
           </span>
           <span className="hidden rounded-full bg-slate-100 px-1.5 py-0.5 font-mono text-[9.5px] font-medium tracking-wide text-slate-500 ring-1 ring-slate-200 sm:inline dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
             v2.4

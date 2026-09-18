@@ -145,7 +145,7 @@ export function App(): JSX.Element {
                       ? 'translate-x-0'
                       : 'pointer-events-none translate-x-full'
                   }`
-                : 'flex min-w-0 flex-1 flex-col border-l border-slate-300/80 bg-sr-paper shadow-inner dark:border-slate-700'
+                : 'sr-preview-divider flex min-w-0 flex-1 flex-col bg-sr-paper shadow-inner'
             }
           >
             <PreviewPane render={render} onBack={overlayPreview ? () => setView('canvas') : null} />
