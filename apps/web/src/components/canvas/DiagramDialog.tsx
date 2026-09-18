@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode, type WheelEvent as ReactWheelEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Code2, Maximize2, Minus, Plus, Save, Sparkles, X } from 'lucide-react';
 import type { BibEntry, LabelRecord } from '@scirender/ast';
-import { DIAGRAM_PRESETS, renderDiagramSvg, type DiagramStudioCurve, type DiagramStudioTheme } from '~/lib/diagram-studio';
+import { applyDiagramViewport, DIAGRAM_PRESETS, getSvgIntrinsicSize, renderDiagramSvg, type DiagramStudioCurve, type DiagramStudioTheme } from '~/lib/diagram-studio';
 import type { DiagramForm } from '~/lib/card-forms';
 
 interface Props {
@@ -49,9 +49,13 @@ export function DiagramDialog({ open, form, bibliography, labels, onChange, onSa
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
   const [rendering, setRendering] = useState(false);
+  const [panning, setPanning] = useState(false);
   const dragRef = useRef<{ clientX: number; clientY: number; panX: number; panY: number; pointerId: number } | null>(null);
   const renderSeq = useRef(0);
   const previewRef = useRef<HTMLDivElement | null>(null);
+  const zoomRef = useRef(1);
+  const panXRef = useRef(0);
+  const panYRef = useRef(0);
 
   useEffect(() => {
     if (!open) return;
@@ -71,6 +75,9 @@ export function DiagramDialog({ open, form, bibliography, labels, onChange, onSa
     if (!open) return;
     const onKey = (e: KeyboardEvent): void => {
       if (!previewRef.current) return;
+      const target = e.target;
+      const isEditable = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable);
+      if (isEditable) return;
       if (e.code === 'Space') previewRef.current.dataset.spacePan = e.type === 'keydown' ? '1' : '0';
     };
     window.addEventListener('keydown', onKey);
@@ -123,78 +130,121 @@ export function DiagramDialog({ open, form, bibliography, labels, onChange, onSa
     const savedX = Number(form.attrs['view-x']);
     const savedY = Number(form.attrs['view-y']);
     const savedZoom = Number(form.attrs['view-zoom']);
-    setZoom(Number.isFinite(savedZoom) && savedZoom > 0 ? Math.max(0.25, Math.min(2.5, savedZoom)) : 1);
-    setPanX(Number.isFinite(savedX) ? savedX : 0);
-    setPanY(Number.isFinite(savedY) ? savedY : 0);
+    const restoredZoom = Number.isFinite(savedZoom) && savedZoom > 0 ? Math.max(0.25, Math.min(2.5, savedZoom)) : 1;
+    const restoredX = Number.isFinite(savedX) ? savedX : 0;
+    const restoredY = Number.isFinite(savedY) ? savedY : 0;
+    zoomRef.current = restoredZoom;
+    panXRef.current = restoredX;
+    panYRef.current = restoredY;
+    setZoom(restoredZoom);
+    setPanX(restoredX);
+    setPanY(restoredY);
   }, [open, form.attrs]);
 
-  const clampPan = (nextX: number, nextY: number, nextZoom = zoom): [number, number] => {
-    const limit = Math.max(0, (nextZoom - 1) * 50);
+  const clampPan = (nextX: number, nextY: number, nextZoom = zoomRef.current): [number, number] => {
+    // A zoomed view can move only across the hidden portion of the original
+    // SVG. This gives the exact center-limit in percentage space, rather than
+    // allowing arbitrary blank canvas around the diagram.
+    const limit = Math.max(0, 50 * (1 - 1 / Math.max(0.25, nextZoom)));
     return [Math.max(-limit, Math.min(limit, nextX)), Math.max(-limit, Math.min(limit, nextY))];
+  };
+
+  const setViewport = (nextZoom: number, nextX: number, nextY: number): void => {
+    const boundedZoom = Math.max(0.25, Math.min(2.5, nextZoom));
+    const [boundedX, boundedY] = clampPan(nextX, nextY, boundedZoom);
+    zoomRef.current = boundedZoom;
+    panXRef.current = boundedX;
+    panYRef.current = boundedY;
+    setZoom(boundedZoom);
+    setPanX(boundedX);
+    setPanY(boundedY);
   };
 
   const changeZoomAt = (nextZoom: number, anchor?: { x: number; y: number }): void => {
     const bounded = Math.max(0.25, Math.min(2.5, nextZoom));
+    const currentZoom = zoomRef.current;
+    const currentX = panXRef.current;
+    const currentY = panYRef.current;
     if (!anchor || !previewRef.current) {
-      const [x, y] = clampPan(panX, panY, bounded);
-      setZoom(bounded); setPanX(x); setPanY(y); return;
+      setViewport(bounded, currentX, currentY);
+      return;
     }
     const rect = previewRef.current.getBoundingClientRect();
-    const nx = (anchor.x - rect.left) / Math.max(1, rect.width) - 0.5;
-    const ny = (anchor.y - rect.top) / Math.max(1, rect.height) - 0.5;
-    const ratio = bounded / zoom;
-    const rawX = panX + nx * 100 * (1 - ratio);
-    const rawY = panY + ny * 100 * (1 - ratio);
-    const [x, y] = clampPan(rawX, rawY, bounded);
-    setZoom(bounded); setPanX(x); setPanY(y);
+    const ax = Math.max(0, Math.min(1, (anchor.x - rect.left) / Math.max(1, rect.width)));
+    const ay = Math.max(0, Math.min(1, (anchor.y - rect.top) / Math.max(1, rect.height)));
+    // Keep the exact vector-space point under the pointer fixed while the
+    // viewBox narrows. Pan percentages encode the view center, so the offset
+    // scales by the inverse of the current zoom.
+    const oldScale = 1 / Math.max(0.25, currentZoom);
+    const nextScale = 1 / bounded;
+    const rawX = currentX + (ax - 0.5) * 100 * (nextScale - oldScale);
+    const rawY = currentY + (ay - 0.5) * 100 * (nextScale - oldScale);
+    setViewport(bounded, rawX, rawY);
   };
 
   const fitToViewport = (): void => {
     const host = previewRef.current;
     const content = host?.querySelector<HTMLElement>('[data-sr-diagram-content]');
-    if (!host || !content) {
-      setPanX(0);
-      setPanY(0);
-      setZoom(1);
+    const size = svg ? getSvgIntrinsicSize(svg) : null;
+    if (!host || !content || !size) {
+      setViewport(1, 0, 0);
       return;
     }
     const hostRect = host.getBoundingClientRect();
-    const contentRect = content.getBoundingClientRect();
-    const baseW = contentRect.width / Math.max(zoom, 0.001);
-    const baseH = contentRect.height / Math.max(zoom, 0.001);
+    const svgEl = content.querySelector<SVGSVGElement>('svg');
+    const measured = svgEl?.getBoundingClientRect();
+    const baseW = measured && measured.width > 0 ? measured.width : size.width;
+    const baseH = measured && measured.height > 0 ? measured.height : size.height;
     const availableW = Math.max(64, hostRect.width - 64);
     const availableH = Math.max(64, hostRect.height - 64);
-    const nextZoom = Math.max(0.25, Math.min(2.5, availableW / Math.max(1, baseW), availableH / Math.max(1, baseH)));
-    setPanX(0);
-    setPanY(0);
-    setZoom(nextZoom);
+    const nextZoom = Math.max(0.25, Math.min(2.5, availableW / baseW, availableH / baseH));
+    setViewport(nextZoom, 0, 0);
   };
 
-  const onWheel = (event: ReactWheelEvent<HTMLDivElement>): void => {
-    if (!(event.ctrlKey || event.metaKey)) return;
-    event.preventDefault();
-    const factor = Math.exp(-event.deltaY * 0.0015);
-    changeZoomAt(zoom * factor, { x: event.clientX, y: event.clientY });
-  };
+  // Use a native, non-passive listener. React's delegated wheel event is too late
+  // for browser page-zoom in some Chromium configurations (Ctrl/Cmd+wheel).
+  useEffect(() => {
+    const host = previewRef.current;
+    if (!open || !host) return;
+    const onWheel = (event: WheelEvent): void => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const factor = Math.exp(-event.deltaY * 0.0015);
+      changeZoomAt(zoomRef.current * factor, { x: event.clientX, y: event.clientY });
+    };
+    host.addEventListener('wheel', onWheel, { passive: false });
+    return () => host.removeEventListener('wheel', onWheel);
+  }, [open]);
 
   const beginPan = (event: ReactMouseEvent<HTMLDivElement>): void => {
     const isMiddle = event.button === 1;
     const isSpaceDrag = event.button === 0 && event.currentTarget.dataset.spacePan === '1';
     if (!isMiddle && !isSpaceDrag) return;
     event.preventDefault();
-    dragRef.current = { clientX: event.clientX, clientY: event.clientY, panX, panY, pointerId: 0 };
+    event.stopPropagation();
+    dragRef.current = { clientX: event.clientX, clientY: event.clientY, panX: panXRef.current, panY: panYRef.current, pointerId: 0 };
+    setPanning(true);
   };
 
   const movePan = (event: ReactMouseEvent<HTMLDivElement>): void => {
     const start = dragRef.current;
     if (!start) return;
-    const nextX = start.panX + (event.clientX - start.clientX) * 100 / Math.max(1, previewRef.current?.getBoundingClientRect().width ?? 1);
-    const nextY = start.panY + (event.clientY - start.clientY) * 100 / Math.max(1, previewRef.current?.getBoundingClientRect().height ?? 1);
+    const width = Math.max(1, previewRef.current?.getBoundingClientRect().width ?? 1);
+    const height = Math.max(1, previewRef.current?.getBoundingClientRect().height ?? 1);
+    // Pan is stored as a percentage of the original SVG viewport. At zoom Z,
+    // one screen pixel corresponds to 1/Z of that original viewport.
+    const scale = 1 / Math.max(0.25, zoomRef.current);
+    const nextX = start.panX + (event.clientX - start.clientX) * 100 / width * scale;
+    const nextY = start.panY + (event.clientY - start.clientY) * 100 / height * scale;
     const [x, y] = clampPan(nextX, nextY);
-    setPanX(x); setPanY(y);
+    panXRef.current = x;
+    panYRef.current = y;
+    setPanX(x);
+    setPanY(y);
   };
 
-  const endPan = (): void => { dragRef.current = null; };
+  const endPan = (): void => { dragRef.current = null; setPanning(false); };
 
 
   if (!open) return null;
@@ -230,7 +280,7 @@ export function DiagramDialog({ open, form, bibliography, labels, onChange, onSa
               <section className="space-y-3 rounded-xl border border-white/[.07] bg-white/[.025] p-3">
                 <ControlRow label="Hướng">
                   <div className="flex flex-wrap gap-1">
-                    {DIRECTIONS.map((d) => <button key={d.value} type="button" onClick={() => onChange({ direction: d.value })} aria-pressed={form.direction === d.value} className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10.5px] ${form.direction === d.value ? 'bg-sky-400/15 text-sky-200 ring-1 ring-sky-400/35' : 'text-white/55 hover:bg-white/5'}`}>{d.icon}{d.label}</button>)}
+                    {DIRECTIONS.map((d) => <button key={d.value} type="button" onClick={() => onChange({ direction: d.value })} aria-pressed={form.direction === d.value} className={`sr-diagram-choice inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10.5px] ${form.direction === d.value ? 'is-active bg-sky-400/15 ring-1 ring-sky-400/35' : 'hover:bg-white/5'}`}>{d.icon}{d.label}</button>)}
                   </div>
                 </ControlRow>
                 <ControlRow label="Đường nối">
@@ -264,16 +314,15 @@ export function DiagramDialog({ open, form, bibliography, labels, onChange, onSa
             <div
               ref={previewRef}
               className="min-h-0 flex-1 overflow-auto p-6"
-              onWheel={onWheel}
               onMouseDown={beginPan}
               onMouseMove={movePan}
               onMouseUp={endPan}
               onMouseLeave={endPan}
-              style={{ cursor: dragRef.current ? 'grabbing' : 'default' }}
+              style={{ cursor: panning ? 'grabbing' : 'default', touchAction: 'none' }}
             >
               <div className="relative grid min-h-full place-items-center rounded-xl border border-white/[.05] bg-white/[.015] p-8">
                 {rendering ? <span className="pointer-events-none absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-white/[.08] bg-black/20 px-2 py-1 text-[9.5px] text-white/45">Đang dựng…</span> : null}
-                {error ? <div className="max-w-[600px] rounded-lg border border-rose-400/20 bg-rose-400/5 p-4 text-xs text-rose-200">{error}</div> : svg ? <div data-sr-diagram-content="1" style={{ transform: `translate(${panX}%, ${panY}%) scale(${zoom})`, transformOrigin: 'center center' }} className="will-change-transform" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="text-xs text-white/30">Dán mã Mermaid hoặc chọn mẫu để xem trước.</div>}
+                {error ? <div className="max-w-[600px] rounded-lg border border-rose-400/20 bg-rose-400/5 p-4 text-xs text-rose-200">{error}</div> : svg ? <div data-sr-diagram-content="1" className="shrink-0 select-none" dangerouslySetInnerHTML={{ __html: applyDiagramViewport(svg, panX, panY, zoom) }} /> : <div className="text-xs text-white/30">Dán mã Mermaid hoặc chọn mẫu để xem trước.</div>}
               </div>
             </div>
             <footer className="flex min-h-12 shrink-0 items-center gap-2 border-t border-white/[.07] px-3">

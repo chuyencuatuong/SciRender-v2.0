@@ -378,6 +378,7 @@ const cellKey = (cell: CellRef): string => `${cell.row}:${cell.col}`;
 
 function TableEditor({ text, onChange, kind, labels, bibliography, suppressLandscape }: EditorProps): JSX.Element {
   const form = parseTable(text);
+  const tableEditorRef = useRef<HTMLDivElement | null>(null);
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
   const anchorRef = useRef<CellRef | null>(null);
   const draggingRef = useRef(false);
@@ -389,6 +390,30 @@ function TableEditor({ text, onChange, kind, labels, bibliography, suppressLands
     window.addEventListener('mouseup', up);
     return () => window.removeEventListener('mouseup', up);
   }, [dragging]);
+
+  useEffect(() => {
+    if (!selectedCells.size) return;
+    const clearSelection = (): void => {
+      setSelectedCells(new Set());
+      anchorRef.current = null;
+      draggingRef.current = false;
+      setDragging(false);
+    };
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target;
+      if (target instanceof Node && tableEditorRef.current?.contains(target)) return;
+      clearSelection();
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') clearSelection();
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [selectedCells.size]);
   if (!form) return <RawEditor text={text} onChange={onChange} kind={kind} labels={labels} bibliography={bibliography} />;
   const width = form.header.length;
   const totalRows = form.rows.length + 1;
@@ -695,7 +720,7 @@ function TableEditor({ text, onChange, kind, labels, bibliography, suppressLands
   );
 
   return (
-    <div data-sr-table-editor-active className="space-y-2" onMouseUp={() => { draggingRef.current = false; setDragging(false); }} onKeyDownCapture={onTableKeyDownCapture} onContextMenu={(e) => { if (e.target instanceof HTMLElement && e.target.closest('[data-sr-cell]')) { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY }); } }} onCopyCapture={(e) => {
+    <div ref={tableEditorRef} data-sr-table-editor-active className="space-y-2" onMouseUp={() => { draggingRef.current = false; setDragging(false); }} onKeyDownCapture={onTableKeyDownCapture} onContextMenu={(e) => { if (e.target instanceof HTMLElement && e.target.closest('[data-sr-cell]')) { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY }); } }} onCopyCapture={(e) => {
       if (selectedCells.size <= 1 || !bounds) return;
       e.preventDefault();
       e.stopPropagation();

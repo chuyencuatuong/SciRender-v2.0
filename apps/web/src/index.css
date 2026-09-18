@@ -148,6 +148,9 @@
   --sr-ease: cubic-bezier(0.2, 0, 0, 1);
   --sr-dock: 56px;
   --sr-panel-width: 272px;
+  --sr-diagram-control-ink: rgb(226 232 240);
+  --sr-diagram-control-ink-hover: rgb(248 250 252);
+  --sr-diagram-control-ink-active: rgb(125 211 252);
 }
 
 [data-theme='dark'] {
@@ -650,3 +653,8 @@ select.sr-input {
 [data-theme='dark'] .sr-ref-token { color: rgb(125 211 252); background: rgb(56 189 248 / 0.10); }
 
 .sr-code-keyword{color:rgb(var(--sky-300));font-weight:600}.sr-code-direction{color:rgb(var(--deep-300))}.sr-code-edge{color:rgb(var(--emerald-300))}
+
+.sr-diagram-dialog .sr-diagram-choice{color:var(--sr-diagram-control-ink);}
+.sr-diagram-dialog .sr-diagram-choice:hover{color:var(--sr-diagram-control-ink-hover);}
+.sr-diagram-dialog .sr-diagram-choice.is-active{color:var(--sr-diagram-control-ink-active);}
+

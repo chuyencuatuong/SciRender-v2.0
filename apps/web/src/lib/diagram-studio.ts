@@ -136,6 +136,27 @@ function hash(s: string): string {
 }
 
 /** Applies the editor viewpoint to the saved SVG by narrowing its viewBox. */
+export interface SvgIntrinsicSize {
+  width: number;
+  height: number;
+}
+
+/** Reads the SVG's vector-space dimensions without rasterising or measuring a DOM layer. */
+export function getSvgIntrinsicSize(svg: string): SvgIntrinsicSize | null {
+  const root = /<svg\b[^>]*>/i.exec(svg);
+  if (!root) return null;
+  const tag = root[0];
+  const vb = /\bviewBox="([^"]+)"/i.exec(tag);
+  if (!vb) return null;
+  const rawViewBox = vb[1];
+  if (!rawViewBox) return null;
+  const parts = rawViewBox.trim().split(/[\s,]+/).map(Number);
+  const width = parts[2] ?? 0;
+  const height = parts[3] ?? 0;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+  return { width, height };
+}
+
 export function applyDiagramViewport(svg: string, panXPercent: number, panYPercent: number, zoom: number): string {
   const root = /<svg\b[^>]*>/i.exec(svg);
   if (!root) return svg;

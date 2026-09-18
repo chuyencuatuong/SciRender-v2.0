@@ -127,3 +127,82 @@ pnpm build
 pnpm smoke
 pnpm browser-check
 ```
+
+## V3 — Root-Cause Investigation & Regression Hardening (18 Sep 2026)
+
+Đợt V3 tập trung vào bốn lỗi tái hiện thực tế được báo cáo sau đợt refactor trước.
+
+### Lỗi 1 — Long table mất tail và caption "Bảng Bảng …"
+
+**Caption duplication — root cause đã xác định ở `packages/renderer-html/src/render-core.ts:30-80`.** `crossRef` tự sinh semantic label bằng `refWord()` + số, trong khi parser có thể trả về một text node đứng ngay trước như `"Bảng "`. Ghép hai node theo renderer cũ tạo đúng chuỗi `"Bảng " + "Bảng 3.2"`.
+
+**Fix:** `inline()` nhận biết cặp `text -> crossRef`; chỉ khi text node kết thúc đúng bằng semantic word của reference thì renderer bỏ word do `crossRef` sinh ra và giữ lại một lần duy nhất. Không dùng replace toàn cục nên các câu không có pattern lặp vẫn nguyên.
+
+**Tail disappearance:** static audit của pipeline cho thấy `paginate()` vốn đã `queue.unshift(tail)`; vì vậy không có bằng chứng rằng `queue` tự ý loại bỏ tail. Điểm yếu thực tế nằm ở việc fragment continuation được clone với cùng `id/data-sr-id/data-sr-block-id` của block gốc và chưa có invariant bảo toàn row ở ranh giới `split -> paginate`. Đây là trạng thái dễ tạo identity collision cho các pass dùng selector/anchor và không có guard chống một fragment hỏng lọt tiếp vào queue.
+
+**Fix:** `splitTable()` nay đo lại clone head sau khi loại row, tính cả margin/caption/table reflow; cấm cắt qua `rowspan`; giữ tối thiểu 2 dòng mỗi phía; lặp `<thead>`; làm sạch identity của tail; đánh dấu `data-sr-continuation=1` và `data-sr-remaining-rows`; loại suffix `(tiếp theo)` cũ trước khi thêm suffix mới; kiểm tra `headRows + tailRows === sourceRows`. `paginate()` kiểm tra lại conservation trước khi `queue.unshift(tail)`. Nếu invariant thất bại, engine khôi phục block nguyên bản thay vì âm thầm làm mất dữ liệu.
+
+**Giới hạn xác minh:** container audit không có `node_modules`/Playwright nên chưa chạy được browser E2E trên chính tài liệu 21 dòng. Vì vậy, phần “tail disappearance” được harden theo invariants và identity semantics; không tuyên bố đã tái hiện được một DOM browser bug duy nhất từ source tĩnh.
+
+### Lỗi 2 — Cell Selection Lock
+
+**Root cause tại `apps/web/src/components/canvas/CardEditors.tsx:379-430`:** `selectedCells` chỉ có các path chọn/drag nội bộ, không có lifecycle reset khi pointer rời khỏi table và không có `Escape` handler cấp component.
+
+**Fix:** thêm `tableEditorRef`, listener `pointerdown` ở capture phase để phát hiện target ngoài editor, và listener `keydown` cho `Escape`; cả hai chỉ được gắn khi có selection và đều có cleanup. Reset đồng thời `selectedCells`, anchor, dragging state.
+
+### Lỗi 3 — Diagram Studio blur + wheel leakage + hướng chữ chìm
+
+**Root cause của blur tại `apps/web/src/components/canvas/DiagramDialog.tsx`:** bản preview cũ scale wrapper HTML bằng CSS `transform: translate(...) scale(zoom)`. SVG vẫn là vector về mặt DOM, nhưng compositor có thể giữ lớp đã rasterize/composite ở mức zoom cũ, tạo cảm giác ảnh bitmap khi phóng lớn.
+
+**Fix:** bỏ CSS scale khỏi preview; zoom/pan bằng thay đổi trực tiếp `viewBox` của `<svg>` qua `applyDiagramViewport()` (`apps/web/src/lib/diagram-studio.ts`). Render asset lưu cũng bake viewport vào SVG để góc nhìn đã chọn đi cùng asset.
+
+Native `wheel` listener `{ passive:false }` trên preview gọi `preventDefault()` + `stopPropagation()` cho Ctrl/Cmd+Wheel, nên không rò sang browser page zoom/canvas scroll. Listener được cleanup theo lifecycle dialog.
+
+Trong quá trình kiểm tra toán học của Pan/Zoom, phát hiện thêm một regression chưa được mô tả: công thức zoom theo cursor của patch trước dùng scale ratio sai dấu/hệ số, và pan pixel không chia cho zoom. V3 sửa cả hai bằng nghịch đảo zoom (`1/Z`) và quy đổi pixel -> percent theo `1/Z`.
+
+Phím Space chỉ kích hoạt `Space+drag` khi focus không nằm trên `input`, `textarea` hoặc contenteditable, tránh biến dấu cách đang gõ trong Mermaid source thành trạng thái pan.
+
+Các nút hướng được đưa về token tương phản sáng trên nền tối qua `.sr-diagram-choice`.
+
+### Lỗi 4 — Print/PDF lệch Preview
+
+**Root cause tại `packages/template-engine/src/css.ts:455-476`:** print root cũ dùng `position:absolute` và `width:max(pageWidth,pageHeight)`. Với A4 portrait, điều này buộc root layout rộng 297mm dù page box là 210mm, nên browser paged-media engine phải shrink/reposition nội dung.
+
+**Fix:** root print trở về `position:static`, width `100%`, xóa margin/padding/min/max width; `.sr-page` được ép trực tiếp đúng kích thước template (`210×297mm` portrait, `297×210mm` landscape). `@page` và named landscape page box đều margin 0. `#root` UI app bị loại khỏi print tree.
+
+`packages/renderer-pdf/src/print.ts` chờ `document.fonts.ready` rồi mới cho browser 2 animation frames áp print stylesheet trước `window.print()`, tránh snapshot khi font metrics còn đổi.
+
+### Proactive audit — hạng mục thêm
+
+- Không phát hiện global `window/document/MediaQuery` listener mới không có cleanup trong các path đã rà.
+- `useRender` đã abort render run cũ và tháo image listeners `load/error/abort` của run bị huỷ.
+- Mermaid render cache đã bounded; không tăng vô hạn theo số source duy nhất.
+- Object URL lifecycle đã có revoke path tập trung; download paths revoke sau thời gian ngắn.
+- Parser block readers đã kiểm tra cursor progression; không thấy loop không tăng index trong các reader chính.
+- Table/diagram editor serialization giữ `attrsRaw`, caption/label và viewport metadata; không phát hiện regression round-trip mới.
+- `store.ts` đã loại bỏ duplicate object key `source` từng tồn tại.
+- `splitList()` và `splitCodeBlock()` đã được rà theo cùng tiêu chí row/item conservation, numbering, leading newline và caption continuation; chưa thấy lỗi mới đủ bằng chứng để thay đổi logic ngoài phạm vi.
+
+### Verification V3
+
+**PASS**
+
+- `node scripts/smoke-root-cause-v3.mjs`
+- `node scripts/smoke-native-core-interaction.mjs`
+- `tsc -p tsconfig.json --noEmit` bằng compiler global: diagnostic code/count trùng baseline v2 trước patch; không xuất hiện error-code semantic mới do V3.
+
+**Bị chặn bởi môi trường**
+
+`pnpm@10.34.5` không có local và Corepack không tải được từ npm registry (`EAI_AGAIN registry.npmjs.org`). Archive cũng không chứa `node_modules`, vì vậy `pnpm install`, `pnpm typecheck`, `pnpm build` và browser E2E/Playwright chưa thể chạy trong container này.
+
+Lệnh xác nhận ở môi trường CI/máy local có network:
+
+```bash
+corepack pnpm --version
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm build
+pnpm smoke:root-cause
+pnpm smoke
+pnpm browser-check
+```
