@@ -267,6 +267,13 @@ export function paginate(
     const atomic = options.atomicTypes.includes(type) || !isSplittable(block);
     if (atomic) {
       if (columnIsEmpty) {
+        if (type === 'diagram' && fitOversizedDiagram(block, column.limitBottom())) {
+          if (!column.overflows()) {
+            recordPage(block, pageOfColumn(columnIndex), pageOfNode);
+            commitColumn(wantsLandscape);
+            continue;
+          }
+        }
         // Nothing can be done: the object is taller than the text area.
         warnings.push({
           code: 'SR-L001',
@@ -464,6 +471,31 @@ function newColumn(
 }
 
 /* ------------------------------------------------------------------ helpers */
+
+function fitOversizedDiagram(block: Element, limitBottom: number): boolean {
+  const visual = block.querySelector<HTMLElement>('.sr-mermaid > svg, .sr-diagram-asset');
+  if (!visual) return false;
+  const rect = visual.getBoundingClientRect();
+  if (!(rect.width > 0) || !(rect.height > 0)) return false;
+  const blockRect = block.getBoundingClientRect();
+  const computed = getComputedStyle(block);
+  const marginBottom = parseFloat(computed.marginBottom) || 0;
+  const paddingX = (parseFloat(computed.paddingLeft) || 0) + (parseFloat(computed.paddingRight) || 0);
+  const borderX = (parseFloat(computed.borderLeftWidth) || 0) + (parseFloat(computed.borderRightWidth) || 0);
+  const maxVisualWidth = Math.max(0, block.clientWidth - paddingX - borderX);
+  const nonVisualHeight = Math.max(0, blockRect.height - rect.height);
+  const maxVisualHeight = Math.max(0, limitBottom - blockRect.top - nonVisualHeight - marginBottom);
+  if (!(maxVisualHeight > 0)) return false;
+  const scale = Math.min(1, maxVisualWidth > 0 ? maxVisualWidth / rect.width : 1, maxVisualHeight / rect.height);
+  if (!(scale > 0 && scale < 1)) return false;
+  const style = (visual as HTMLElement).style;
+  style.width = `${Math.max(1, rect.width * scale)}px`;
+  style.height = `${Math.max(1, rect.height * scale)}px`;
+  style.maxWidth = 'none';
+  style.aspectRatio = `${rect.width} / ${rect.height}`;
+  block.setAttribute('data-sr-fit-scale', String(Math.round(scale * 1000) / 1000));
+  return true;
+}
 
 function recordPage(el: Element, pageIndex: number, map: Record<string, number>): void {
   const id = el.getAttribute('data-sr-id');

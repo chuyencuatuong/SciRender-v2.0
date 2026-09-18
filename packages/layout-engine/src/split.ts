@@ -284,7 +284,8 @@ export function splitTable(
   const rows = Array.from(body ? body.rows : table.rows).filter(
     (r) => r.parentElement?.tagName !== 'THEAD',
   );
-  if (rows.length < minRows * 2) return null;
+  const keepRows = Math.max(2, Math.trunc(minRows));
+  if (rows.length < keepRows * 2) return null;
 
   const rowLogicalWidth = (row: HTMLTableRowElement): number =>
     Array.from(row.cells).reduce((sum, cell) => sum + Math.max(1, cell.colSpan || 1), 0);
@@ -301,51 +302,68 @@ export function splitTable(
     if (row.getBoundingClientRect().bottom <= availableBottom + 0.5) naturalFit++;
     else break;
   }
+  let candidate = Math.min(naturalFit, rows.length - keepRows);
+  if (candidate < keepRows) return null;
 
-  // The largest row count that both fits the remaining space AND lands on a
-  // boundary no rowspan crosses — never merely the tallest prefix that fits,
-  // now that a cell can reach past its own row (P1: a cut must never slice a
-  // cell's identity in two).
-  let fit = 0;
-  for (let k = naturalFit; k >= 1; k--) {
-    if (safeAfter[k - 1]) {
-      fit = k;
-      break;
-    }
-  }
-  if (fit < minRows || rows.length - fit < minRows) return null;
+  const caption = captionOf(wrapper);
 
-  const head = wrapper.cloneNode(true) as Element;
-  const tail = wrapper.cloneNode(true) as Element;
-  const cut = (clone: Element, keep: (index: number) => boolean): boolean => {
-    const t = clone.querySelector('table');
-    if (!t) return false;
-    const tb = t.querySelector('tbody');
-    const list = Array.from(tb ? tb.rows : t.rows).filter(
+  const makeHead = (fit: number): Element => {
+    const head = wrapper.cloneNode(true) as Element;
+    const t = head.querySelector('table');
+    const tb = t?.querySelector('tbody');
+    const list = Array.from(tb ? tb.rows : t?.rows ?? []).filter(
       (r) => r.parentElement?.tagName !== 'THEAD',
     );
-    list.forEach((row, index) => {
-      if (!keep(index)) row.remove();
-    });
-    return true;
+    list.forEach((row, index) => { if (index >= fit) row.remove(); });
+    if (caption && !caption.above) head.querySelector(':scope > .sr-caption')?.remove();
+    return head;
   };
-  if (!cut(head, (i) => i < fit)) return null;
-  if (!cut(tail, (i) => i >= fit)) return null;
+
+  const measureHead = (fit: number): number | null => {
+    const head = makeHead(fit);
+    const parent = wrapper.parentElement;
+    if (!parent) return null;
+    parent.insertBefore(head, wrapper);
+    const marginBottom = parseFloat(getComputedStyle(head).marginBottom) || 0;
+    const bottom = head.getBoundingClientRect().bottom + marginBottom;
+    head.remove();
+    return Number.isFinite(bottom) ? bottom : null;
+  };
+
+  // The row rects are a fast first estimate, but the candidate clone is the
+  // authoritative measurement: automatic table layout can change earlier row
+  // heights once later rows are removed. The clone also includes border-spacing,
+  // cell padding, caption and margins exactly as the real fragment will print.
+  let fit = candidate;
+  for (; fit >= keepRows; fit--) {
+    if (!safeAfter[fit - 1]) continue;
+    const bottom = measureHead(fit);
+    if (bottom !== null && bottom <= availableBottom + 0.5) break;
+  }
+  if (fit < keepRows || rows.length - fit < keepRows) return null;
+
+  const head = makeHead(fit);
+  const tail = wrapper.cloneNode(true) as Element;
+  const t = tail.querySelector('table');
+  const tb = t?.querySelector('tbody');
+  const list = Array.from(tb ? tb.rows : t?.rows ?? []).filter(
+    (r) => r.parentElement?.tagName !== 'THEAD',
+  );
+  list.forEach((row, index) => { if (index < fit) row.remove(); });
 
   const cap = captionOf(wrapper);
   const headCap = captionOf(head);
   const tailCap = captionOf(tail);
-  if (cap?.above) {
-    // The number is announced once; the carry-over says it is the same table.
+  if (cap) {
+    if (!cap.above) headCap?.el.remove();
     if (tailCap) tailCap.el.textContent = `${tailCap.el.textContent} (${continuedLabel})`;
-  } else if (cap) {
-    headCap?.el.remove();
   }
 
-  // Only the head owns the identity, so the outline maps the table to one page.
-  for (const el of Array.from(tail.querySelectorAll('[data-sr-id]'))) {
-    el.removeAttribute('data-sr-id');
-  }
+  const headRows = Array.from(head.querySelectorAll('tbody tr')).length;
+  const tailRows = Array.from(tail.querySelectorAll('tbody tr')).length;
+  if (headRows !== fit || tailRows !== rows.length - fit || headRows + tailRows !== rows.length) return null;
+
+  for (const el of Array.from(tail.querySelectorAll('[data-sr-id]'))) el.removeAttribute('data-sr-id');
   tail.removeAttribute('data-sr-id');
   head.setAttribute('data-sr-split', 'head');
   tail.setAttribute('data-sr-split', 'tail');

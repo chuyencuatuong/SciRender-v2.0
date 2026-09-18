@@ -69,7 +69,7 @@ export function compileCss(t: TemplateDescriptor): string {
   position:relative;
   width:var(--sr-page-width);
   height:var(--sr-page-height);
-  background:#fff;
+  background:rgb(255 255 255);
   color:var(--sr-text);
   box-sizing:border-box;
   padding:var(--sr-margin-top) var(--sr-margin-right) var(--sr-margin-bottom) var(--sr-margin-left);
@@ -432,7 +432,7 @@ ${
 }
 .sr-doc .sr-diagram-asset{display:block;max-width:100%;height:auto;margin:0 auto;}
 .sr-doc .sr-unknown{
-  border:1px dashed #c2410c;background:#fff8f3;color:#9a3412;padding:.4em .6em;
+  border:1px dashed #c2410c;background:rgb(255 255 255)8f3;color:#9a3412;padding:.4em .6em;
   font-family:var(--sr-mono-font);font-size:.82em;white-space:pre-wrap;text-indent:0;
 }
 .sr-doc sup{font-size:.72em;vertical-align:super;line-height:0;}
@@ -454,10 +454,10 @@ function round(n: number): number {
 /** Print stylesheet — drives the browser's own paged-media pipeline. */
 export function compilePrintCss(t: TemplateDescriptor): string {
   const p = t.page;
-  return `@page{size:A4 portrait;margin:0!important;}
-@page landscape-page{size:A4 landscape;margin:0!important;}
+  return `@page{size:210mm 297mm;margin:0!important;}
+@page landscape-page{size:297mm 210mm;margin:0!important;}
 @media print{
-  html,body{margin:0!important;padding:0!important;background:#fff!important;}
+  html,body{margin:0!important;padding:0!important;background:rgb(255 255 255)!important;}
   *,*::before,*::after{ -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important;}
   a{color:inherit!important;text-decoration:none!important;}
   body *{visibility:hidden;}

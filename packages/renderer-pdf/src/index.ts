@@ -114,10 +114,10 @@ export function exportStandaloneHtml(options: StandaloneOptions): string {
 <style>${options.katexCss ?? ''}</style>
 <style>${options.extraCss ?? ''}</style>
 <style>
-html,body{margin:0;padding:0;background:#525659;}
+html,body{margin:0;padding:0;background:rgb(82 86 89);}
 .sr-pages{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px;}
 .sr-page{box-shadow:0 2px 14px rgba(0,0,0,.35);}
-@media print{html,body{background:#fff;}.sr-pages{gap:0;padding:0;}}
+@media print{@page{size:A4 portrait;margin:0!important;}@page landscape-page{size:A4 landscape;margin:0!important;}html,body{margin:0!important;padding:0!important;background:rgb(255 255 255);}.sr-pages{gap:0;padding:0;}}
 ${template.css}
 ${compilePrintCss(template.descriptor)}
 </style>

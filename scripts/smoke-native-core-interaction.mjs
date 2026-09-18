@@ -49,7 +49,7 @@ check('between-card insert divider', canvas.includes('h-4 items-center justify-c
 check('drag auto-scroll near viewport edges', canvas.includes('const edge = 80') && canvas.includes('requestAnimationFrame(stepDragAutoScroll)'));
 check('shortcut cheat sheet mounted', fs.existsSync(path.join(root, 'apps/web/src/components/ShortcutCheatSheet.tsx')) && app.includes('<ShortcutCheatSheet'));
 check('native word navigation left to browser', !canvas.includes('Ctrl+Arrow') && !auto.includes('Ctrl+Arrow'));
-check('Obsidian Studio base surface tokens', css.includes('--sr-workspace-base: #0b0d11') && css.includes('--sr-paper-ground: #13161f') && css.includes('--sr-card: #161922'));
+check('Obsidian Studio base surface tokens', css.includes('--sr-workspace-base: rgb(11 13 17)') && css.includes('--sr-paper-ground: rgb(19 22 31)') && css.includes('--sr-card: rgb(22 25 34)'));
 check('Obsidian Studio chrome border token', css.includes('rgb(17 20 26 / 0.80)') && css.includes('rgb(255 255 255 / 0.07)'));
 check('card elevation shadow token', css.includes('0 4px 20px -4px rgba(0, 0, 0, 0.5)'));
 check('logo electric glow', css.includes('drop-shadow(0 0 8px rgba(26, 143, 227, 0.35))') && topbar.includes('sr-logo-mark'));
@@ -87,7 +87,7 @@ check('TopBar dropdown is explicit absolute overlay', topbar.includes('overflow-
 check('@ reference syntax highlight + autocomplete', fs.readFileSync(path.join(root, 'apps/web/src/components/canvas/AutoTextarea.tsx'), 'utf8').includes('sr-ref-token') && auto.includes('detectTrigger') && auto.includes('mentionCandidates'));
 check('table context menu + fill handle', cardsEditors.includes('Căn trái') && cardsEditors.includes('Căn theo dấu thập phân') && cardsEditors.includes('Kéo để điền dữ liệu'));
 check('columns ungroup preserves landscape', read('apps/web/src/lib/cards.ts').includes('orientation=landscape') && cardShell.includes('makeColumns(pair[0], pair[1]'));
-check('print links + landscape page breaks', rendererHtml.includes('href="#') && rendererCss.includes('break-before:page') && rendererCss.includes('size:A4 landscape'));
+check('print links + landscape page breaks', rendererHtml.includes('href="#') && rendererCss.includes('break-before:page') && (rendererCss.includes('size:297mm 210mm') || rendererCss.includes('size:A4 landscape')));
 
 if (failures) process.exit(1);
 console.log('Native interaction source smoke: PASS');
