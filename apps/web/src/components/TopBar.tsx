@@ -56,6 +56,7 @@ export function TopBar({ render }: Props): JSX.Element {
   const pageHtml = render.pages.map((p) => p.html);
   const footers = render.pages.map((p) => p.footer);
   const pageOrientations = render.pages.map((p) => p.orientation);
+  const pageKinds = render.pages.map((p) => p.kind);
 
   const onPrintRef = useRef<() => void>(() => undefined);
 
@@ -84,6 +85,7 @@ export function TopBar({ render }: Props): JSX.Element {
       template: result.template,
       footers,
       pageOrientations,
+      pageKinds,
       documentTitle: result.document.meta.title || title,
     });
   };
@@ -97,6 +99,7 @@ export function TopBar({ render }: Props): JSX.Element {
       template: result.template,
       footers,
       pageOrientations,
+      pageKinds,
       documentTitle: result.document.meta.title || title,
       katexCss,
       extraCss: fontsCss,

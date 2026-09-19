@@ -79,6 +79,7 @@ type CardActions = {
 export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   const initialStore = useStore.getState();
   const setSource = useStore((s) => s.setSource);
+  const requestRender = useStore((s) => s.render);
   const addAssets = useStore((s) => s.addAssets);
   const addGeneratedAsset = useStore((s) => s.addGeneratedAsset);
   const gotoLine = useStore((s) => s.gotoLine);
@@ -904,11 +905,11 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     toggleLandscape: (index) => {
       const card = doc.cards[index];
       if (!card) return;
+      const pair = splitColumns(card.text);
+      if (!pair) return;
       const landscape = /\b(?:landscape|orientation=landscape)\b/.test(card.text);
-      const next = landscape
-        ? card.text.replace(/\s+(?:landscape|orientation=landscape)/, '')
-        : card.text.replace(/^::: cols\b/, '::: cols landscape');
-      updateCard(index, next, 'columns');
+      updateCard(index, makeColumns(pair[0], pair[1], !landscape), 'columns');
+      window.requestAnimationFrame(() => requestRender());
     },
     mergeNext: (index) => mergeColumns(index, index + 1),
     dragStart: (index) => {

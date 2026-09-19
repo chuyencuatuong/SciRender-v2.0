@@ -207,9 +207,9 @@ export function DiagramDialog({ open, form, bibliography, labels, onChange, onSa
     const host = previewRef.current;
     if (!open || !host) return;
     const onWheel = (event: WheelEvent): void => {
-      if (!(event.ctrlKey || event.metaKey)) return;
       event.preventDefault();
       event.stopPropagation();
+      if (!(event.ctrlKey || event.metaKey)) return;
       const factor = Math.exp(-event.deltaY * 0.0015);
       changeZoomAt(zoomRef.current * factor, { x: event.clientX, y: event.clientY });
     };
@@ -313,16 +313,16 @@ export function DiagramDialog({ open, form, bibliography, labels, onChange, onSa
             </div>
             <div
               ref={previewRef}
-              className="min-h-0 flex-1 overflow-auto p-6"
+              className="min-h-0 flex-1 overflow-hidden p-3"
               onMouseDown={beginPan}
               onMouseMove={movePan}
               onMouseUp={endPan}
               onMouseLeave={endPan}
               style={{ cursor: panning ? 'grabbing' : 'default', touchAction: 'none' }}
             >
-              <div className="relative grid min-h-full place-items-center rounded-xl border border-white/[.05] bg-white/[.015] p-8">
+              <div className="relative flex h-full w-full min-h-0 min-w-0 items-center justify-center overflow-hidden rounded-xl border border-white/[.05] bg-white/[.015] p-2">
                 {rendering ? <span className="pointer-events-none absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-white/[.08] bg-black/20 px-2 py-1 text-[9.5px] text-white/45">Đang dựng…</span> : null}
-                {error ? <div className="max-w-[600px] rounded-lg border border-rose-400/20 bg-rose-400/5 p-4 text-xs text-rose-200">{error}</div> : svg ? <div data-sr-diagram-content="1" className="shrink-0 select-none" dangerouslySetInnerHTML={{ __html: applyDiagramViewport(svg, panX, panY, zoom) }} /> : <div className="text-xs text-white/30">Dán mã Mermaid hoặc chọn mẫu để xem trước.</div>}
+                {error ? <div className="max-w-[600px] rounded-lg border border-rose-400/20 bg-rose-400/5 p-4 text-xs text-rose-200">{error}</div> : svg ? <div data-sr-diagram-content="1" className="h-full w-full min-h-0 min-w-0 select-none [&>svg]:block [&>svg]:h-full [&>svg]:w-full [&>svg]:max-h-none [&>svg]:max-w-none" dangerouslySetInnerHTML={{ __html: applyDiagramViewport(svg, panX, panY, zoom) }} /> : <div className="text-xs text-white/30">Dán mã Mermaid hoặc chọn mẫu để xem trước.</div>}
               </div>
             </div>
             <footer className="flex min-h-12 shrink-0 items-center gap-2 border-t border-white/[.07] px-3">

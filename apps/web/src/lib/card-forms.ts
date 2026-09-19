@@ -162,6 +162,7 @@ export function serializeDiagram(form: DiagramForm): string {
       form.attrs['view-x'] ? `view-x=${form.attrs['view-x']}` : '',
       form.attrs['view-y'] ? `view-y=${form.attrs['view-y']}` : '',
       form.attrs['view-zoom'] ? `view-zoom=${form.attrs['view-zoom']}` : '',
+      form.landscape ? 'orientation=landscape' : '',
     ].filter(Boolean).join(' ');
     return `![${form.caption || 'Sơ đồ kỹ thuật'}](${form.asset}){${assetBits}}`;
   }

@@ -654,7 +654,9 @@ select.sr-input {
 
 .sr-code-keyword{color:rgb(var(--sky-300));font-weight:600}.sr-code-direction{color:rgb(var(--deep-300))}.sr-code-edge{color:rgb(var(--emerald-300))}
 
-.sr-diagram-dialog .sr-diagram-choice{color:var(--sr-diagram-control-ink);}
-.sr-diagram-dialog .sr-diagram-choice:hover{color:var(--sr-diagram-control-ink-hover);}
-.sr-diagram-dialog .sr-diagram-choice.is-active{color:var(--sr-diagram-control-ink-active);}
+.sr-diagram-dialog .sr-diagram-choice{color:var(--sr-diagram-control-ink)!important;border:1px solid rgb(255 255 255 / 0.30);}
+.sr-diagram-dialog .sr-diagram-choice:hover{color:var(--sr-diagram-control-ink-hover)!important;}
+.sr-diagram-dialog .sr-diagram-choice.is-active{color:var(--sr-diagram-control-ink-active)!important;border-color:rgb(255 255 255 / 0.45);}
+.sr-diagram-dialog [data-sr-diagram-content]{display:flex;width:100%;height:100%;min-width:0;min-height:0;align-items:center;justify-content:center;}
+.sr-diagram-dialog [data-sr-diagram-content] > svg{display:block;width:100%;height:100%;max-width:none!important;max-height:none!important;}
 

@@ -384,6 +384,7 @@ function TableEditor({ text, onChange, kind, labels, bibliography, suppressLands
   const draggingRef = useRef(false);
   const [dragging, setDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const contextSelectionRef = useRef<Set<string> | null>(null);
   useEffect(() => {
     if (!dragging) return;
     const up = (): void => { draggingRef.current = false; setDragging(false); };
@@ -525,14 +526,31 @@ function TableEditor({ text, onChange, kind, labels, bibliography, suppressLands
   const horizontalMerge = Boolean(rectangularSelection && bounds && bounds.r1 === bounds.r2 && bounds.c2 > bounds.c1 && bounds.r1 >= 0);
   const verticalMerge = Boolean(rectangularSelection && bounds && bounds.c1 === bounds.c2 && bounds.r2 > bounds.r1 && bounds.r1 >= 0);
 
-  const mergeSelected = (mode: 'horizontal' | 'vertical'): void => {
-    if (!bounds) return;
+  const getSelectionModel = (cells: Set<string>): { selectedList: CellRef[]; bounds: { r1: number; r2: number; c1: number; c2: number } | null } => {
+    const list = Array.from(cells).map((k) => {
+      const [row = 0, col = 0] = k.split(':').map(Number);
+      return { row, col };
+    });
+    const b = list.length ? {
+      r1: Math.min(...list.map((c) => c.row)), r2: Math.max(...list.map((c) => c.row)),
+      c1: Math.min(...list.map((c) => c.col)), c2: Math.max(...list.map((c) => c.col)),
+    } : null;
+    return { selectedList: list, bounds: b };
+  };
+
+  const mergeSelected = (mode: 'horizontal' | 'vertical', cells = selectedCells): void => {
+    const model = getSelectionModel(cells);
+    if (!model.bounds) return;
+    const b = model.bounds;
+    const rectangular = cells.size === (b.r2 - b.r1 + 1) * (b.c2 - b.c1 + 1);
+    const canHorizontal = rectangular && b.r1 === b.r2 && b.c2 > b.c1 && b.r1 >= 0;
+    const canVertical = rectangular && b.c1 === b.c2 && b.r2 > b.r1 && b.r1 >= 0;
     let next = { ...form, header: form.header.slice(), rows: form.rows.map((r) => r.slice()) };
-    if (mode === 'horizontal' && horizontalMerge) {
-      for (let c = bounds.c1 + 1; c <= bounds.c2; c++) next.rows[bounds.r1]![c] = TABLE_HORIZONTAL_MERGE_MARKER;
+    if (mode === 'horizontal' && canHorizontal) {
+      for (let c = b.c1 + 1; c <= b.c2; c++) next.rows[b.r1]![c] = TABLE_HORIZONTAL_MERGE_MARKER;
     }
-    if (mode === 'vertical' && verticalMerge) {
-      for (let r = bounds.r1 + 1; r <= bounds.r2; r++) next.rows[r]![bounds.c1] = TABLE_MERGE_MARKER;
+    if (mode === 'vertical' && canVertical) {
+      for (let r = b.r1 + 1; r <= b.r2; r++) next.rows[r]![b.c1] = TABLE_MERGE_MARKER;
     }
     push(next);
   };
@@ -542,9 +560,9 @@ function TableEditor({ text, onChange, kind, labels, bibliography, suppressLands
     rows.splice(Math.max(0, Math.min(rows.length, at)), 0, ...Array.from({ length: count }, () => Array.from({ length: width }, () => '')));
     push({ ...form, rows });
   };
-  const deleteSelectedRows = (): void => {
-    if (!bounds || bounds.r1 < 0) return;
-    const rows = form.rows.filter((_, r) => r < bounds.r1 || r > bounds.r2);
+  const deleteSelectedRows = (selectionBounds = bounds): void => {
+    if (!selectionBounds || selectionBounds.r1 < 0) return;
+    const rows = form.rows.filter((_, r) => r < selectionBounds.r1 || r > selectionBounds.r2);
     push({ ...form, rows: rows.length ? rows : [Array.from({ length: width }, () => '')] });
   };
   const addColumnAt = (at: number): void => {
@@ -556,9 +574,9 @@ function TableEditor({ text, onChange, kind, labels, bibliography, suppressLands
       rows: form.rows.map((r) => [...r.slice(0, c), '', ...r.slice(c)]),
     });
   };
-  const deleteSelectedColumns = (): void => {
-    if (!bounds) return;
-    const keep = Array.from({ length: width }, (_, c) => c < bounds.c1 || c > bounds.c2);
+  const deleteSelectedColumns = (selectionBounds = bounds): void => {
+    if (!selectionBounds) return;
+    const keep = Array.from({ length: width }, (_, c) => c < selectionBounds.c1 || c > selectionBounds.c2);
     const header = form.header.filter((_, c) => keep[c]);
     const align = form.align.filter((_, c) => keep[c]);
     const rows = form.rows.map((r) => r.filter((_, c) => keep[c]));
@@ -569,16 +587,17 @@ function TableEditor({ text, onChange, kind, labels, bibliography, suppressLands
       rows: rows.map((r) => r.length ? r : ['']),
     });
   };
-  const setSelectedAlignment = (mode: CellAlign): void => {
-    if (!bounds) return;
+  const setSelectedAlignment = (mode: CellAlign, selectionBounds = bounds): void => {
+    if (!selectionBounds) return;
     const align = form.align.slice();
-    for (let c = bounds.c1; c <= bounds.c2; c++) align[c] = mode;
+    for (let c = selectionBounds.c1; c <= selectionBounds.c2; c++) align[c] = mode;
     push({ ...form, align });
   };
-  const unmergeSelected = (): void => {
-    if (!selectedList.length) return;
+  const unmergeSelected = (cells = selectedCells): void => {
+    const model = getSelectionModel(cells);
+    if (!model.selectedList.length) return;
     const next = { ...form, header: form.header.slice(), rows: form.rows.map((r) => r.slice()) };
-    selectedList.forEach((cell) => {
+    model.selectedList.forEach((cell) => {
       if (cell.row === -1) {
         if (next.header[cell.col] === TABLE_HORIZONTAL_MERGE_MARKER) next.header[cell.col] = '';
       } else if (next.rows[cell.row]?.[cell.col] === TABLE_MERGE_MARKER || next.rows[cell.row]?.[cell.col] === TABLE_HORIZONTAL_MERGE_MARKER) {
@@ -725,8 +744,20 @@ function TableEditor({ text, onChange, kind, labels, bibliography, suppressLands
     </th>
   );
 
+  const closeContextMenu = (): void => {
+    contextSelectionRef.current = null;
+    setContextMenu(null);
+  };
+  const contextCells = contextMenu ? (contextSelectionRef.current ?? selectedCells) : selectedCells;
+  const contextModel = getSelectionModel(contextCells);
+  const contextRectangular = Boolean(
+    contextModel.bounds && contextCells.size === (contextModel.bounds.r2 - contextModel.bounds.r1 + 1) * (contextModel.bounds.c2 - contextModel.bounds.c1 + 1),
+  );
+  const contextHorizontalMerge = Boolean(contextRectangular && contextModel.bounds && contextModel.bounds.r1 === contextModel.bounds.r2 && contextModel.bounds.c2 > contextModel.bounds.c1 && contextModel.bounds.r1 >= 0);
+  const contextVerticalMerge = Boolean(contextRectangular && contextModel.bounds && contextModel.bounds.c1 === contextModel.bounds.c2 && contextModel.bounds.r2 > contextModel.bounds.r1 && contextModel.bounds.r1 >= 0);
+
   return (
-    <div ref={tableEditorRef} data-sr-table-editor-active className="space-y-2" onMouseUp={() => { draggingRef.current = false; setDragging(false); }} onKeyDownCapture={onTableKeyDownCapture} onContextMenu={(e) => { if (e.target instanceof HTMLElement && e.target.closest('[data-sr-cell]')) { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY }); } }} onCopyCapture={(e) => {
+    <div ref={tableEditorRef} data-sr-table-editor-active className="space-y-2" onMouseUp={() => { draggingRef.current = false; setDragging(false); }} onKeyDownCapture={onTableKeyDownCapture} onContextMenu={(e) => { if (e.target instanceof HTMLElement && e.target.closest('[data-sr-cell]')) { e.preventDefault(); contextSelectionRef.current = new Set(selectedCells); setContextMenu({ x: e.clientX, y: e.clientY }); } }} onCopyCapture={(e) => {
       if (selectedCells.size <= 1 || !bounds) return;
       e.preventDefault();
       e.stopPropagation();
@@ -824,26 +855,26 @@ function TableEditor({ text, onChange, kind, labels, bibliography, suppressLands
       {contextMenu ? (
         <TableContextMenu
           point={contextMenu}
-          onClose={() => setContextMenu(null)}
+          onClose={closeContextMenu}
           actions={
             <>
-              {horizontalMerge ? <MenuAction label="Gộp vùng ngang (>>)" onClick={() => { mergeSelected('horizontal'); setContextMenu(null); }} /> : null}
-              {verticalMerge ? <MenuAction label="Gộp vùng dọc (^^)" onClick={() => { mergeSelected('vertical'); setContextMenu(null); }} /> : null}
-              {selectedCells.size > 1 ? <MenuAction label="Tách gộp / Hủy merge" onClick={() => { unmergeSelected(); setContextMenu(null); }} /> : null}
-              {(horizontalMerge || verticalMerge || selectedCells.size > 1) ? <div className="my-1 h-px bg-white/10" /> : null}
-              <MenuAction label="Thêm hàng trên" onClick={() => { addRowsAt(bounds && bounds.r1 >= 0 ? bounds.r1 : form.rows.length); setContextMenu(null); }} />
-              <MenuAction label="Thêm hàng dưới" onClick={() => { addRowsAt((bounds && bounds.r2 >= 0 ? bounds.r2 : form.rows.length - 1) + 1); setContextMenu(null); }} />
-              <MenuAction label="Xóa hàng đang chọn" disabled={!bounds || bounds.r1 < 0} onClick={() => { deleteSelectedRows(); setContextMenu(null); }} />
-              <MenuAction label="Thêm cột trái" onClick={() => { addColumnAt(bounds?.c1 ?? width); setContextMenu(null); }} />
-              <MenuAction label="Thêm cột phải" onClick={() => { addColumnAt((bounds?.c2 ?? width - 1) + 1); setContextMenu(null); }} />
-              <MenuAction label="Xóa cột đang chọn" disabled={!bounds} onClick={() => { deleteSelectedColumns(); setContextMenu(null); }} />
+              {contextHorizontalMerge ? <MenuAction label="Gộp vùng ngang (>>)" onClick={() => { mergeSelected('horizontal', contextCells); closeContextMenu(); }} /> : null}
+              {contextVerticalMerge ? <MenuAction label="Gộp vùng dọc (^^)" onClick={() => { mergeSelected('vertical', contextCells); closeContextMenu(); }} /> : null}
+              {contextCells.size > 1 ? <MenuAction label="Tách gộp / Hủy merge" onClick={() => { unmergeSelected(contextCells); closeContextMenu(); }} /> : null}
+              {(contextHorizontalMerge || contextVerticalMerge || contextCells.size > 1) ? <div className="my-1 h-px bg-white/10" /> : null}
+              <MenuAction label="Thêm hàng trên" onClick={() => { addRowsAt(contextModel.bounds && contextModel.bounds.r1 >= 0 ? contextModel.bounds.r1 : form.rows.length); closeContextMenu(); }} />
+              <MenuAction label="Thêm hàng dưới" onClick={() => { addRowsAt((contextModel.bounds && contextModel.bounds.r2 >= 0 ? contextModel.bounds.r2 : form.rows.length - 1) + 1); closeContextMenu(); }} />
+              <MenuAction label="Xóa hàng đang chọn" disabled={!contextModel.bounds || contextModel.bounds.r1 < 0} onClick={() => { deleteSelectedRows(contextModel.bounds); closeContextMenu(); }} />
+              <MenuAction label="Thêm cột trái" onClick={() => { addColumnAt(contextModel.bounds?.c1 ?? width); closeContextMenu(); }} />
+              <MenuAction label="Thêm cột phải" onClick={() => { addColumnAt((contextModel.bounds?.c2 ?? width - 1) + 1); closeContextMenu(); }} />
+              <MenuAction label="Xóa cột đang chọn" disabled={!contextModel.bounds} onClick={() => { deleteSelectedColumns(contextModel.bounds); closeContextMenu(); }} />
               <div className="my-1 h-px bg-white/10" />
-              <MenuAction label="Căn trái" onClick={() => { setSelectedAlignment('left'); setContextMenu(null); }} />
-              <MenuAction label="Căn giữa" onClick={() => { setSelectedAlignment('center'); setContextMenu(null); }} />
-              <MenuAction label="Căn phải" onClick={() => { setSelectedAlignment('right'); setContextMenu(null); }} />
-              <MenuAction label="Căn theo dấu thập phân" onClick={() => { setSelectedAlignment('decimal'); setContextMenu(null); }} />
+              <MenuAction label="Căn trái" onClick={() => { setSelectedAlignment('left', contextModel.bounds); closeContextMenu(); }} />
+              <MenuAction label="Căn giữa" onClick={() => { setSelectedAlignment('center', contextModel.bounds); closeContextMenu(); }} />
+              <MenuAction label="Căn phải" onClick={() => { setSelectedAlignment('right', contextModel.bounds); closeContextMenu(); }} />
+              <MenuAction label="Căn theo dấu thập phân" onClick={() => { setSelectedAlignment('decimal', contextModel.bounds); closeContextMenu(); }} />
               <div className="my-1 h-px bg-white/10" />
-              <MenuAction label="Xóa dữ liệu vùng chọn" disabled={!selectedCells.size} onClick={() => { let next = { ...form, header: form.header.slice(), rows: form.rows.map((r) => r.slice()) }; selectedList.forEach((cell) => { next = writeCellOn(next, cell, ''); }); push(next); setContextMenu(null); }} />
+              <MenuAction label="Xóa dữ liệu vùng chọn" disabled={!contextCells.size} onClick={() => { let next = { ...form, header: form.header.slice(), rows: form.rows.map((r) => r.slice()) }; contextModel.selectedList.forEach((cell) => { next = writeCellOn(next, cell, ''); }); push(next); closeContextMenu(); }} />
             </>
           }
         />
@@ -906,7 +937,8 @@ function TableContextMenu({
       data-sr-table-context-menu="1"
       className="sr-table-context-menu fixed z-[9999] w-[228px] rounded-xl p-1.5 shadow-2xl backdrop-blur-md"
       style={{ left: position.left, top: position.top, visibility: position.visible ? 'visible' : 'hidden' }}
-      onMouseDown={(event) => event.stopPropagation()}
+      onPointerDownCapture={(event) => event.stopPropagation()}
+      onMouseDownCapture={(event) => event.stopPropagation()}
     >
       {actions}
     </div>,
@@ -915,7 +947,18 @@ function TableContextMenu({
 }
 
 function MenuAction({ label, onClick, disabled = false }: { label: string; onClick: () => void; disabled?: boolean }): JSX.Element {
-  return <button type="button" disabled={disabled} onClick={onClick} className="flex w-full rounded-lg px-2.5 py-1.5 text-left text-[11px] hover:bg-white/10 disabled:opacity-30">{label}</button>;
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+      onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+      onClick={(event) => { event.preventDefault(); event.stopPropagation(); onClick(); }}
+      className="flex w-full rounded-lg px-2.5 py-1.5 text-left text-[11px] hover:bg-white/10 disabled:opacity-30"
+    >
+      {label}
+    </button>
+  );
 }
 
 /* ----------------------------------------------------------------- pieces */

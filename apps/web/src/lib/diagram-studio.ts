@@ -102,7 +102,7 @@ export async function renderDiagramSvg(
       theme: 'base',
       fontFamily,
       themeVariables: { fontFamily, fontSize: '13px', ...tv },
-      flowchart: { htmlLabels: false, useMaxWidth: true, curve, nodeSpacing, rankSpacing, padding: 10 },
+      flowchart: { htmlLabels: true, useMaxWidth: false, curve, nodeSpacing, rankSpacing, padding: 10 },
       sequence: { useMaxWidth: true },
       gantt: { useMaxWidth: true },
     });
@@ -116,7 +116,12 @@ export async function renderDiagramSvg(
   const svg = (await mermaid.render(id, directedSource)).svg;
   const root = /<svg\b[^>]*>/i.exec(svg);
   if (!root) return svg;
-  const css = `<style>text, tspan, .nodeLabel, .edgeLabel, foreignObject, foreignObject * { font-family: \"Times New Roman\", Times, serif !important; }</style>`;
+  const css = `<style>
+    text,tspan,.nodeLabel,.edgeLabel,foreignObject,foreignObject *{font-family:"Times New Roman",Times,serif!important;}
+    .nodeLabel{white-space:normal!important;overflow-wrap:anywhere!important;word-break:break-word!important;line-height:1.25!important;}
+    .node foreignObject{overflow:visible!important;}
+    .node rect,.node polygon,.node path{overflow:visible!important;}
+  </style>`;
   const value = svg.slice(0, (root.index ?? 0) + root[0].length) + css + svg.slice((root.index ?? 0) + root[0].length);
   renderCache.set(cacheKey, value);
   if (renderCache.size > MAX_RENDER_CACHE) {
@@ -180,7 +185,11 @@ export function applyDiagramViewport(svg: string, panXPercent: number, panYPerce
   const nextX = centerX - viewW / 2;
   const nextY = centerY - viewH / 2;
   const next = `${nextX} ${nextY} ${viewW} ${viewH}`;
-  const rebuilt = tag.replace(/\bviewBox="[^"]+"/i, `viewBox="${next}"`);
+  const rebuilt = tag
+    .replace(/\bviewBox="[^"]+"/i, `viewBox="${next}"`)
+    .replace(/\s(?:width|height)="[^"]*"/gi, '')
+    .replace(/\sstyle="[^"]*"/gi, '')
+    .replace(/>$/, ' width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="display:block;max-width:none;max-height:none">');
   return svg.slice(0, root.index) + rebuilt + svg.slice(root.index + tag.length);
 }
 
