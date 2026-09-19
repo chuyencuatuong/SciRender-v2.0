@@ -132,8 +132,13 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   const [splitView, setSplitView] = useState(false);
   const [splitPct, setSplitPct] = useState(55);
   const [splitDragging, setSplitDragging] = useState(false);
-  const listRef2 = useRef<HTMLDivElement | null>(null);
+  const splitLeftRef = useRef<HTMLDivElement | null>(null);
+  const splitRightRef = useRef<HTMLDivElement | null>(null);
   const splitBoxRef = useRef<HTMLDivElement | null>(null);
+  const splitDragRectRef = useRef<DOMRect | null>(null);
+  const splitPctRef = useRef(55);
+  const splitDragFrameRef = useRef<number | null>(null);
+  const listRef2 = useRef<HTMLDivElement | null>(null);
 
   // Re-slice only when the source changed somewhere else (open a document,
   // apply an edit from the source view) — never on our own writes, which would
@@ -847,13 +852,28 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   useEffect(() => {
     if (!splitDragging) return;
     const onMove = (e: MouseEvent): void => {
-      const box = splitBoxRef.current;
-      if (!box) return;
-      const rect = box.getBoundingClientRect();
-      const pct = ((e.clientX - rect.left) / rect.width) * 100;
-      setSplitPct(Math.min(80, Math.max(20, pct)));
+      const rect = splitDragRectRef.current;
+      const left = splitLeftRef.current;
+      const right = splitRightRef.current;
+      if (!rect || !left || !right || rect.width <= 0) return;
+      splitPctRef.current = Math.min(80, Math.max(20, ((e.clientX - rect.left) / rect.width) * 100));
+      if (splitDragFrameRef.current !== null) return;
+      splitDragFrameRef.current = window.requestAnimationFrame(() => {
+        splitDragFrameRef.current = null;
+        const pct = splitPctRef.current;
+        left.style.width = `${pct}%`;
+        right.style.width = `${100 - pct}%`;
+      });
     };
-    const onUp = (): void => setSplitDragging(false);
+    const onUp = (): void => {
+      if (splitDragFrameRef.current !== null) {
+        window.cancelAnimationFrame(splitDragFrameRef.current);
+        splitDragFrameRef.current = null;
+      }
+      setSplitPct(Math.round(splitPctRef.current));
+      splitDragRectRef.current = null;
+      setSplitDragging(false);
+    };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
     document.body.style.cursor = 'col-resize';
@@ -861,6 +881,10 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
     return () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      if (splitDragFrameRef.current !== null) {
+        window.cancelAnimationFrame(splitDragFrameRef.current);
+        splitDragFrameRef.current = null;
+      }
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
@@ -918,6 +942,7 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
   // exact same `doc`/`selected`/handlers, so editing in either pane edits the
   // one shared document (P1: the canvas is a view, never a second copy).
   const renderPane = (ref: React.RefObject<HTMLDivElement>): JSX.Element => (
+
     <div
       ref={ref}
       className="sr-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-28 pt-6"
@@ -985,11 +1010,11 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
           {doc.cards.map((card, index) => (
             <Fragment key={card.id}>
               <motion.div
-                layout={reduced ? false : 'position'}
-                initial={reduced ? false : CARD_IN.initial}
-                animate={CARD_IN.animate}
-                exit={reduced ? undefined : CARD_IN.exit}
-                transition={CARD_IN.transition}
+                layout={reduced || splitView ? false : 'position'}
+                initial={reduced || splitView ? false : CARD_IN.initial}
+                animate={splitView ? undefined : CARD_IN.animate}
+                exit={reduced || splitView ? undefined : CARD_IN.exit}
+                transition={splitView ? undefined : CARD_IN.transition}
                 className="relative mb-2.5"
               >
                 <CanvasCard
@@ -1139,18 +1164,34 @@ export function CanvasPane({ viewSwitch, render }: Props): JSX.Element {
       </div>
 
       {splitView ? (
-        <div ref={splitBoxRef} className="flex min-h-0 flex-1 flex-row">
-          <div style={{ width: `${splitPct}%` }} className="flex min-h-0 flex-col">
+        <div
+          ref={(node) => {
+            splitBoxRef.current = node;
+            if (node) {
+              splitPctRef.current = splitPct;
+              splitLeftRef.current = node.firstElementChild as HTMLDivElement | null;
+              splitRightRef.current = node.lastElementChild as HTMLDivElement | null;
+            }
+          }}
+          className="flex min-h-0 flex-1 flex-row"
+        >
+          <div ref={splitLeftRef} style={{ width: `${splitPct}%` }} className="flex min-h-0 flex-col">
             {renderPane(listRef)}
           </div>
           <div
             role="separator"
             aria-orientation="vertical"
             aria-label="Kéo để đổi chiều rộng hai khung"
-            onMouseDown={() => setSplitDragging(true)}
+            onMouseDown={() => {
+              const box = splitBoxRef.current;
+              if (!box) return;
+              splitPctRef.current = splitPct;
+              splitDragRectRef.current = box.getBoundingClientRect();
+              setSplitDragging(true);
+            }}
             className="w-[5px] shrink-0 cursor-col-resize border-x border-ink-900/[0.06] bg-ink-900/[0.03] hover:bg-deep-100"
           />
-          <div style={{ width: `${100 - splitPct}%` }} className="flex min-h-0 flex-col">
+          <div ref={splitRightRef} style={{ width: `${100 - splitPct}%` }} className="flex min-h-0 flex-col">
             {renderPane(listRef2)}
           </div>
         </div>

@@ -30,6 +30,10 @@ export function App(): JSX.Element {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const splitRef = useRef<HTMLDivElement | null>(null);
+  const editorPaneRef = useRef<HTMLDivElement | null>(null);
+  const dragRectRef = useRef<DOMRect | null>(null);
+  const dragPctRef = useRef(prefs.editorWidth);
+  const dragFrameRef = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
@@ -71,13 +75,33 @@ export function App(): JSX.Element {
   useEffect(() => {
     if (!dragging) return;
     const onMove = (e: MouseEvent): void => {
-      const host = splitRef.current;
-      if (!host) return;
-      const rect = host.getBoundingClientRect();
-      const pct = ((e.clientX - rect.left) / rect.width) * 100;
-      setPref('editorWidth', Math.min(72, Math.max(24, Math.round(pct))));
+      const rect = dragRectRef.current;
+      const pane = editorPaneRef.current;
+      if (!rect || !pane || rect.width <= 0) return;
+      dragPctRef.current = Math.min(72, Math.max(24, ((e.clientX - rect.left) / rect.width) * 100));
+      if (dragFrameRef.current !== null) return;
+      dragFrameRef.current = window.requestAnimationFrame(() => {
+        dragFrameRef.current = null;
+        const pct = dragPctRef.current;
+        pane.style.width = `${pct}%`;
+        pane.style.flexBasis = `${pct}%`;
+      });
     };
-    const onUp = (): void => setDragging(false);
+    const onUp = (): void => {
+      if (dragFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragFrameRef.current);
+        dragFrameRef.current = null;
+      }
+      const pct = Math.round(dragPctRef.current);
+      const pane = editorPaneRef.current;
+      if (pane) {
+        pane.style.width = `${pct}%`;
+        pane.style.flexBasis = `${pct}%`;
+      }
+      setPref('editorWidth', pct);
+      dragRectRef.current = null;
+      setDragging(false);
+    };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
     document.body.style.cursor = 'col-resize';
@@ -85,6 +109,10 @@ export function App(): JSX.Element {
     return () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      if (dragFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragFrameRef.current);
+        dragFrameRef.current = null;
+      }
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
@@ -119,6 +147,7 @@ export function App(): JSX.Element {
 
         <div ref={splitRef} className="relative flex min-w-0 flex-1 bg-sr-workspace">
           <div
+            ref={editorPaneRef}
             className="flex min-w-0 flex-1 flex-col bg-sr-workspace"
             style={overlayPreview ? undefined : { width: `${prefs.editorWidth}%`, flex: '0 0 auto' }}
           >
@@ -130,7 +159,13 @@ export function App(): JSX.Element {
               role="separator"
               aria-orientation="vertical"
               aria-label="Kéo để đổi tỉ lệ soạn thảo và bản in"
-              onMouseDown={() => setDragging(true)}
+              onMouseDown={() => {
+                const host = splitRef.current;
+                if (!host) return;
+                dragPctRef.current = prefs.editorWidth;
+                dragRectRef.current = host.getBoundingClientRect();
+                setDragging(true);
+              }}
               className={`w-1 shrink-0 cursor-col-resize border-l border-slate-300/80 transition dark:border-slate-700 ${
                 dragging ? 'bg-sky-500' : 'bg-transparent hover:bg-sky-400/50'
               }`}

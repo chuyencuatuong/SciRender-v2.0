@@ -33,6 +33,10 @@ export function PreviewPane({ render, onBack = null }: Props): JSX.Element {
   // Zoom follows the column width until the reader takes over; after that it is
   // theirs. A page wider than its column is the one thing a preview must not do.
   const [manualZoom, setManualZoom] = useState(false);
+  const zoomValueRef = useRef(prefs.zoom);
+  const zoomFrameRef = useRef<number | null>(null);
+  const zoomCommitTimerRef = useRef<number | null>(null);
+  const zoomTargetRef = useRef<HTMLDivElement | null>(null);
 
   const stale = source !== renderedSource;
 
@@ -53,19 +57,47 @@ export function PreviewPane({ render, onBack = null }: Props): JSX.Element {
     return () => window.removeEventListener('sr:preview-focus', onFocus);
   }, [render.pages.length]);
 
-  // Ctrl/Meta + wheel zooms only the preview, never the browser.
+  // Wheel belongs to the preview. Ordinary wheel still scrolls this host, while
+  // Ctrl/Meta+wheel changes preview zoom without leaking into the page/browser.
   useEffect(() => {
     const host = scrollRef.current;
     if (!host) return;
+    zoomValueRef.current = prefs.zoom;
     const onWheel = (e: WheelEvent): void => {
+      e.stopPropagation();
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
-      const next = Math.max(0.25, Math.min(1.6, Number((prefs.zoom + (e.deltaY < 0 ? 0.05 : -0.05)).toFixed(2))));
+      const current = zoomValueRef.current;
+      const next = Math.max(0.25, Math.min(1.6, Number((current + (e.deltaY < 0 ? 0.05 : -0.05)).toFixed(2))));
+      zoomValueRef.current = next;
       setManualZoom(true);
-      setPref('zoom', next);
+
+      if (zoomFrameRef.current === null) {
+        zoomFrameRef.current = window.requestAnimationFrame(() => {
+          zoomFrameRef.current = null;
+          const target = zoomTargetRef.current;
+          if (target) target.style.zoom = String(zoomValueRef.current);
+        });
+      }
+
+      if (zoomCommitTimerRef.current !== null) window.clearTimeout(zoomCommitTimerRef.current);
+      zoomCommitTimerRef.current = window.setTimeout(() => {
+        zoomCommitTimerRef.current = null;
+        setPref('zoom', zoomValueRef.current);
+      }, 120);
     };
     host.addEventListener('wheel', onWheel, { passive: false });
-    return () => host.removeEventListener('wheel', onWheel);
+    return () => {
+      host.removeEventListener('wheel', onWheel);
+      if (zoomFrameRef.current !== null) {
+        window.cancelAnimationFrame(zoomFrameRef.current);
+        zoomFrameRef.current = null;
+      }
+      if (zoomCommitTimerRef.current !== null) {
+        window.clearTimeout(zoomCommitTimerRef.current);
+        zoomCommitTimerRef.current = null;
+      }
+    };
   }, [prefs.zoom, setPref]);
 
   // Clicking anywhere in the rendered page jumps the editor to that source line.
@@ -171,6 +203,7 @@ export function PreviewPane({ render, onBack = null }: Props): JSX.Element {
           // trang tự căn giữa và vùng cuộn đúng chiều cao. Bản xem trước chỉ để
           // nhìn — việc đo trang diễn ra ở host đo riêng, nên dùng zoom là an toàn.
           <div
+            ref={zoomTargetRef}
             className="flex flex-col items-center gap-6 py-8"
             style={{ zoom: prefs.zoom }}
           >

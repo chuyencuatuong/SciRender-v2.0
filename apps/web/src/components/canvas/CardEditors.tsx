@@ -401,7 +401,13 @@ function TableEditor({ text, onChange, kind, labels, bibliography, suppressLands
     };
     const onPointerDown = (event: PointerEvent): void => {
       const target = event.target;
-      if (target instanceof Node && tableEditorRef.current?.contains(target)) return;
+      if (!(target instanceof Node)) return;
+      // The context menu is rendered through a React portal into document.body,
+      // so it is intentionally outside tableEditorRef. Treat that portal as an
+      // interactive continuation of the table editor; otherwise the capture
+      // listener clears selectedCells before the menu item's onClick can use it.
+      if (tableEditorRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest('[data-sr-table-context-menu]')) return;
       clearSelection();
     };
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -897,6 +903,7 @@ function TableContextMenu({
     <div
       ref={menuRef}
       role="menu"
+      data-sr-table-context-menu="1"
       className="sr-table-context-menu fixed z-[9999] w-[228px] rounded-xl p-1.5 shadow-2xl backdrop-blur-md"
       style={{ left: position.left, top: position.top, visibility: position.visible ? 'visible' : 'hidden' }}
       onMouseDown={(event) => event.stopPropagation()}
