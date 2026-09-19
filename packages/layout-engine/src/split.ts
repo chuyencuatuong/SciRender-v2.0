@@ -279,7 +279,7 @@ function stripContinuationSuffix(text: string, continuedLabel: string): string {
   return text.replace(new RegExp(`\\s*${escaped}\\s*$`, 'i'), '').trim();
 }
 
-function clearFragmentIdentity(fragment: Element): void {
+export function clearFragmentIdentity(fragment: Element): void {
   fragment.removeAttribute('id');
   fragment.removeAttribute('data-sr-id');
   fragment.removeAttribute('data-sr-block-id');
@@ -426,10 +426,7 @@ export function splitList(
     const start = Number(list.getAttribute('start') ?? '1') || 1;
     tail.setAttribute('start', String(start + fit));
   }
-  for (const el of Array.from(tail.querySelectorAll('[data-sr-id]'))) {
-    el.removeAttribute('data-sr-id');
-  }
-  tail.removeAttribute('data-sr-id');
+  clearFragmentIdentity(tail);
   head.setAttribute('data-sr-split', 'head');
   tail.setAttribute('data-sr-split', 'tail');
   return [head, tail];
@@ -573,15 +570,15 @@ export function splitCodeBlock(
   const headCap = captionOf(head);
   const tailCap = captionOf(tail);
   if (cap?.above) {
-    if (tailCap) tailCap.el.textContent = `${tailCap.el.textContent} (${continuedLabel})`;
+    if (tailCap) {
+      const base = stripContinuationSuffix(tailCap.el.textContent ?? '', continuedLabel);
+      tailCap.el.textContent = base ? `${base} (${continuedLabel})` : `(${continuedLabel})`;
+    }
   } else if (cap) {
     headCap?.el.remove();
   }
 
-  for (const el of Array.from(tail.querySelectorAll('[data-sr-id]'))) {
-    el.removeAttribute('data-sr-id');
-  }
-  tail.removeAttribute('data-sr-id');
+  clearFragmentIdentity(tail);
   head.setAttribute('data-sr-split', 'head');
   tail.setAttribute('data-sr-split', 'tail');
   return [head, tail];

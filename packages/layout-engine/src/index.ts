@@ -9,6 +9,7 @@ import {
   snapToWord,
   splitCodeBlock,
   splitElementAt,
+  clearFragmentIdentity,
   splitList,
   splitTable,
 } from './split.js';
@@ -584,13 +585,11 @@ function trySplit(
   if (!parts) return null;
 
   const [head, tail] = parts;
+  clearFragmentIdentity(tail);
   head.setAttribute('data-sr-split', 'head');
   tail.setAttribute('data-sr-split', 'tail');
   tail.classList.remove('sr-first-paragraph');
   if (tail instanceof HTMLElement) tail.style.textIndent = '0';
-  for (const el of Array.from(tail.querySelectorAll('[data-sr-id]'))) {
-    el.removeAttribute('data-sr-id');
-  }
   return [head, tail];
 }
 

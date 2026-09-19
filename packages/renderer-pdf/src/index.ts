@@ -13,6 +13,7 @@ export interface PrintOptions {
 
 const PRINT_ROOT_ID = 'sr-print-root';
 const PRINT_STYLE_ID = 'sr-print-style';
+let activePrintCleanup: (() => void) | null = null;
 
 /**
  * Print / PDF pipeline.
@@ -22,6 +23,8 @@ const PRINT_STYLE_ID = 'sr-print-style';
  * breaks in the PDF (P2). The browser only rasterises.
  */
 export function printDocument(options: PrintOptions): void {
+  activePrintCleanup?.();
+  activePrintCleanup = null;
   const { pages, template } = options;
   const previousTitle = document.title;
   if (options.documentTitle) document.title = options.documentTitle;
@@ -49,12 +52,17 @@ export function printDocument(options: PrintOptions): void {
     })
     .join('');
 
+  let cleaned = false;
   const cleanup = (): void => {
+    if (cleaned) return;
+    cleaned = true;
     document.title = previousTitle;
     root?.remove();
     style?.remove();
     window.removeEventListener('afterprint', cleanup);
+    if (activePrintCleanup === cleanup) activePrintCleanup = null;
   };
+  activePrintCleanup = cleanup;
   window.addEventListener('afterprint', cleanup);
 
   // Chờ mọi phông chữ (kể cả các @font-face vừa được browser tải/parse cho

@@ -2,6 +2,7 @@ import { compilePrintCss, type ResolvedTemplate } from '@scirender/template-engi
 
 const PRINT_ROOT_ID = 'sr-print-root';
 const PRINT_STYLE_ID = 'sr-print-style';
+let activePrintCleanup: (() => void) | null = null;
 
 export type PageOrientation = 'portrait' | 'landscape';
 
@@ -15,6 +16,8 @@ export interface PrintOptions {
 }
 
 export function printDocument(options: PrintOptions): void {
+  activePrintCleanup?.();
+  activePrintCleanup = null;
   const { pages, template } = options;
   const previousTitle = document.title;
   if (options.documentTitle) document.title = options.documentTitle;
@@ -42,12 +45,17 @@ export function printDocument(options: PrintOptions): void {
     })
     .join('');
 
+  let cleaned = false;
   const cleanup = (): void => {
+    if (cleaned) return;
+    cleaned = true;
     document.title = previousTitle;
     root?.remove();
     style?.remove();
     window.removeEventListener('afterprint', cleanup);
+    if (activePrintCleanup === cleanup) activePrintCleanup = null;
   };
+  activePrintCleanup = cleanup;
   window.addEventListener('afterprint', cleanup);
 
   // Fonts are part of physical page geometry. Open the print dialog only after
