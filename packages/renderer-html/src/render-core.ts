@@ -1,8 +1,8 @@
-import type { BlockNode, InlineNode, TableCell } from '@scirender/ast';
+import { plainText, type BlockNode, type InlineNode, type TableCell } from '@scirender/ast';
 import { renderMath } from '@scirender/equation-engine';
 import { figureStyle, resolveFigureSrc, type AssetMap } from '@scirender/figure-engine';
 import { alignStyle, evaluateTable, normaliseTable, plainCellText } from '@scirender/table-engine';
-import { refWord, type TemplateDescriptor } from '@scirender/template-engine';
+import { normaliseHeadingTitle, refWord, type TemplateDescriptor } from '@scirender/template-engine';
 import { highlightCode } from './highlight.js';
 import { escapeAttr, escapeHtml, safeUrl } from './escape.js';
 
@@ -29,6 +29,20 @@ export { anchorIdForLabel };
 
 export function inline(nodes: InlineNode[], t: TemplateDescriptor): string {
   return nodes.map((n, index) => inlineOne(n, t, shouldSuppressReferenceWord(nodes[index - 1], n, t))).join('');
+}
+
+function stripHeadingPrefixHtml(html: string, rawTitle: string, cleanTitle: string): string {
+  if (rawTitle === cleanTitle) return html;
+  const prefix = rawTitle.slice(0, Math.max(0, rawTitle.length - cleanTitle.length)).trim();
+  if (!prefix) return html;
+  const pattern = prefix
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\s+/g, '\\s+');
+  // Inline formatting can wrap the entire pasted prefix in <strong>/<em>/<a>.
+  // Permit opening tags before the visible prefix so we preserve formatting for
+  // the actual title text instead of replacing the whole heading with plain text.
+  const re = new RegExp(`^((?:\\s*<[^>]+>)*?)\\s*${pattern}\\s*`, 'i');
+  return html.replace(re, '$1');
 }
 
 function shouldSuppressReferenceWord(previous: InlineNode | undefined, node: InlineNode, t: TemplateDescriptor): boolean {
@@ -166,8 +180,16 @@ export function renderBlock(
       const num = numberText
         ? `<span class="sr-heading-number">${escapeHtml(numberText)}</span>`
         : '';
+      const titleRaw = plainText(node);
+      const titleClean = normaliseHeadingTitle(
+        titleRaw,
+        node.number,
+        node.depth,
+        t.headings.numbering === 'decimal',
+      );
+      const titleHtml = stripHeadingPrefixHtml(inline(node.children, t), titleRaw, titleClean);
       const brk = style?.pageBreakBefore ? ' data-sr-break="page"' : '';
-      return `<h${node.depth}${attrsOf(node)}${brk}>${num}${inline(node.children, t)}</h${node.depth}>`;
+      return `<h${node.depth}${attrsOf(node)}${brk}>${num}${titleHtml}</h${node.depth}>`;
     }
     case 'paragraph': {
       const cls = afterHeading ? ' class="sr-first-paragraph"' : '';

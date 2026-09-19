@@ -116,5 +116,5 @@ export function formatPageNumber(n: number, style: PageNumberStyle): string {
   return style === 'roman-upper' ? out.toUpperCase() : out;
 }
 export * from './types.js';
-export { assignNumbers, refWord } from './numbering.js';
+export { assignNumbers, normaliseHeadingTitle, refWord } from './numbering.js';
 export type { NumberingResult } from './numbering.js';

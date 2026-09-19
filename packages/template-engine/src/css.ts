@@ -470,6 +470,7 @@ export function compilePrintCss(t: TemplateDescriptor): string {
     box-shadow:none!important;margin:0!important;border:0!important;
     break-after:page;page-break-after:always;
   }
+  .sr-page-cover{page:auto!important;break-before:auto!important;break-after:page!important;page-break-before:auto!important;page-break-after:always!important;}
   .sr-page-landscape{page:landscape-page!important;width:${p.height}!important;height:${p.width}!important;}
   .sr-page:last-child{break-after:auto;page-break-after:auto;}
   .sr-no-print{display:none!important;}

@@ -2,6 +2,7 @@ import type { DocumentNode } from '@scirender/ast';
 import { plainText, walk } from '@scirender/ast';
 import {
   formatPageNumber,
+  normaliseHeadingTitle,
   type FrontSectionKind,
   type TemplateDescriptor,
 } from '@scirender/template-engine';
@@ -42,7 +43,12 @@ export function collectOutline(doc: DocumentNode, t: TemplateDescriptor): Outlin
     const style = t.headings.levels[n.depth - 1];
     const numberText =
       n.number && style && style.numberFormat ? style.numberFormat.replace('{n}', n.number) : '';
-    const title = plainText(n);
+    const title = normaliseHeadingTitle(
+      plainText(n),
+      n.number,
+      n.depth,
+      t.headings.numbering === 'decimal',
+    );
     out.push({
       id: n.id,
       depth: n.depth,

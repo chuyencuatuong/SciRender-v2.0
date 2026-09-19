@@ -5,10 +5,12 @@ const PRINT_STYLE_ID = 'sr-print-style';
 let activePrintCleanup: (() => void) | null = null;
 
 export type PageOrientation = 'portrait' | 'landscape';
+export type PageKind = 'cover' | 'front' | 'body';
 
 export interface PrintOptions {
   pages: string[];
   pageOrientations?: PageOrientation[];
+  pageKinds?: PageKind[];
   template: ResolvedTemplate;
   /** Page-number labels, one per page. Omit for no footers. */
   footers?: string[];
@@ -39,7 +41,10 @@ export function printDocument(options: PrintOptions): void {
   root.innerHTML = pages
     .map((html, i) => {
       const footer = options.footers?.[i];
-      return `<section class="sr-page${options.pageOrientations?.[i] === 'landscape' ? ' sr-page-landscape' : ''}"><div class="sr-page-body sr-doc">${html}</div>${
+      const kind = options.pageKinds?.[i] ?? 'body';
+      const classes = ['sr-page', `sr-page-${kind}`];
+      if (options.pageOrientations?.[i] === 'landscape') classes.push('sr-page-landscape');
+      return `<section class="${classes.join(' ')}"><div class="sr-page-body sr-doc">${html}</div>${
         footer ? `<div class="sr-page-footer">${escapeHtml(footer)}</div>` : ''
       }</section>`;
     })
@@ -66,8 +71,10 @@ export function printDocument(options: PrintOptions): void {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         window.print();
-        // Safari never fires afterprint in some configurations.
-        window.setTimeout(cleanup, 1500);
+        // `afterprint` is the authoritative cleanup signal. A very long
+        // fallback prevents stale print DOM from surviving forever on
+        // browsers that fail to emit it, without racing the PDF snapshot.
+        window.setTimeout(cleanup, 60_000);
       });
     });
   });

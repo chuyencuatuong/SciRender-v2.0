@@ -8,6 +8,49 @@ import type {
 import { walk } from '@scirender/ast';
 import type { CounterStyle, TemplateDescriptor } from './types.js';
 
+
+/**
+ * Normalises a heading title for templates that generate hierarchical numbering.
+ * Authors often paste manual prefixes ("1.", "I.", "CHƯƠNG 2:") into the
+ * Markdown itself; when automatic numbering is enabled those prefixes must not
+ * be duplicated in either the rendered heading or the generated TOC.
+ */
+function stripInlineMarkdownSyntax(title: string): string {
+  return title
+    .replace(/(`{1,3})(.*?)\1/g, '$2')
+    .replace(/(\*{1,3}|_{1,3})(.*?)\1/g, '$2')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function normaliseHeadingTitle(
+  title: string,
+  number: string | null,
+  depth: number,
+  autoNumbering: boolean,
+): string {
+  let value = stripInlineMarkdownSyntax(title);
+  if (!autoNumbering || !number || !value) return value;
+
+  const escaped = number.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (depth === 1) {
+    // The HCMUT template prints "CHƯƠNG 2." automatically. Accept the
+    // common pasted variants "CHƯƠNG 2:", "Chương 2 -", etc.
+    const chapter = new RegExp(`^chương\\s*${escaped}\\s*[.:\\-–—)]?\\s*`, 'i');
+    value = value.replace(chapter, '');
+  }
+
+  // Generic decimal/roman prefixes are manual list-like numbering, not title
+  // content, when template numbering is active. Only strip a prefix at the
+  // very beginning and require punctuation/whitespace so years such as 2026
+  // remain valid titles.
+  const decimal = /^\s*\d+(?:\.\d+)*\s*[.)\]:]\s+/;
+  const roman = /^\s*[IVXLCDM]+\s*[.)\]:]\s+/i;
+  value = value.replace(decimal, '').replace(roman, '').trim();
+  return value;
+}
+
 export interface NumberingResult {
   labels: Record<string, LabelRecord>;
   citationOrder: string[];
