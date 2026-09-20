@@ -21,6 +21,7 @@
     "baseUrl": ".",
     "paths": {
       "@scirender/ast": ["packages/ast/src/index.ts"],
+      "@scirender/citation-engine": ["packages/citation-engine/src/index.ts"],
       "@scirender/parser": ["packages/parser/src/index.ts"],
       "@scirender/validator": ["packages/validator/src/index.ts"],
       "@scirender/intelligence": ["packages/intelligence/src/index.ts"],

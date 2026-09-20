@@ -1,6 +1,6 @@
 import { compilePrintCss, type ResolvedTemplate } from '@scirender/template-engine';
 
-export type PageOrientation = 'portrait' | 'landscape';
+import type { PageOrientation } from '@scirender/ast';
 
 export interface PdfOptions {
   /** Inner HTML of each already-paginated page body. */

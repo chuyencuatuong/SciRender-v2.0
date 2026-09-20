@@ -15,7 +15,12 @@ console.log('\nSciRender v2.0 Round 3 runtime-contract smoke');
 const numbering = read('packages/template-engine/src/numbering.ts');
 const front = read('packages/renderer-html/src/front.ts');
 const renderCore = read('packages/renderer-html/src/render-core.ts');
-const cardEditors = read('apps/web/src/components/canvas/CardEditors.tsx');
+const cardEditors = [
+  read('apps/web/src/components/canvas/CardEditors.tsx'),
+  read('apps/web/src/components/editors/types.ts'),
+  read('apps/web/src/components/editors/EditorFields.tsx'),
+  read('apps/web/src/components/editors/table/TableEditor.tsx'),
+].join('\\n');
 const diagramDialog = read('apps/web/src/components/canvas/DiagramDialog.tsx');
 const diagramStudio = read('apps/web/src/lib/diagram-studio.ts');
 const css = read('packages/template-engine/src/css.ts');
@@ -23,7 +28,14 @@ const pdf = read('packages/renderer-pdf/src/index.ts');
 const print = read('packages/renderer-pdf/src/print.ts');
 const serverPdf = read('packages/pdf-server/src/server.ts');
 const topbar = read('apps/web/src/components/TopBar.tsx');
-const canvas = read('apps/web/src/components/canvas/CanvasPane.tsx');
+const canvas = [
+  read('apps/web/src/components/canvas/CanvasPane.tsx'),
+  read('apps/web/src/components/canvas/CanvasPaneController.tsx'),
+  read('apps/web/src/components/canvas/CanvasPaneView.tsx'),
+  read('apps/web/src/hooks/canvas/useCanvasDragDrop.ts'),
+  read('apps/web/src/hooks/canvas/useCanvasKeyboard.ts'),
+  read('apps/web/src/hooks/canvas/useCanvasStoreSync.ts'),
+].join('\\n');
 const forms = read('apps/web/src/lib/card-forms.ts');
 
 // TOC / heading normalization.

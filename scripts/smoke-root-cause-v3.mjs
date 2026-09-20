@@ -13,7 +13,12 @@ console.log('\nSciRender v2.0 root-cause regression smoke');
 const split = read('packages/layout-engine/src/split.ts');
 const layout = read('packages/layout-engine/src/index.ts');
 const renderCore = read('packages/renderer-html/src/render-core.ts');
-const cardEditors = read('apps/web/src/components/canvas/CardEditors.tsx');
+const cardEditors = [
+  read('apps/web/src/components/canvas/CardEditors.tsx'),
+  read('apps/web/src/components/editors/types.ts'),
+  read('apps/web/src/components/editors/EditorFields.tsx'),
+  read('apps/web/src/components/editors/table/TableEditor.tsx'),
+].join('\\n');
 const diagram = read('apps/web/src/components/canvas/DiagramDialog.tsx');
 const diagramLib = read('apps/web/src/lib/diagram-studio.ts');
 const printCss = read('packages/template-engine/src/css.ts');

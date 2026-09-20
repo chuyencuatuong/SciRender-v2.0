@@ -302,7 +302,13 @@ export function splitTable(
   const rows = Array.from(body ? body.rows : table.rows).filter(
     (r) => r.parentElement?.tagName !== 'THEAD',
   );
-  const keepRows = Math.max(2, Math.trunc(minRows));
+  // The caller decides the minimum. This used to clamp to 2 unconditionally,
+  // which quietly overrode `tableOrphans: 1` AND made the last-resort pass
+  // below impossible: a two-row table whose first row already fills the page
+  // could never be cut, so it overflowed the page box (content clipped by
+  // `overflow:hidden` — real loss, not a display artefact) with only an
+  // SR-L001 warning to show for it.
+  const keepRows = Math.max(1, Math.trunc(minRows));
   if (rows.length < keepRows * 2) return null;
 
   const rowLogicalWidth = (row: HTMLTableRowElement): number =>
@@ -383,7 +389,11 @@ export function splitTable(
   const headRows = Array.from(head.querySelectorAll('tbody tr')).length;
   const tailRows = Array.from(tail.querySelectorAll('tbody tr')).length;
   const sourceRows = rows.length;
-  // Conservation invariant: every original row must exist in exactly one fragment.
+  // Conservation invariant: every original row exists in exactly one fragment.
+  // Checked on the *built* fragments, not on the arithmetic that produced them,
+  // so a clone that lost a row to a selector mismatch is caught here and the
+  // whole split is abandoned rather than shipping a table with a hole in it.
+  // Relaxing `keepRows` above never relaxes this.
   if (headRows !== fit || tailRows !== sourceRows - fit || headRows + tailRows !== sourceRows) return null;
 
   clearFragmentIdentity(tail);

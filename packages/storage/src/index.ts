@@ -235,6 +235,23 @@ export async function exportBundle(docId: string): Promise<DocumentBundle | null
   return { format: 'scirender-bundle', version: 1, document: doc, assets: encoded };
 }
 
+/**
+ * A bundle is a file people send each other, so everything in it is untrusted
+ * input — including the parts that never reach the reader as text.
+ *
+ * `overrides` is interpolated into the document's stylesheet; `dataUrl` is
+ * fetched by the importer's browser. Neither was checked. The overrides are
+ * sanitised downstream by `mergeTemplate` (see template-engine/sanitize.ts),
+ * but the asset URLs are handled here because this is where the fetch happens:
+ * an entry reading `http://10.0.0.5/admin/delete` made the *importer's* browser
+ * issue that request, with the importer's cookies, the moment they opened a
+ * shared file. Assets are always written as `data:` by `exportBundle`, so
+ * requiring that scheme costs nothing and closes the request path entirely.
+ */
+function isInlineDataUrl(value: unknown): value is string {
+  return typeof value === 'string' && /^data:[\w.+-]+\/[\w.+-]+[;,]/i.test(value.trim());
+}
+
 export async function importBundle(bundle: DocumentBundle): Promise<string> {
   if (bundle.format !== 'scirender-bundle') {
     throw new Error('Tệp không phải bundle SciRender hợp lệ.');
@@ -250,7 +267,14 @@ export async function importBundle(bundle: DocumentBundle): Promise<string> {
     createdAt: now,
     updatedAt: now,
   });
+  const rejected: string[] = [];
   for (const a of bundle.assets ?? []) {
+    if (!isInlineDataUrl(a.dataUrl)) {
+      // P6 — fail loudly. The document still imports; the reader is told which
+      // attachments were dropped and why, rather than finding blanks later.
+      rejected.push(a.name || '(không tên)');
+      continue;
+    }
     const res = await fetch(a.dataUrl);
     const blob = await res.blob();
     await putAsset({
@@ -263,5 +287,27 @@ export async function importBundle(bundle: DocumentBundle): Promise<string> {
       createdAt: Date.now(),
     });
   }
+  if (rejected.length) {
+    throw new BundleAssetsRejected(id, rejected);
+  }
   return id;
+}
+
+/**
+ * Thrown after a successful document import when some attachments were refused.
+ * It carries the new document id so the caller can still open the document —
+ * the import is not rolled back, because losing the text as well would be a
+ * worse outcome than losing an attachment.
+ */
+export class BundleAssetsRejected extends Error {
+  constructor(
+    readonly docId: string,
+    readonly assetNames: string[],
+  ) {
+    super(
+      `Đã nhập tài liệu, nhưng bỏ qua ${assetNames.length} tài nguyên không hợp lệ ` +
+        `(chỉ chấp nhận dữ liệu nhúng data:, không tải từ địa chỉ ngoài): ${assetNames.join(', ')}.`,
+    );
+    this.name = 'BundleAssetsRejected';
+  }
 }

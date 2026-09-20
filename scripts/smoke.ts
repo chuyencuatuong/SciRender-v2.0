@@ -507,9 +507,18 @@ const ayHtml = compile(BIB, 'hcmut-btl', (d) => ({
   ...d,
   citation: { ...d.citation, style: 'author-year' },
 })).rendered.html;
-check('một tác giả ra "Họ, năm"', ayHtml.includes('(Nguyễn, 2020)'));
-check('hai tác giả nối bằng liên từ của template', ayHtml.includes('(Trần và Lê, 2019)'));
-check('ba tác giả trở lên rút thành và cs.', ayHtml.includes('(Phạm và cs., 2021)'));
+/**
+ * Assert on the citation's *text*, not on raw HTML. Every citation is wrapped
+ * in an `<a class="sr-citation-link">` so the reader can jump to the entry, so
+ * the delimiters and the author-year text are separated by a tag and a literal
+ * `includes('(Nguyễn, 2020)')` can never match. The three checks below failed
+ * for that reason alone while the renderer was producing exactly the right
+ * output — a test bug that was masking, not detecting, regressions.
+ */
+const ayText = ayHtml.replace(/<[^>]+>/g, '');
+check('một tác giả ra "Họ, năm"', ayText.includes('(Nguyễn, 2020)'), ayText.slice(0, 200));
+check('hai tác giả nối bằng liên từ của template', ayText.includes('(Trần và Lê, 2019)'), ayText.slice(0, 200));
+check('ba tác giả trở lên rút thành và cs.', ayText.includes('(Phạm và cs., 2021)'), ayText.slice(0, 200));
 check('danh mục author-year không đánh số [n]',
   !/sr-reference-item"><span>\[1\]/.test(ayHtml));
 

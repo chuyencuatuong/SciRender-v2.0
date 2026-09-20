@@ -1,7 +1,7 @@
 import { compilePrintCss, type ResolvedTemplate } from '@scirender/template-engine';
 
-export type PageOrientation = 'portrait' | 'landscape';
-export type PageKind = 'cover' | 'front' | 'body';
+export type { PageKind, PageOrientation } from '@scirender/ast';
+import type { PageKind, PageOrientation } from '@scirender/ast';
 
 export interface PrintOptions {
   pages: string[];
@@ -104,6 +104,29 @@ export interface StandaloneOptions extends PrintOptions {
 }
 
 /** Produces a single self-contained .html file — no network, no assets folder. */
+/**
+ * Guards a stylesheet that is about to be embedded in a raw `<style>` element.
+ *
+ * `mergeTemplate` already sanitises every descriptor value, so in a correct
+ * build nothing reaches here that needs changing. This is the second layer, and
+ * it is here for a specific reason rather than out of habit: this function is
+ * the *only* place in SciRender where CSS is concatenated into an HTML string
+ * instead of being assigned to `style.textContent`. Everywhere else the DOM
+ * does the escaping. If a future change adds a stylesheet source that skips the
+ * descriptor path — a user stylesheet, a theme file, CSS pasted into an export
+ * option — it would land straight in this string, and this catch keeps that
+ * from becoming an executable `</style>`.
+ *
+ * Only the element-terminating sequence is neutralised. The CSS itself is left
+ * alone, because at this point it is machine-generated and rewriting it would
+ * change what prints.
+ */
+function embedStyle(css: string): string {
+  // `</style` in any casing ends the element, with or without the closing
+  // bracket. Breaking the `<` is enough and leaves valid (if inert) CSS.
+  return css.replace(/<\s*\/\s*(style|script)/gi, '<\\/$1');
+}
+
 export function exportStandaloneHtml(options: StandaloneOptions): string {
   const { pages, template } = options;
   const title = options.documentTitle ?? 'SciRender document';
@@ -126,15 +149,15 @@ export function exportStandaloneHtml(options: StandaloneOptions): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="SciRender 2.0">
 <title>${escapeHtml(title)}</title>
-<style>${options.katexCss ?? ''}</style>
-<style>${options.extraCss ?? ''}</style>
+<style>${embedStyle(options.katexCss ?? '')}</style>
+<style>${embedStyle(options.extraCss ?? '')}</style>
 <style>
 html,body{margin:0;padding:0;background:rgb(82 86 89);}
 .sr-pages{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px;}
 .sr-page{box-shadow:0 2px 14px rgba(0,0,0,.35);}
 @media print{@page{size:A4 portrait;margin:0!important;}@page landscape-page{size:A4 landscape;margin:0!important;}html,body{margin:0!important;padding:0!important;background:rgb(255 255 255);}.sr-pages{gap:0;padding:0;}}
-${template.css}
-${compilePrintCss(template.descriptor)}
+${embedStyle(template.css)}
+${embedStyle(compilePrintCss(template.descriptor))}
 </style>
 </head>
 <body>

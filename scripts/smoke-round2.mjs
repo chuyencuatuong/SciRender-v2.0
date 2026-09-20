@@ -13,7 +13,14 @@ function check(name, value, detail = '') {
 
 console.log('\nSciRender v2.0 Round 2 performance/lifecycle smoke');
 const app = read('apps/web/src/App.tsx');
-const canvas = read('apps/web/src/components/canvas/CanvasPane.tsx');
+const canvas = [
+  read('apps/web/src/components/canvas/CanvasPane.tsx'),
+  read('apps/web/src/components/canvas/CanvasPaneController.tsx'),
+  read('apps/web/src/components/canvas/CanvasPaneView.tsx'),
+  read('apps/web/src/hooks/canvas/useCanvasDragDrop.ts'),
+  read('apps/web/src/hooks/canvas/useCanvasKeyboard.ts'),
+  read('apps/web/src/hooks/canvas/useCanvasStoreSync.ts'),
+].join('\\n');
 const sidePanel = read('apps/web/src/components/SidePanel.tsx');
 const preview = read('apps/web/src/components/PreviewPane.tsx');
 const store = read('apps/web/src/state/store.ts');

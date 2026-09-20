@@ -124,3 +124,4 @@ function loadEvents(): TelemetryEvent[] {
     return [];
   }
 }
+export * from './counters.js';

@@ -17,7 +17,8 @@
     "browser-check": "node scripts/browser-check.mjs",
     "fonts": "node scripts/sync-fonts.mjs",
     "smoke:round2": "node scripts/smoke-round2.mjs",
-    "smoke:round3": "node scripts/smoke-round3-runtime-contracts.mjs"
+    "smoke:round3": "node scripts/smoke-round3-runtime-contracts.mjs",
+    "smoke:pagination": "node scripts/smoke-pagination-rescue.mjs"
   },
   "devDependencies": {
     "esbuild": "0.24.0",

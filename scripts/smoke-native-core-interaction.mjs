@@ -12,11 +12,22 @@ function read(rel) { return fs.readFileSync(path.join(root, rel), 'utf8'); }
 console.log('\nNative Core Interaction smoke');
 const audit = read('apps/web/src/components/AuditDialog.tsx');
 const command = read('apps/web/src/components/CommandPalette.tsx');
-const canvas = read('apps/web/src/components/canvas/CanvasPane.tsx');
+const canvas = [
+  read('apps/web/src/components/canvas/CanvasPane.tsx'),
+  read('apps/web/src/components/canvas/CanvasPaneController.tsx'),
+  read('apps/web/src/components/canvas/CanvasPaneView.tsx'),
+  read('apps/web/src/hooks/canvas/useCanvasDragDrop.ts'),
+  read('apps/web/src/hooks/canvas/useCanvasKeyboard.ts'),
+  read('apps/web/src/hooks/canvas/useCanvasStoreSync.ts'),
+].join('\\n');
 const auto = read('apps/web/src/components/canvas/AutoTextarea.tsx');
 const shortcuts = read('apps/web/src/lib/shortcuts.ts');
 const app = read('apps/web/src/App.tsx');
-const cardsEditors = read('apps/web/src/components/canvas/CardEditors.tsx');
+const cardsEditors = [
+  read('apps/web/src/components/canvas/CardEditors.tsx'),
+  read('apps/web/src/components/editors/EditorFields.tsx'),
+  read('apps/web/src/components/editors/table/TableEditor.tsx'),
+].join('\\n');
 const cardShell = read('apps/web/src/components/canvas/CardShell.tsx');
 const topbar = read('apps/web/src/components/TopBar.tsx');
 const css = read('apps/web/src/index.css');
@@ -61,7 +72,7 @@ check('empty paragraph Backspace deletes current block', canvas.includes("card.k
 check('vertical caret navigation jumps between cards', canvas.includes("e.key === 'ArrowUp' && firstLine") && canvas.includes("e.key === 'ArrowDown' && lastLine"));
 check('Ctrl+Alt+0 can force empty heading to paragraph', canvas.includes("headingShortcut.depth === 0 ? 'paragraph' : undefined"));
 check('contextual insert stores anchor block id', store.includes('afterBlockId: s.activeBlockId') && store.includes('activeBlockId: string | null'));
-check('top InsertMenu uses viewport context', canvas.includes('<InsertMenu onInsert={(tpl) => insertAt(viewportInsertIndex(), tpl.text)} />'));
+check('top InsertMenu uses viewport context', canvas.includes('<InsertMenu onInsert={(tpl) => controller.insertAt(controller.viewportInsertIndex(), tpl.text)} />'));
 check('new block auto-focuses and flashes', canvas.includes("scrollIntoView({ behavior: 'smooth', block: 'center' })") && canvas.includes('setFlashCardId(card.id)') && cardShell.includes('ring-2 ring-sky-400 animate-pulse'));
 check('floating toolbar has no rough plus button', !cardShell.includes('onInsertBelow') && !cardShell.includes('Thêm khối bên dưới') && !cardShell.includes('iconOnly'));
 check('reduced-motion compatible animation tokens', css.includes('transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease-out'));

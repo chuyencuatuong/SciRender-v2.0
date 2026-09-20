@@ -44,7 +44,8 @@ export interface LayoutWarning {
   line: number | null;
 }
 
-export type PageOrientation = 'portrait' | 'landscape';
+export type { PageOrientation } from '@scirender/ast';
+import type { PageOrientation } from '@scirender/ast';
 
 export interface PaginateResult {
   /** Inner HTML of each page body, in order. */
@@ -285,7 +286,39 @@ export function paginate(
             continue;
           }
         }
-        // Nothing can be done: the object is taller than the text area.
+
+        // The block owns an entire empty page and still overflows. Before
+        // accepting the loss, retry the structural split with the orphan
+        // minimums dropped to one unit per side: a table whose `tableOrphans`
+        // is 2 cannot be cut at all when only one row fits, even though
+        // cutting after one row would have kept every row on the page it
+        // belongs to. This is the case a tall cell (a display formula, a long
+        // wrapped paragraph inside a `<td>`) produces, and until now it fell
+        // straight through to the warning below with the overflowing rows
+        // clipped away by the page box's `overflow:hidden`.
+        const rescued = trySplitStructure(block, column, options, true);
+        if (rescued) {
+          const [head, tail] = rescued;
+          column.replace(block, head);
+          if (!column.overflows()) {
+            const expectedRows = tableRowCount(block);
+            const headRows = tableRowCount(head);
+            const tailRows = tableRowCount(tail);
+            const conserved =
+              expectedRows == null ||
+              (headRows != null && tailRows != null && headRows + tailRows === expectedRows);
+            if (conserved) {
+              recordPage(head, pageOfColumn(columnIndex), pageOfNode);
+              queue.unshift(tail);
+              commitColumn(wantsLandscape);
+              continue;
+            }
+          }
+          column.replace(head, block);
+        }
+
+        // Nothing can be done: a single indivisible unit (one table row, one
+        // figure, one equation) is taller than the text area.
         warnings.push({
           code: 'SR-L001',
           message: `Khối "${type || block.tagName.toLowerCase()}" cao hơn vùng nội dung của trang nên bị tràn.`,
@@ -542,20 +575,35 @@ function carryHeadings(column: Column, queue: Element[], options: PaginateOption
   }
 }
 
+/**
+ * Splits a structural block (table rows, list items, code lines) at the column
+ * boundary.
+ *
+ * `lastResort` is set only when the column is already empty — meaning the block
+ * has a whole page to itself and *still* does not fit, so the alternative to
+ * splitting is letting it overflow the page box and lose the overflowing rows
+ * to `overflow:hidden`. In that situation the orphan/widow minimums are a
+ * typographic preference standing in the way of not losing content, so they are
+ * dropped to one unit per side. The conservation invariants inside
+ * `splitTable` / `splitCodeBlock` are *not* relaxed: a split that cannot be
+ * made safely still returns null and still ends in an SR-L001 warning.
+ */
 function trySplitStructure(
   block: Element,
   column: Column,
   options: PaginateOptions,
+  lastResort = false,
 ): [Element, Element] | null {
   const limit = column.limitBottom();
+  const floor = (configured: number): number => (lastResort ? 1 : Math.max(1, configured));
   if (options.splitTables && isTable(block)) {
-    return splitTable(block, limit, Math.max(1, options.tableOrphans), options.continuedLabel);
+    return splitTable(block, limit, floor(options.tableOrphans), options.continuedLabel);
   }
   if (options.splitLists && isList(block)) {
     return splitList(block, limit, 1);
   }
   if (options.splitCode && isCode(block)) {
-    return splitCodeBlock(block, limit, Math.max(1, options.codeOrphans), options.continuedLabel);
+    return splitCodeBlock(block, limit, floor(options.codeOrphans), options.continuedLabel);
   }
   return null;
 }
@@ -634,4 +682,21 @@ export function checkPageBudget(
 }
 
 export { lineBoxes, clusterRects, isSplittable } from './split.js';
+// `lineBoxes()` and `clusterRects()` both return `LineBox[]`, so a consumer
+// could call them but could not name what came back. Exporting the splitting
+// primitives as well lets a test (or a future column engine) reuse them
+// instead of re-deriving a second, divergent implementation (P4).
+export {
+  isCode,
+  isList,
+  isTable,
+  splitCodeBlock,
+  splitElementAt,
+  splitList,
+  splitTable,
+  clearFragmentIdentity,
+  offsetAtLineStart,
+  snapToWord,
+  textLength,
+} from './split.js';
 export type { LineBox } from './split.js';

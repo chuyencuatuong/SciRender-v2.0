@@ -25,6 +25,17 @@ const MAX_CONCURRENT_RENDERS = Number(process.env.MAX_CONCURRENT_RENDERS ?? 2);
 const EXPORT_TOKEN = process.env.EXPORT_TOKEN?.trim() || null;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN?.trim() || '*';
 
+/**
+ * Schemes the render page is allowed to load from.
+ *
+ * `exportStandaloneHtml` produces a self-contained document: fonts are inlined
+ * as base64 by `export-fonts.ts`, images are `data:` or `blob:` URLs from the
+ * user's own asset store, and the stylesheet is generated inline. A correct
+ * SciRender export therefore needs **no network at all** to print, which is
+ * what makes a default-deny policy possible rather than merely desirable.
+ */
+const ALLOWED_RENDER_SCHEMES = new Set(['data:', 'about:', 'blob:']);
+
 if (ALLOWED_ORIGIN === '*') {
   // eslint-disable-next-line no-console
   console.warn(
@@ -45,7 +56,21 @@ let browserPromise: Promise<Browser> | null = null;
 async function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
     browserPromise = chromium.launch({
-      args: ['--disable-dev-shm-usage'],
+      args: [
+        '--disable-dev-shm-usage',
+        // Belt to the route interceptor's braces. Even if a future change
+        // loosens the routing, these keep the render context from reaching
+        // the host it runs on or the machines around it.
+        '--disable-background-networking',
+        '--disable-sync',
+        '--disable-extensions',
+        '--no-default-browser-check',
+        '--no-first-run',
+        // Chromium already refuses file:// subresources from a non-file page;
+        // stating it explicitly means a future `setContent` replaced by a
+        // `goto('file://…')` does not quietly inherit access.
+        '--disable-file-system',
+      ],
       // Lối thoát cho triển khai tự quản lý không dùng ảnh Docker chính thức
       // của Playwright (vd. Chromium đã có sẵn ở một đường dẫn khác).
       executablePath: process.env.CHROMIUM_EXECUTABLE_PATH || undefined,
@@ -112,7 +137,48 @@ app.post('/export-pdf', checkToken, async (req: Request, res: Response) => {
   let context: Awaited<ReturnType<Browser['newContext']>> | null = null;
   try {
     const browser = await getBrowser();
-    context = await browser.newContext();
+    context = await browser.newContext({
+      // No storage, no cookies, no service workers survive a render; each
+      // request gets a context of its own and it is destroyed in `finally`.
+      serviceWorkers: 'block',
+      javaScriptEnabled: true,
+      offline: true,
+    });
+
+    /**
+     * Default-deny egress for the rendered page — the fix for a real SSRF.
+     *
+     * `page.setContent(html)` renders a string this endpoint accepts from
+     * anyone who can reach it, with JavaScript enabled and
+     * `waitUntil: 'networkidle'`. Without this, an HTML body containing
+     *
+     *   <img src="http://169.254.169.254/latest/meta-data/iam/security-credentials/">
+     *   <script>fetch('http://10.0.0.7/internal').then(r=>r.text())
+     *     .then(t=>document.body.textContent=t)</script>
+     *
+     * turns the export server into a request proxy sitting *inside* the
+     * hosting network — and, because the response can be written into the DOM
+     * before `page.pdf()` runs, the returned PDF is the exfiltration channel.
+     * `networkidle` made it worse by guaranteeing the server waits for those
+     * requests to complete before printing.
+     *
+     * JavaScript stays enabled because `document.fonts.ready` below is what
+     * fixed Vietnamese diacritics printing in a fallback face (Đợt 6). With
+     * every request blocked, leaving it on costs nothing: script can still run,
+     * but it has nowhere to reach and nothing to read.
+     */
+    await context.route('**/*', (route) => {
+      const url = route.request().url();
+      const scheme = /^([a-z][a-z0-9+.-]*:)/i.exec(url)?.[1]?.toLowerCase() ?? '';
+      if (ALLOWED_RENDER_SCHEMES.has(scheme)) {
+        void route.continue();
+        return;
+      }
+      // eslint-disable-next-line no-console
+      console.warn(`[pdf-server] chặn yêu cầu ra ngoài khi dựng PDF: ${scheme || '(không rõ)'}`);
+      void route.abort('blockedbyclient');
+    });
+
     const page = await context.newPage();
 
     const timeout = new Promise<never>((_, reject) =>
@@ -121,7 +187,11 @@ app.post('/export-pdf', checkToken, async (req: Request, res: Response) => {
 
     const pdf = await Promise.race([
       (async () => {
-        await page.setContent(html, { waitUntil: 'networkidle', timeout: RENDER_TIMEOUT_MS });
+        // `networkidle` waited for requests that are now all refused, and its
+        // semantics ("500ms with no more than 2 connections") only ever made
+        // sense when the page could legitimately fetch. `load` is the right
+        // signal for a document whose every resource is already inline.
+        await page.setContent(html, { waitUntil: 'load', timeout: RENDER_TIMEOUT_MS });
         // Đợi phông chữ nhúng (base64) nạp xong trước khi in — tương tự
         // `document.fonts.ready` mà bản tải PDF ảnh phía trình duyệt đã làm.
         // Chạy trong ngữ cảnh trang (trình duyệt), không phải Node — tsconfig

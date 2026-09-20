@@ -389,3 +389,21 @@ export interface FootnoteDefinition {
   number: number | null;
   position: Position;
 }
+
+/* ------------------------------------------------------------------ paging */
+
+/**
+ * Page geometry vocabulary, declared once.
+ *
+ * `PageOrientation` was previously declared independently in
+ * `layout-engine/index.ts`, `renderer-pdf/index.ts`, `renderer-pdf/pdf.ts` and
+ * `renderer-pdf/print.ts`. Four structurally identical aliases type-check
+ * against each other today, which is exactly why the drift would go unnoticed:
+ * the day one of them gains a third value ('auto', say) the others keep
+ * compiling and start silently rejecting it at the boundary. One declaration,
+ * re-exported, removes that failure mode.
+ */
+export type PageOrientation = 'portrait' | 'landscape';
+
+/** Which numbering/footer regime a printed page belongs to. */
+export type PageKind = 'cover' | 'front' | 'body';

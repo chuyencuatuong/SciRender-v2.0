@@ -1,4 +1,5 @@
 import { compileCss, compilePrintCss } from './css.js';
+import { sanitizeTemplateStrings } from './sanitize.js';
 import {
   BUILTIN_TEMPLATES,
   findTemplate,
@@ -56,13 +57,27 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/** One-level-deep merge — matches the shape of TemplateOverrides. */
+/**
+ * One-level-deep merge — matches the shape of TemplateOverrides.
+ *
+ * The overrides are sanitised here, at the single point where untrusted
+ * template values enter the pipeline. See `sanitize.ts` for why: these values
+ * are interpolated into CSS that `exportStandaloneHtml` later embeds inside a
+ * raw `<style>` element, where a `</style>` in a font stack stops being a font
+ * stack. Cleaning once at the boundary keeps every current and future
+ * interpolation site in `css.ts` safe without each one having to remember.
+ *
+ * Built-in templates go through the same pass. They have nothing to strip, and
+ * running them through it anyway means the merged descriptor has exactly one
+ * provenance rather than two.
+ */
 export function mergeTemplate(
   base: TemplateDescriptor,
   overrides: TemplateOverrides,
 ): TemplateDescriptor {
+  const safeOverrides = sanitizeTemplateStrings(overrides);
   const out = { ...base } as Record<string, unknown>;
-  for (const [key, value] of Object.entries(overrides)) {
+  for (const [key, value] of Object.entries(safeOverrides)) {
     if (value === undefined) continue;
     const current = out[key];
     if (isPlainObject(current) && isPlainObject(value)) {
@@ -116,5 +131,6 @@ export function formatPageNumber(n: number, style: PageNumberStyle): string {
   return style === 'roman-upper' ? out.toUpperCase() : out;
 }
 export * from './types.js';
+export { sanitizeCssValue, isUnsafeCssValue, sanitizeTemplateStrings } from './sanitize.js';
 export { assignNumbers, normaliseHeadingTitle, refWord } from './numbering.js';
 export type { NumberingResult } from './numbering.js';
