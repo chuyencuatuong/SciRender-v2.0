@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { listenForShortcuts } from '~/lib/shortcuts';
 import { CommandPalette } from '~/components/CommandPalette';
+import { QuickFeedbackModal } from '~/components/QuickFeedbackModal';
 import { ShortcutCheatSheet } from '~/components/ShortcutCheatSheet';
 import { TopBar } from '~/components/TopBar';
 import { SideRail } from '~/components/SideRail';
@@ -11,6 +12,28 @@ import { StatusBar } from '~/components/StatusBar';
 import { useRender } from '~/hooks/useRender';
 import { FLOAT_PANEL, SPLIT_PREVIEW, useMediaQuery } from '~/lib/breakpoint';
 import { useStore } from '~/state/store';
+import { AppLoadingScreen } from '~/components/ui/AppLoadingScreen';
+import { LazyDialogProvider } from '~/components/ui/dialog-context';
+
+const AuditDialog = lazy(async () => {
+  const module = await import('~/components/AuditDialog');
+  return { default: module.AuditDialog };
+});
+
+const DiagramDialog = lazy(async () => {
+  const module = await import('~/components/canvas/DiagramDialog');
+  return { default: module.DiagramDialog };
+});
+
+const SourceDialog = lazy(async () => {
+  const module = await import('~/components/canvas/SourceDialog');
+  return { default: module.SourceDialog };
+});
+
+const ChartDialog = lazy(async () => {
+  const module = await import('~/components/canvas/ChartDialog');
+  return { default: module.ChartDialog };
+});
 
 export function App(): JSX.Element {
   const init = useStore((s) => s.init);
@@ -118,20 +141,9 @@ export function App(): JSX.Element {
     };
   }, [dragging, setPref]);
 
-  if (!ready) {
-    return (
-      <div className="grid h-full place-items-center">
-        <div className="text-center">
-          <div className="font-serif text-[22px] tracking-[-0.015em] text-ink-900">
-            Sci<i className="font-light not-italic text-deep-600">Render</i>
-          </div>
-          <p className="mt-1 text-[12.5px] text-ink-400">Đang mở không gian làm việc cục bộ…</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
+  const shell = !ready ? (
+    <AppLoadingScreen />
+  ) : (
     <div className="flex h-full flex-col overflow-hidden bg-sr-workspace text-ink-900">
       <TopBar render={render} />
 
@@ -191,6 +203,22 @@ export function App(): JSX.Element {
       <StatusBar render={render} />
       <ShortcutCheatSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} onToggle={() => setShortcutsOpen((v) => !v)} />
       <CommandPalette render={render} />
+      <QuickFeedbackModal pageCount={render.pages.length} />
     </div>
+  );
+
+  return (
+    <Suspense fallback={<AppLoadingScreen />}>
+      <LazyDialogProvider
+        dialogs={{
+          AuditDialog,
+          DiagramDialog,
+          SourceDialog,
+          ChartDialog,
+        }}
+      >
+        {shell}
+      </LazyDialogProvider>
+    </Suspense>
   );
 }

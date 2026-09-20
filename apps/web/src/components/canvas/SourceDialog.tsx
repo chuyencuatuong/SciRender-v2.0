@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, X } from 'lucide-react';
 
-interface Props {
+export interface SourceDialogProps {
   source: string;
   onClose: () => void;
   onApply: (source: string) => void;
@@ -14,7 +14,7 @@ interface Props {
  * paste a whole document in. It is not a second editor competing with the
  * cards: applying here re-slices the canvas from the text.
  */
-export function SourceDialog({ source, onClose, onApply }: Props): JSX.Element {
+export function SourceDialog({ source, onClose, onApply }: SourceDialogProps): JSX.Element {
   const [text, setText] = useState(source);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLTextAreaElement | null>(null);

@@ -1,17 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  checkPageBudget,
-  optionsFromTemplate,
-  paginate,
-  type LayoutWarning,
-} from '@scirender/layout-engine';
-import { renderFrontMatter, type FrontNumbers } from '@scirender/renderer-html';
-import { formatPageNumber, type FrontSectionKind } from '@scirender/template-engine';
-import { track } from '@scirender/telemetry';
-import { runPreSubmissionAudit, type AuditReport } from '@scirender/intelligence';
+import type { LayoutWarning } from '@scirender/layout-engine';
+import type { FrontNumbers } from '@scirender/renderer-html';
+import type { FrontSectionKind } from '@scirender/template-engine';
+import { countRender, track } from '@scirender/telemetry';
+import type { AuditReport } from '@scirender/intelligence';
 import { fitDisplayMath } from '~/lib/fit-math';
+import { ensureKatexCss } from '~/lib/katex-css';
 import { resolveMermaidBlocks } from '~/lib/mermaid';
-import { compile, type CompileResult } from '~/lib/pipeline';
+import type { CompileResult } from '~/lib/pipeline';
 import { useStore } from '~/state/store';
 
 export type PageKind = 'cover' | 'front' | 'body';
@@ -51,6 +47,33 @@ const EMPTY: RenderState = {
 };
 
 const MAX_FRONT_PASSES = 3;
+
+async function loadRenderEngine(): Promise<{
+  compile: typeof import('~/lib/pipeline')['compile'];
+  checkPageBudget: typeof import('@scirender/layout-engine')['checkPageBudget'];
+  optionsFromTemplate: typeof import('@scirender/layout-engine')['optionsFromTemplate'];
+  paginate: typeof import('@scirender/layout-engine')['paginate'];
+  renderFrontMatter: typeof import('@scirender/renderer-html')['renderFrontMatter'];
+  formatPageNumber: typeof import('@scirender/template-engine')['formatPageNumber'];
+  runPreSubmissionAudit: typeof import('@scirender/intelligence')['runPreSubmissionAudit'];
+}> {
+  const [pipeline, layout, html, template, intelligence] = await Promise.all([
+    import('~/lib/pipeline'),
+    import('@scirender/layout-engine'),
+    import('@scirender/renderer-html'),
+    import('@scirender/template-engine'),
+    import('@scirender/intelligence'),
+  ]);
+  return {
+    compile: pipeline.compile,
+    checkPageBudget: layout.checkPageBudget,
+    optionsFromTemplate: layout.optionsFromTemplate,
+    paginate: layout.paginate,
+    renderFrontMatter: html.renderFrontMatter,
+    formatPageNumber: template.formatPageNumber,
+    runPreSubmissionAudit: intelligence.runPreSubmissionAudit,
+  };
+}
 
 /**
  * Renders on demand.
@@ -93,10 +116,26 @@ export function useRender(): RenderState {
 
     const run = async (): Promise<void> => {
       const started = performance.now();
+      let engine: Awaited<ReturnType<typeof loadRenderEngine>>;
+      try {
+        engine = await loadRenderEngine();
+      } catch (err) {
+        countRender(null);
+        if (!cancelled) {
+          setState((s) => ({
+            ...s,
+            running: false,
+            error: err instanceof Error ? err.stack ?? err.message : String(err),
+          }));
+        }
+        return;
+      }
+      if (cancelled || controller.signal.aborted) return;
       let result: CompileResult;
       try {
-        result = compile({ source: renderedSource, templateId, overrides, assets: assetMap });
+        result = engine.compile({ source: renderedSource, templateId, overrides, assets: assetMap });
       } catch (err) {
+        countRender(null);
         if (!cancelled) {
           setState((s) => ({
             ...s,
@@ -110,13 +149,24 @@ export function useRender(): RenderState {
 
       const t = result.template;
 
-      // The template stylesheet must be in the document BEFORE anything is
-      // measured. It used to be installed by an effect that only ran once the
-      // render had finished, so the very first pagination of a session measured
-      // every block at the browser's default 16px instead of the template's
-      // 13pt — blocks came out short and a page happily accepted content that
-      // did not fit on it.
-      applyTemplateCss(t.css);
+      // The template stylesheet and KaTeX stylesheet must be present BEFORE
+      // anything is measured. Both are explicit render-time assets: neither is
+      // part of the initial application payload.
+      try {
+        applyTemplateCss(t.css);
+        await ensureKatexCss();
+      } catch (err) {
+        countRender(null);
+        if (!cancelled) {
+          setState((s) => ({
+            ...s,
+            running: false,
+            error: err instanceof Error ? err.stack ?? err.message : String(err),
+          }));
+        }
+        return;
+      }
+      if (cancelled || controller.signal.aborted) return;
 
       const mermaid = await resolveMermaidBlocks(result.blocks, t.descriptor, {
         contentWidthPx: t.metrics.contentWidthPx,
@@ -144,14 +194,14 @@ export function useRender(): RenderState {
       if (cancelled || controller.signal.aborted) return;
 
       const opts = {
-        ...optionsFromTemplate(t),
+        ...engine.optionsFromTemplate(t),
         footnotes: t.descriptor.footnotes.enabled ? result.footnotes : {},
       };
       const warnings: LayoutWarning[] = [...mermaid.warnings, ...mathWarnings];
 
-      const body = paginate(bodyElements, opts, hostRef.current);
+      const body = engine.paginate(bodyElements, opts, hostRef.current);
       warnings.push(...body.warnings);
-      warnings.push(...checkPageBudget(body.pages.length, t.descriptor.layout.pageBudget));
+      warnings.push(...engine.checkPageBudget(body.pages.length, t.descriptor.layout.pageBudget));
 
       const numbers: FrontNumbers = {
         bodyPageOf: body.pageOfNode,
@@ -164,7 +214,7 @@ export function useRender(): RenderState {
       if (t.descriptor.frontMatter.enabled) {
         let previousKey = '';
         for (let pass = 0; pass < MAX_FRONT_PASSES; pass++) {
-          const frontBlocks = renderFrontMatter(result.document, t.descriptor, {
+          const frontBlocks = engine.renderFrontMatter(result.document, t.descriptor, {
             outline: result.outline,
             figures: result.figures,
             tables: result.tables,
@@ -175,7 +225,7 @@ export function useRender(): RenderState {
             break;
           }
           if (cancelled || !hostRef.current) return;
-          const front = paginate(frontBlocks, { ...opts, footnotes: {} }, hostRef.current);
+          const front = engine.paginate(frontBlocks, { ...opts, footnotes: {} }, hostRef.current);
           frontPages = front.pages;
 
           const nextFrontPageOf: Partial<Record<FrontSectionKind, number>> = {};
@@ -198,19 +248,19 @@ export function useRender(): RenderState {
         ...result.coverPages.map((html) => ({ html, footer: '', kind: 'cover' as const, orientation: 'portrait' as const })),
         ...frontPages.map((html, i) => ({
           html,
-          footer: formatPageNumber(i + 1, d.layout.frontPageNumbers),
+          footer: engine.formatPageNumber(i + 1, d.layout.frontPageNumbers),
           kind: 'front' as const,
           orientation: 'portrait' as const,
         })),
         ...body.pages.map((html, i) => ({
           html,
-          footer: formatPageNumber(i + 1, d.layout.bodyPageNumbers),
+          footer: engine.formatPageNumber(i + 1, d.layout.bodyPageNumbers),
           kind: 'body' as const,
           orientation: body.pageOrientations[i] ?? 'portrait',
         })),
       ];
 
-      const audit = runPreSubmissionAudit(result.document, result.diagnostics, {
+      const audit = engine.runPreSubmissionAudit(result.document, result.diagnostics, {
         tocEnabled: Boolean(d.frontMatter.enabled && d.frontMatter.sections.some((section) => section.kind === 'toc' && section.enabled)),
         pageBudget: d.layout.pageBudget,
       }, {
@@ -231,6 +281,9 @@ export function useRender(): RenderState {
         error: null,
         durationMs,
       });
+      // Aggregate counters, separate from the event log above: this is the
+      // figure the Research panel reports (documents rendered, average pages).
+      countRender(pages.length);
       track('render', {
         ms: durationMs,
         pages: pages.length,

@@ -11,12 +11,15 @@
   "dependencies": {
     "@scirender/ast": "workspace:*",
     "@scirender/citation-engine": "workspace:*",
+    "@scirender/equation-engine": "workspace:*",
+    "@scirender/figure-engine": "workspace:*",
     "@scirender/intelligence": "workspace:*",
     "@scirender/layout-engine": "workspace:*",
     "@scirender/parser": "workspace:*",
     "@scirender/renderer-html": "workspace:*",
     "@scirender/renderer-pdf": "workspace:*",
     "@scirender/storage": "workspace:*",
+    "@scirender/table-engine": "workspace:*",
     "@scirender/telemetry": "workspace:*",
     "@scirender/template-engine": "workspace:*",
     "@scirender/validator": "workspace:*",
@@ -28,9 +31,7 @@
     "mermaid": "11.4.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "zustand": "4.5.5",
-    "@scirender/figure-engine": "workspace:*",
-    "@scirender/table-engine": "workspace:*"
+    "zustand": "4.5.5"
   },
   "devDependencies": {
     "@fontsource/be-vietnam-pro": "^5.3.0",

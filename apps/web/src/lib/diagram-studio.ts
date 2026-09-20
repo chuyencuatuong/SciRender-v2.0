@@ -1,3 +1,5 @@
+import { lazyModule } from './lazy-module';
+
 export type DiagramStudioCurve = 'linear' | 'basis' | 'step';
 export type DiagramStudioTheme = 'academic' | 'obsidian' | 'blueprint';
 
@@ -36,7 +38,8 @@ export const DIAGRAM_PRESETS: DiagramPreset[] = [
 ];
 
 let renderSeq = 0;
-let mermaidLoader: Promise<typeof import('mermaid').default> | null = null;
+/** Same recovery guarantee as `lib/mermaid.ts`: a failed chunk fetch is not memoised. */
+const loadMermaid = lazyModule(() => import('mermaid').then((m) => m.default));
 let configuredKey = '';
 const MAX_RENDER_CACHE = 64;
 const renderCache = new Map<string, string>();
@@ -84,8 +87,7 @@ export async function renderDiagramSvg(
   source: string,
   options: { curve?: DiagramStudioCurve; theme?: DiagramStudioTheme; direction?: 'TB' | 'TD' | 'BT' | 'LR' | 'RL'; fontFamily?: string; nodeSpacing?: number; rankSpacing?: number } = {},
 ): Promise<string> {
-  if (!mermaidLoader) mermaidLoader = import('mermaid').then((m) => m.default);
-  const mermaid = await mermaidLoader;
+  const mermaid = await loadMermaid();
   const curve = options.curve ?? 'basis';
   const theme = options.theme ?? 'academic';
   const direction = options.direction;
@@ -102,7 +104,16 @@ export async function renderDiagramSvg(
       theme: 'base',
       fontFamily,
       themeVariables: { fontFamily, fontSize: '13px', ...tv },
-      flowchart: { htmlLabels: true, useMaxWidth: false, curve, nodeSpacing, rankSpacing, padding: 10 },
+      // See lib/mermaid.ts: "step" is supported by mermaid's runtime curve
+      // table but missing from its published type.
+      flowchart: {
+        htmlLabels: true,
+        useMaxWidth: false,
+        curve: curve as 'linear' | 'basis' | 'cardinal',
+        nodeSpacing,
+        rankSpacing,
+        padding: 10,
+      },
       sequence: { useMaxWidth: true },
       gantt: { useMaxWidth: true },
     });

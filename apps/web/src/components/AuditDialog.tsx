@@ -5,7 +5,7 @@ import type { AuditCheck, AuditReport } from '@scirender/intelligence';
 import { useStore } from '~/state/store';
 import type { RenderState } from '~/hooks/useRender';
 
-interface Props {
+export interface AuditDialogProps {
   open: boolean;
   onClose: () => void;
   render: RenderState;
@@ -20,7 +20,7 @@ const GROUPS: Array<{ id: AuditCheck['group']; title: string }> = [
   { id: 'layout', title: 'Dàn trang & công thức' },
 ];
 
-export function AuditDialog({ open, onClose, render, stale, onRender }: Props): JSX.Element | null {
+export function AuditDialog({ open, onClose, render, stale, onRender }: AuditDialogProps): JSX.Element | null {
   const requestGotoLine = useStore((s) => s.requestGotoLine);
   if (!open || typeof document === 'undefined') return null;
   const audit = render.audit;

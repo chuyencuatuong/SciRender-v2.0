@@ -5,7 +5,7 @@ import type { BibEntry, LabelRecord } from '@scirender/ast';
 import { applyDiagramViewport, DIAGRAM_PRESETS, getSvgIntrinsicSize, renderDiagramSvg, type DiagramStudioCurve, type DiagramStudioTheme } from '~/lib/diagram-studio';
 import type { DiagramForm } from '~/lib/card-forms';
 
-interface Props {
+export interface DiagramDialogProps {
   open: boolean;
   form: DiagramForm;
   bibliography?: BibEntry[];
@@ -40,7 +40,7 @@ function highlightMermaid(value: string): string {
   return html;
 }
 
-export function DiagramDialog({ open, form, bibliography, labels, onChange, onSave, onClose, saved, busy }: Props): JSX.Element | null {
+export function DiagramDialog({ open, form, bibliography, labels, onChange, onSave, onClose, saved, busy }: DiagramDialogProps): JSX.Element | null {
   const [svg, setSvg] = useState('');
   const [error, setError] = useState('');
   const [nodeSpacing, setNodeSpacing] = useState(32);

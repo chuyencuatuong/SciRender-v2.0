@@ -1,17 +1,17 @@
 import { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { descriptiveStats, evaluateGrid, linearRegression, parseNumber, quadraticRegression } from '@scirender/table-engine';
-import { renderChartSvg, type ChartKind, type RegressionKind } from '@scirender/figure-engine';
+import { renderChartSvg, type ChartKind, type NumericChartPoint, type RegressionKind } from '@scirender/figure-engine';
 import type { TableForm } from '~/lib/card-forms';
 
-interface Props {
+export interface ChartDialogProps {
   form: TableForm;
   defaultLabel: string;
   onClose: () => void;
   onCreate: (svg: string, meta: { caption: string; label: string; width: string }) => void | Promise<void>;
 }
 
-export function ChartDialog({ form, defaultLabel, onClose, onCreate }: Props): JSX.Element {
+export function ChartDialog({ form, defaultLabel, onClose, onCreate }: ChartDialogProps): JSX.Element {
   const [kind, setKind] = useState<ChartKind>('scatter');
   const [xIndex, setXIndex] = useState(0);
   const [yIndex, setYIndex] = useState(form.header.length > 1 ? 1 : 0);
@@ -43,20 +43,25 @@ export function ChartDialog({ form, defaultLabel, onClose, onCreate }: Props): J
       return { bars, points: [], stats: descriptiveStats(bars.map((b) => b.y)), regression: null };
     }
     const fixed = parseNumber(fixedError);
-    const points = form.rows
-      .map((_, i) => {
-        const x = parseNumber(evaluated.values[i]?.[xIndex] ?? '');
-        const y = parseNumber(evaluated.values[i]?.[yIndex] ?? '');
-        if (x == null || y == null) return null;
-        const rawError = showErrorBars
-          ? errorMode === 'fixed'
-            ? fixed
-            : parseNumber(evaluated.values[i]?.[errorIndex] ?? '')
-          : null;
-        const yError = rawError == null ? undefined : Math.abs(rawError);
-        return { x, y, yError };
-      })
-      .filter((v): v is { x: number; y: number; yError?: number } => v !== null);
+    // `flatMap` drops the unusable rows without a type predicate. The previous
+    // `.map(... | null).filter(v is {...})` could not compile: an object literal
+    // that always assigns `yError` widens to a *required* `yError: number |
+    // undefined`, which is not assignable to the optional `yError?: number` the
+    // predicate claimed — and the un-narrowed `| null` then leaked into every
+    // `points.map((p) => p.x)` below.
+    const points: NumericChartPoint[] = form.rows.flatMap((_, i) => {
+      const x = parseNumber(evaluated.values[i]?.[xIndex] ?? '');
+      const y = parseNumber(evaluated.values[i]?.[yIndex] ?? '');
+      if (x == null || y == null) return [];
+      const rawError = showErrorBars
+        ? errorMode === 'fixed'
+          ? fixed
+          : parseNumber(evaluated.values[i]?.[errorIndex] ?? '')
+        : null;
+      return rawError == null
+        ? [{ x, y }]
+        : [{ x, y, yError: Math.abs(rawError) }];
+    });
     const regression = regressionKind === 'linear'
       ? linearRegression({ x: points.map((p) => p.x), y: points.map((p) => p.y) })
       : regressionKind === 'quadratic'

@@ -6,6 +6,9 @@
       "@scirender/ast": [
         "packages/ast/src/index.ts"
       ],
+      "@scirender/citation-engine": [
+        "packages/citation-engine/src/index.ts"
+      ],
       "@scirender/parser": [
         "packages/parser/src/index.ts"
       ],

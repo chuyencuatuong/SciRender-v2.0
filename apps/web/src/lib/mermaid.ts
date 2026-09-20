@@ -1,7 +1,16 @@
 import type { TemplateDescriptor } from '@scirender/template-engine';
 import { injectSvgAcademicFont } from '@scirender/figure-engine';
+import { lazyModule } from './lazy-module';
 
-let loader: Promise<typeof import('mermaid').default> | null = null;
+/**
+ * Mermaid is the single heaviest chunk in the app (~2.2MB raw). It is fetched
+ * the first time a document actually contains a diagram — and, because the
+ * memo lives in `lazyModule`, a fetch that fails does NOT leave every later
+ * diagram permanently broken: the next render retries. Before this, one
+ * dropped request meant "no diagrams until you reload", with nothing on screen
+ * saying so.
+ */
+const loadMermaid = lazyModule(() => import('mermaid').then((m) => m.default));
 let seq = 0;
 const MAX_MERMAID_CACHE = 96;
 const cache = new Map<string, string>();
@@ -42,8 +51,7 @@ async function getMermaid(
   t: TemplateDescriptor,
   overrides: { curve?: MermaidCurve; theme?: MermaidTheme } = {},
 ): Promise<typeof import('mermaid').default> {
-  if (!loader) loader = import('mermaid').then((m) => m.default);
-  const mermaid = await loader;
+  const mermaid = await loadMermaid();
   const d = t.diagrams;
   const fontFamily = '"Times New Roman", Times, serif';
   const curve = overrides.curve ?? d.curve as MermaidCurve;
@@ -69,7 +77,12 @@ async function getMermaid(
       flowchart: {
         htmlLabels: false,
         useMaxWidth: true,
-        curve,
+        // Mermaid's published type for `curve` lists only linear/basis/cardinal,
+        // but its runtime curve table (dist/mermaid.js) also registers
+        // `curveStep` — verified in the installed 11.4.0 bundle. The template
+        // exposes "step" as a real choice, so the cast keeps the feature rather
+        // than silently downgrading the author's selection to basis.
+        curve: curve as 'linear' | 'basis' | 'cardinal',
         nodeSpacing: d.nodeSpacing,
         rankSpacing: d.rankSpacing,
         padding: 10,

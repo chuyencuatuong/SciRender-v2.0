@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { listenForShortcuts } from '~/lib/shortcuts';
 import {
   FileCode2,
@@ -15,13 +15,14 @@ import {
   Atom,
 } from 'lucide-react';
 import { exportStandaloneHtml, printDocument, slug } from '@scirender/renderer-pdf';
-import { importBundle, exportBundle } from '@scirender/storage';
-import { track } from '@scirender/telemetry';
+import { BundleAssetsRejected, importBundle, exportBundle } from '@scirender/storage';
+import { countExport, track } from '@scirender/telemetry';
 import type { RenderState } from '~/hooks/useRender';
 import { Menu } from '~/components/ui/Menu';
 import { useStore } from '~/state/store';
 import { readAppFontsCss, readKatexCss } from '~/lib/export-fonts';
-import { AuditDialog } from '~/components/AuditDialog';
+import { AppLoadingScreen } from '~/components/ui/AppLoadingScreen';
+import { useLazyDialogs } from '~/components/ui/dialog-context';
 
 /** Đánh dấu đã hiện lời nhắc "chọn Save as PDF" một lần trên máy này (P5-friendly, không cần server). */
 const PRINT_HINT_SEEN_KEY = 'sr:print-hint-seen';
@@ -58,10 +59,13 @@ export function TopBar({ render }: Props): JSX.Element {
   const pageOrientations = render.pages.map((p) => p.orientation);
   const pageKinds = render.pages.map((p) => p.kind);
 
+  const { AuditDialog } = useLazyDialogs();
+
   const onPrintRef = useRef<() => void>(() => undefined);
 
   const onPrint = (): void => {
     if (!result || !render.pages.length) return;
+    countExport();
     track('export.print', { pages: render.pages.length });
     // Chỉ ai chưa từng thấy hộp thoại in của app mới cần nhắc — tránh làm
     // phiền người đã biết. Nhắc bằng alert (không phải toast tự ẩn) vì đây
@@ -106,6 +110,7 @@ export function TopBar({ render }: Props): JSX.Element {
       lang: result.document.meta.language,
     });
     download(`${slug(title)}.html`, new Blob([html], { type: 'text/html;charset=utf-8' }));
+    countExport();
     track('export.html', { pages: render.pages.length, bytes: html.length });
   };
 
@@ -118,6 +123,7 @@ export function TopBar({ render }: Props): JSX.Element {
         `${slug(title)}.scirender.json`,
         new Blob([JSON.stringify(bundle)], { type: 'application/json' }),
       );
+      countExport();
       track('export.bundle', { assets: bundle.assets.length });
     } finally {
       setBusy(false);
@@ -128,7 +134,17 @@ export function TopBar({ render }: Props): JSX.Element {
     setBusy(true);
     try {
       const text = await file.text();
-      const id = await importBundle(JSON.parse(text));
+      let id: string;
+      try {
+        id = await importBundle(JSON.parse(text));
+      } catch (err) {
+        // The document imported but some attachments were refused (they were
+        // not inline `data:` payloads). The text is the valuable part, so open
+        // it and tell the reader what was dropped — do not discard the import.
+        if (!(err instanceof BundleAssetsRejected)) throw err;
+        id = err.docId;
+        window.alert(err.message);
+      }
       await refreshLibrary();
       await openDocument(id);
     } catch (err) {
@@ -301,13 +317,15 @@ export function TopBar({ render }: Props): JSX.Element {
         />
         </div>
       </div>
-      <AuditDialog
-        open={auditOpen}
-        onClose={() => setAuditOpen(false)}
-        render={render}
-        stale={stale}
-        onRender={requestRender}
-      />
+      <Suspense fallback={<AppLoadingScreen compact />}>
+        <AuditDialog
+          open={auditOpen}
+          onClose={() => setAuditOpen(false)}
+          render={render}
+          stale={stale}
+          onRender={requestRender}
+        />
+      </Suspense>
     </header>
   );
 }

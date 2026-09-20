@@ -17,7 +17,7 @@ import {
   type StoredAsset,
   type StoredDocument,
 } from '@scirender/storage';
-import { initTelemetry, setEnabled as setTelemetryEnabled, track } from '@scirender/telemetry';
+import { countSession, initTelemetry, setEnabled as setTelemetryEnabled, track } from '@scirender/telemetry';
 import { mergeBibliographyFrontMatter, parseBibTeX } from '@scirender/citation-engine';
 import { findTemplate, type TemplateOverrides } from '@scirender/template-engine';
 import { needsCover, withCover } from '~/lib/cover';
@@ -178,6 +178,9 @@ export const useStore = create<AppState>((set, get) => ({
   async init() {
     const prefs = loadPreferences();
     initTelemetry(prefs.telemetryOptIn);
+    // Counters are independent of the event log's consent flag — see
+    // packages/telemetry/src/counters.ts for why the two layers differ.
+    countSession();
     applyTheme(prefs.theme);
     set({ prefs });
     try {

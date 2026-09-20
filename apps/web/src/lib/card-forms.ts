@@ -10,23 +10,48 @@
 
 const CAPTION_RE = /^:\s+(.*)$/;
 
-/** Pulls a trailing `: caption {#label}` line off a card. */
-function takeCaption(text: string): { body: string; caption: string; label: string } {
+/**
+ * Pulls a trailing `: caption {#label attr=value ...}` line off a card.
+ *
+ * `payload` is the raw text inside the braces, label included. It exists
+ * because the caller often needs the attributes and `caption` has, by
+ * definition, already had the whole brace block stripped out of it. Without it
+ * `parseDiagram` was matching `dir=`/`curve=`/`theme=` against a string those
+ * attributes had just been removed from, so every diagram loaded from a saved
+ * document came back at the defaults and the author's direction, curve and
+ * theme were silently discarded on the next save (a P1 violation, and the
+ * reason the diagram round-trip check failed).
+ */
+function takeCaption(text: string): {
+  body: string;
+  caption: string;
+  label: string;
+  payload: string;
+} {
   const lines = text.replace(/\s+$/, '').split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i] as string;
     if (!line.trim()) continue;
     const m = CAPTION_RE.exec(line);
     if (!m) break;
-    const { text: caption, label } = takeLabel((m[1] ?? '').trim());
-    return { body: lines.slice(0, i).join('\n').replace(/\s+$/, ''), caption, label };
+    const { text: caption, label, payload } = takeLabel((m[1] ?? '').trim());
+    return {
+      body: lines.slice(0, i).join('\n').replace(/\s+$/, ''),
+      caption,
+      label,
+      payload,
+    };
   }
-  return { body: text.replace(/\s+$/, ''), caption: '', label: '' };
+  return { body: text.replace(/\s+$/, ''), caption: '', label: '', payload: '' };
 }
 
-function takeLabel(text: string): { text: string; label: string } {
+function takeLabel(text: string): { text: string; label: string; payload: string } {
   const matches = Array.from(text.matchAll(/\{#([a-z]+:[A-Za-z0-9_.-]+)(?:\s+[^{}]*)?\}/g));
   const label = matches.at(-1)?.[1] ?? '';
+  const payload = Array.from(text.matchAll(/\{([^{}]*)\}/g))
+    .map((m) => m[1] ?? '')
+    .join(' ')
+    .trim();
   const cleaned = text
     .replace(/\{#.*?\}|\{\s*\}/g, ' ')
     .replace(/\{([^{}]*)\}/g, (_, content: string) =>
@@ -34,7 +59,7 @@ function takeLabel(text: string): { text: string; label: string } {
     )
     .replace(/\s{2,}/g, ' ')
     .trim();
-  return { text: cleaned, label };
+  return { text: cleaned, label, payload };
 }
 
 
@@ -101,6 +126,10 @@ export interface DiagramForm {
   attrs: Record<string, string>;
 }
 
+/** Values `parseDiagram` falls back to, and therefore values `serializeDiagram` omits. */
+const DIAGRAM_DEFAULT_CURVE: DiagramForm['curve'] = 'basis';
+const DIAGRAM_DEFAULT_THEME: DiagramForm['theme'] = 'academic';
+
 export function parseDiagram(text: string): DiagramForm | null {
   const trimmed = text.trim();
   const assetMatch = /^!\[([^\]]*)\]\((asset:[^)]+)\)\s*\{([^}]*)\}\s*$/.exec(trimmed);
@@ -124,13 +153,17 @@ export function parseDiagram(text: string): DiagramForm | null {
     };
   }
 
-  const { body, caption, label } = takeCaption(text);
+  const { body, caption, label, payload } = takeCaption(text);
   const m = /^```mermaid[ \t]*\n([\s\S]*?)\n?```[ \t]*$/.exec(body.trim());
   if (!m) return null;
-  const dir = /\bdir=(TB|TD|BT|LR|RL)\b/.exec(caption);
-  const curve = /\bcurve=(linear|basis|step)\b/.exec(caption)?.[1] as DiagramForm['curve'] | undefined;
-  const theme = /\btheme=(academic|obsidian|blueprint)\b/.exec(caption)?.[1] as DiagramForm['theme'] | undefined;
-  const landscape = /\b(?:landscape|orientation=landscape)\b/.test(caption);
+  // Attributes live inside the braces; `caption` has had the braces removed.
+  // Both are searched so a document that writes them outside the braces (the
+  // older, undocumented shape) still loads.
+  const attrSource = `${payload} ${caption}`;
+  const dir = /\bdir=(TB|TD|BT|LR|RL)\b/.exec(attrSource);
+  const curve = /\bcurve=(linear|basis|step)\b/.exec(attrSource)?.[1] as DiagramForm['curve'] | undefined;
+  const theme = /\btheme=(academic|obsidian|blueprint)\b/.exec(attrSource)?.[1] as DiagramForm['theme'] | undefined;
+  const landscape = /\b(?:landscape|orientation=landscape)\b/.test(attrSource);
   const attrs: Record<string, string> = {};
   if (dir) attrs.dir = dir[1] as string;
   if (curve) attrs.curve = curve;
@@ -146,8 +179,8 @@ export function parseDiagram(text: string): DiagramForm | null {
   return {
     source: m[1] ?? '',
     direction: dir ? (dir[1] as string) : '',
-    curve: curve ?? 'basis',
-    theme: theme ?? 'academic',
+    curve: curve ?? DIAGRAM_DEFAULT_CURVE,
+    theme: theme ?? DIAGRAM_DEFAULT_THEME,
     landscape,
     caption: cleanCaption,
     label,
@@ -166,11 +199,17 @@ export function serializeDiagram(form: DiagramForm): string {
     ].filter(Boolean).join(' ');
     return `![${form.caption || 'Sơ đồ kỹ thuật'}](${form.asset}){${assetBits}}`;
   }
+  // Only non-default values are written back. `curve` and `theme` are always
+  // populated on the form (the dialog needs a concrete value to render with),
+  // so emitting them unconditionally appended `curve=basis theme=academic` to
+  // every caption the author had left plain — rewriting the author's source on
+  // a round trip that changed nothing, which P1 forbids. DEFAULTs here must
+  // stay in step with the fallbacks in `parseDiagram` below.
   const bits = [
     form.label ? `#${form.label}` : '',
     form.direction ? `dir=${form.direction}` : '',
-    form.curve ? `curve=${form.curve}` : '',
-    form.theme ? `theme=${form.theme}` : '',
+    form.curve && form.curve !== DIAGRAM_DEFAULT_CURVE ? `curve=${form.curve}` : '',
+    form.theme && form.theme !== DIAGRAM_DEFAULT_THEME ? `theme=${form.theme}` : '',
     form.landscape ? 'landscape' : '',
   ].filter(Boolean).join(' ');
   const cap = form.caption || bits ? `\n\n: ${form.caption}${bits ? ` {${bits}}` : ''}` : '';
