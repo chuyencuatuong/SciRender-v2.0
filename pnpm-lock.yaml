@@ -26,12 +26,12 @@ importers:
       '@scirender/citation-engine':
         specifier: workspace:*
         version: link:../../packages/citation-engine
+      '@scirender/equation-engine':
+        specifier: workspace:*
+        version: link:../../packages/equation-engine
       '@scirender/figure-engine':
         specifier: workspace:*
         version: link:../../packages/figure-engine
-      '@scirender/table-engine':
-        specifier: workspace:*
-        version: link:../../packages/table-engine
       '@scirender/intelligence':
         specifier: workspace:*
         version: link:../../packages/intelligence
@@ -50,6 +50,9 @@ importers:
       '@scirender/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@scirender/table-engine':
+        specifier: workspace:*
+        version: link:../../packages/table-engine
       '@scirender/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
@@ -126,6 +129,12 @@ importers:
 
   packages/ast: {}
 
+  packages/citation-engine:
+    dependencies:
+      '@scirender/ast':
+        specifier: workspace:*
+        version: link:../ast
+
   packages/equation-engine:
     dependencies:
       '@scirender/ast':
@@ -138,12 +147,6 @@ importers:
       '@types/katex':
         specifier: 0.16.7
         version: 0.16.7
-
-  packages/citation-engine:
-    dependencies:
-      '@scirender/ast':
-        specifier: workspace:*
-        version: link:../ast
 
   packages/figure-engine:
     dependencies:
@@ -162,6 +165,9 @@ importers:
 
   packages/layout-engine:
     dependencies:
+      '@scirender/ast':
+        specifier: workspace:*
+        version: link:../ast
       '@scirender/template-engine':
         specifier: workspace:*
         version: link:../template-engine
