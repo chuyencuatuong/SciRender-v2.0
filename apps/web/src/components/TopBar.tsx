@@ -13,7 +13,9 @@ import {
   Sun,
   Upload,
   Atom,
+  CircleUserRound,
 } from 'lucide-react';
+import { isSupabaseConfigured } from '~/lib/supabase';
 import { exportStandaloneHtml, printDocument, slug } from '@scirender/renderer-pdf';
 import { BundleAssetsRejected, importBundle, exportBundle } from '@scirender/storage';
 import { countExport, track } from '@scirender/telemetry';
@@ -303,6 +305,19 @@ export function TopBar({ render }: Props): JSX.Element {
         >
           {theme === 'dark' ? <Sun size={16} strokeWidth={1.8} /> : <Moon size={16} strokeWidth={1.8} />}
         </button>
+
+        {/* DAY 1: lối vào cổng tài khoản — chỉ hiện khi đã cấu hình Supabase,
+            nên bản chạy khách/ngoại tuyến giữ nguyên thanh công cụ cũ. */}
+        {isSupabaseConfigured ? (
+          <a
+            href="#dashboard"
+            className="sr-rail-btn !h-[34px] !w-[34px]"
+            title="Tài khoản & tài liệu của tôi"
+            aria-label="Mở cổng tài khoản"
+          >
+            <CircleUserRound size={16} strokeWidth={1.8} />
+          </a>
+        ) : null}
 
         <input
           ref={importRef}

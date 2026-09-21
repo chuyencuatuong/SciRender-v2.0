@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, Loader2, Maximize2, Minus, Play, Plus } from 'lucide-react';
 import type { PageKind, PageOrientation, RenderState } from '~/hooks/useRender';
 import { useStore } from '~/state/store';
+import { sanitizeContent } from '~/lib/security';
 
 interface Props {
   render: RenderState;
@@ -149,7 +150,13 @@ export function PreviewPane({ render, onBack = null }: Props): JSX.Element {
   }, [fitToWidth, manualZoom, render.pages.length]);
 
   const t = render.result?.template;
-  const pages = render.pages;
+  // Last line of defense before `dangerouslySetInnerHTML` (security.ts,
+  // `document-render`). Memoised on the pages array, so zoom/scroll re-renders
+  // do not re-sanitize; useRender already cleans at the first DOM sink.
+  const pages = useMemo(
+    () => render.pages.map((page) => ({ ...page, html: sanitizeContent(page.html, 'document-render') })),
+    [render.pages],
+  );
 
   return (
     <>

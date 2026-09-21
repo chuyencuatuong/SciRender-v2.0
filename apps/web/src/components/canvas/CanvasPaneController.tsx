@@ -105,10 +105,12 @@ export function useCanvasController({ viewSwitch, render }: Props): CanvasContro
   const addGeneratedAsset = useStore((s) => s.addGeneratedAsset);
   const gotoLine = useStore((s) => s.gotoLine);
   const coverAdded = useStore((s) => s.coverAdded);
+  const profileFilled = useStore((s) => s.profileFilled);
   const insertBlockRequest = useStore((s) => s.insertBlockRequest);
   const citationInsertRequest = useStore((s) => s.citationInsertRequest);
   const noteBlockUsed = useStore((s) => s.noteBlockUsed);
   const [coverNoticeSeen, setCoverNoticeSeen] = useState<number | null>(null);
+  const [profileNoticeSeen, setProfileNoticeSeen] = useState<number | null>(null);
   const labels = render.result?.document.labels;
 
   const [doc, setDoc] = useState<CanvasDoc>(() => toCards(initialStore.source));
@@ -630,6 +632,7 @@ export function useCanvasController({ viewSwitch, render }: Props): CanvasContro
         <AnimatePresence>
           {coverAdded && coverAdded !== coverNoticeSeen ? (
             <motion.div
+              key="cover-added"
               initial={reduced ? false : { opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={reduced ? undefined : { opacity: 0, height: 0 }}
@@ -654,6 +657,41 @@ export function useCanvasController({ viewSwitch, render }: Props): CanvasContro
                   type="button"
                   aria-label="Ẩn thông báo"
                   onClick={() => setCoverNoticeSeen(coverAdded)}
+                  className="grid h-5 w-5 shrink-0 place-items-center rounded text-deep-500 hover:bg-[var(--sr-surface)]"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </motion.div>
+          ) : null}
+          {profileFilled && profileFilled.at !== profileNoticeSeen ? (
+            <motion.div
+              key="profile-filled"
+              initial={reduced ? false : { opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={reduced ? undefined : { opacity: 0, height: 0 }}
+              transition={{ duration: 0.18 }}
+              className="mb-2.5 overflow-hidden"
+            >
+              <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-2 text-[12px] text-deep-800">
+                <BadgeCheck size={14} className="mt-0.5 shrink-0 text-sky-600" />
+                <div className="flex-1">
+                  Đã điền trang bìa từ hồ sơ của bạn ({profileFilled.fields
+                    .map((f) => ({ members: 'sinh viên thực hiện', mssv: 'MSSV', faculty: 'khoa', major: 'ngành' })[f])
+                    .join(', ')}). Chỉ những ô còn trống hoặc giữ chỗ được điền. Mở{' '}
+                  <button
+                    type="button"
+                    className="font-medium underline underline-offset-2"
+                    onClick={() => setShowFront(true)}
+                  >
+                    Thông tin tài liệu
+                  </button>{' '}
+                  để xem hoặc sửa.
+                </div>
+                <button
+                  type="button"
+                  aria-label="Ẩn thông báo"
+                  onClick={() => setProfileNoticeSeen(profileFilled.at)}
                   className="grid h-5 w-5 shrink-0 place-items-center rounded text-deep-500 hover:bg-[var(--sr-surface)]"
                 >
                   <X size={12} />

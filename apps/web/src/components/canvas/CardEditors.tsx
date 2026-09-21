@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useState } from 'react';
+import { sanitizeContent } from '~/lib/security';
 import { Code2 } from 'lucide-react';
 import {
   headingDepth,
@@ -163,7 +164,7 @@ function EquationPreview({ tex }: { tex: string }): JSX.Element {
     void Promise.all([ensureKatexCss(), import('@scirender/equation-engine')])
       .then(([, { renderMath }]) => renderMath(tex, true))
       .then((value) => {
-        if (!cancelled) setPreview(value);
+        if (!cancelled) setPreview({ ...value, html: sanitizeContent(value.html, 'document-render') });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -256,7 +257,7 @@ function DiagramEditor({ text, onChange, kind, labels, bibliography, onSaveDiagr
     if (!previewSource.trim()) { setThumb(''); return () => { cancelled = true; }; }
     const timer = window.setTimeout(() => {
       void renderDiagramSvg(previewSource, { curve: form?.curve, theme: form?.theme, direction: (form?.direction || undefined) as 'TB' | 'BT' | 'LR' | 'RL' | undefined })
-        .then((svg) => { if (!cancelled) setThumb(svg); })
+        .then((svg) => { if (!cancelled) setThumb(sanitizeContent(svg, 'document-render')); })
         .catch(() => { if (!cancelled) setThumb(''); });
     }, 300);
     return () => { cancelled = true; window.clearTimeout(timer); };

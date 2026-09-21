@@ -7,6 +7,7 @@ import type { AuditReport } from '@scirender/intelligence';
 import { fitDisplayMath } from '~/lib/fit-math';
 import { ensureKatexCss } from '~/lib/katex-css';
 import { resolveMermaidBlocks } from '~/lib/mermaid';
+import { sanitizeContent } from '~/lib/security';
 import type { CompileResult } from '~/lib/pipeline';
 import { useStore } from '~/state/store';
 
@@ -214,12 +215,14 @@ export function useRender(): RenderState {
       if (t.descriptor.frontMatter.enabled) {
         let previousKey = '';
         for (let pass = 0; pass < MAX_FRONT_PASSES; pass++) {
-          const frontBlocks = engine.renderFrontMatter(result.document, t.descriptor, {
-            outline: result.outline,
-            figures: result.figures,
-            tables: result.tables,
-            numbers,
-          });
+          const frontBlocks = engine
+            .renderFrontMatter(result.document, t.descriptor, {
+              outline: result.outline,
+              figures: result.figures,
+              tables: result.tables,
+              numbers,
+            })
+            .map(cleanRendered);
           if (!frontBlocks.length) {
             frontPages = [];
             break;
@@ -245,7 +248,7 @@ export function useRender(): RenderState {
 
       const d = t.descriptor;
       const pages: RenderedPage[] = [
-        ...result.coverPages.map((html) => ({ html, footer: '', kind: 'cover' as const, orientation: 'portrait' as const })),
+        ...result.coverPages.map((html) => ({ html: cleanRendered(html), footer: '', kind: 'cover' as const, orientation: 'portrait' as const })),
         ...frontPages.map((html, i) => ({
           html,
           footer: engine.formatPageNumber(i + 1, d.layout.frontPageNumbers),
@@ -331,6 +334,16 @@ function nextFrame(): Promise<void> {
  * that way accepts a block that does not fit. Reusing the settled elements is
  * what makes pagination reproducible across reloads (P2).
  */
+/**
+ * Defense in depth on the render path (security.ts, profile `document-render`).
+ * The renderer escapes every author string by construction; this catches a
+ * future escaping bug or a hostile Mermaid/KaTeX output before it becomes DOM.
+ * Measured: ~15 ms per pass for the 17-page sample, output DOM-identical.
+ */
+function cleanRendered(html: string): string {
+  return sanitizeContent(html, 'document-render');
+}
+
 async function settleMedia(
   host: HTMLElement,
   blocks: string[],
@@ -353,7 +366,13 @@ async function settleMedia(
   const staging = document.createElement('div');
   staging.className = 'sr-doc';
   staging.style.width = '100%';
-  staging.innerHTML = blocks.join('');
+  // First DOM sink of the body: images start loading (and `onerror` would
+  // fire) here, before the preview ever sees the markup — so this, not only
+  // PreviewPane, is where the sanitizer has to run. Mermaid SVG is already
+  // inlined at this point, and its `data-sr-mermaid` source attribute already
+  // removed (DOMPurify's SAFE_FOR_XML would drop any attribute containing
+  // `-->`, i.e. every flowchart, so sanitizing *before* Mermaid is not an option).
+  staging.innerHTML = cleanRendered(blocks.join(''));
   const elements = Array.from(staging.children);
   host.appendChild(staging);
 

@@ -23,6 +23,7 @@ import { findTemplate, type TemplateOverrides } from '@scirender/template-engine
 import { needsCover, withCover } from '~/lib/cover';
 import { BUILTIN_ASSETS } from '~/lib/builtin-assets';
 import { SAMPLE_DOCUMENT, EMPTY_DOCUMENT } from '~/lib/sample';
+import { applyProfileToCover, type CoverField, type CoverProfile } from '~/lib/profile-cover';
 
 export type PanelId =
   | 'outline'
@@ -81,8 +82,17 @@ export interface AppState {
   /** Set by the Command Palette; CanvasPane owns the actual insert. */
   insertBlockRequest: { templateId: string; afterBlockId: string | null; nonce: number } | null;
   citationInsertRequest: { text: string; nonce: number } | null;
+  /**
+   * The signed-in student's cover data, set by the editor route only when the
+   * profile has `auto_fill_cover = true`; null for guests / opted-out users.
+   */
+  coverProfile: CoverProfile | null;
+  /** Last automatic fill from the profile — the canvas announces it (P6). */
+  profileFilled: { at: number; fields: CoverField[] } | null;
 
   init: () => Promise<void>;
+  /** Stores the profile and fills the open BTL document's cover placeholders. */
+  setCoverProfile: (profile: CoverProfile | null) => void;
   setSource: (source: string) => void;
   /** Commit the editor content to the preview. */
   render: () => void;
@@ -149,6 +159,34 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+type StoreGet = () => AppState;
+type StoreSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
+
+/**
+ * Applies `coverProfile` to the open document when it uses the HCMUT BTL
+ * template. See `lib/profile-cover.ts` for exactly what may be overwritten
+ * (only a pristine sample/empty document, or placeholders). Returns true when
+ * the source changed; the caller decides whether to save.
+ */
+function fillCoverFromProfile(get: StoreGet, set: StoreSet): boolean {
+  const { coverProfile, templateId, source, renderedSource } = get();
+  if (!coverProfile || templateId !== 'hcmut-btl') return false;
+  const pristine = source === SAMPLE_DOCUMENT || source === EMPTY_DOCUMENT;
+  const result = applyProfileToCover(source, coverProfile, { pristine });
+  if (!result.changed.length) return false;
+  // A preview that was up to date stays up to date: the fill is the app's
+  // doing, not an edit the user has yet to commit with "Dựng trang".
+  const previewCurrent = renderedSource === source;
+  set((s) => ({
+    source: result.source,
+    title: titleFromSource(result.source),
+    dirty: true,
+    profileFilled: { at: Date.now(), fields: result.changed },
+    ...(previewCurrent ? { renderedSource: result.source, renderNonce: s.renderNonce + 1 } : {}),
+  }));
+  return true;
+}
+
 export const useStore = create<AppState>((set, get) => ({
   ready: false,
   docId: '',
@@ -174,6 +212,23 @@ export const useStore = create<AppState>((set, get) => ({
   activeBlockId: null,
   insertBlockRequest: null,
   citationInsertRequest: null,
+  coverProfile: null,
+  profileFilled: null,
+
+  setCoverProfile(profile) {
+    const prev = get().coverProfile;
+    const same =
+      prev === profile ||
+      (prev !== null &&
+        profile !== null &&
+        prev.full_name === profile.full_name &&
+        prev.student_id === profile.student_id &&
+        prev.faculty === profile.faculty &&
+        prev.major === profile.major);
+    if (same) return;
+    set({ coverProfile: profile });
+    if (get().ready && fillCoverFromProfile(get, set)) void get().save();
+  },
 
   async init() {
     const prefs = loadPreferences();
@@ -248,6 +303,7 @@ export const useStore = create<AppState>((set, get) => ({
       set({ source: filled, coverAdded: Date.now() });
     }
     set((s) => ({ templateId, dirty: true, renderNonce: s.renderNonce + 1 }));
+    fillCoverFromProfile(get, set);
     track('template.change', { templateId });
     void get().save();
   },
@@ -320,6 +376,7 @@ export const useStore = create<AppState>((set, get) => ({
       activeBlockId: null,
     }));
     get().setPref('lastDocumentId', id);
+    fillCoverFromProfile(get, set);
     await get().save();
     track('document.create', { sample: withSample });
   },
@@ -347,6 +404,7 @@ export const useStore = create<AppState>((set, get) => ({
       activeBlockId: null,
     }));
     get().setPref('lastDocumentId', doc.id);
+    if (fillCoverFromProfile(get, set)) void get().save();
     track('document.open', { assets: assets.length, bytes: doc.source.length });
   },
 
