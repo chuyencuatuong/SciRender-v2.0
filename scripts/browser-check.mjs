@@ -18,7 +18,8 @@ const playwright = await import(process.env.PLAYWRIGHT_PATH || 'playwright').cat
 });
 const { chromium } = playwright.chromium ? playwright : playwright.default;
 
-const URL = process.env.SCIRENDER_URL ?? 'http://localhost:4173/';
+// DAY 1: "/" is now a landing page; the editor lives at #app.
+const URL = process.env.SCIRENDER_URL ?? 'http://localhost:4173/#app';
 let failures = 0;
 let checks = 0;
 

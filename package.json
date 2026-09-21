@@ -18,7 +18,8 @@
     "fonts": "node scripts/sync-fonts.mjs",
     "smoke:round2": "node scripts/smoke-round2.mjs",
     "smoke:round3": "node scripts/smoke-round3-runtime-contracts.mjs",
-    "smoke:pagination": "node scripts/smoke-pagination-rescue.mjs"
+    "smoke:pagination": "node scripts/smoke-pagination-rescue.mjs",
+    "e2e:auth": "node scripts/e2e-auth-mock.mjs"
   },
   "devDependencies": {
     "esbuild": "0.24.0",

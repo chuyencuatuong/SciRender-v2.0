@@ -60,7 +60,8 @@ import {
   type FigureForm,
   type TableForm,
 } from '../apps/web/src/lib/card-forms.js';
-import { SAMPLE_DOCUMENT } from '../apps/web/src/lib/sample.js';
+import { EMPTY_DOCUMENT, SAMPLE_DOCUMENT } from '../apps/web/src/lib/sample.js';
+import { applyProfileToCover, facultyLabel } from '../apps/web/src/lib/profile-cover.js';
 import {
   formatAPAReference,
   formatAuthorYear,
@@ -906,6 +907,71 @@ const bare = '# Chỉ có tiêu đề\n\nKhông có front matter.';
 const bareFilled = withCover(bare, HCMUT_BTL);
 check('tài liệu không có front matter thì tạo mới', bareFilled.startsWith('---\ntitle: Chỉ có tiêu đề'));
 check('thân tài liệu cũ được giữ lại', bareFilled.includes('Không có front matter.'));
+
+/* ------------------------------------------- DAY 1: hồ sơ → trang bìa BTL */
+
+section('Hồ sơ sinh viên → trang bìa BTL (DAY 1)');
+
+const PROFILE = {
+  full_name: 'Trần Nhật Tường',
+  student_id: '2213880',
+  faculty: 'Khoa học Ứng dụng',
+  major: 'Kỹ thuật Y sinh',
+};
+
+check('facultyLabel thêm "Khoa" khi thiếu', facultyLabel('Khoa học Ứng dụng') === 'Khoa Khoa học Ứng dụng');
+check('facultyLabel giữ nguyên khi đã có đơn vị', facultyLabel('Khoa Cơ khí') === 'Khoa Cơ khí' && facultyLabel('Viện Kỹ thuật') === 'Viện Kỹ thuật');
+
+const fresh = applyProfileToCover(SAMPLE_DOCUMENT, PROFILE, { pristine: true });
+const freshDoc = compile(fresh.source);
+check('tài liệu mẫu mới tạo: thay thành viên bằng sinh viên đang đăng nhập',
+  freshDoc.doc.meta.cover?.members.length === 1 &&
+    freshDoc.doc.meta.cover?.members[0]?.name === 'Trần Nhật Tường' &&
+    freshDoc.doc.meta.cover?.members[0]?.studentId === '2213880',
+  JSON.stringify(freshDoc.doc.meta.cover?.members));
+check('tài liệu mẫu mới tạo: điền khoa', freshDoc.doc.meta.cover?.faculty === 'Khoa Khoa học Ứng dụng', freshDoc.doc.meta.cover?.faculty);
+check('tài liệu mẫu mới tạo: ghi ngành vào cover.major', /^ {2}major: "Kỹ thuật Y sinh"$/m.test(fresh.source));
+check('tài liệu mẫu mới tạo: không đụng khóa khác của front matter',
+  ['course: Môn Cơ sở Y khoa', 'advisor: TS. Nguyễn Văn B', 'logo: asset:logo-bk', 'abstract: |', 'key: mukkamala2015']
+    .every((k) => fresh.source.includes(k)));
+check('tài liệu mẫu mới tạo: thân tài liệu giữ nguyên byte',
+  fresh.source.slice(fresh.source.indexOf('\n---\n', 4)) === SAMPLE_DOCUMENT.slice(SAMPLE_DOCUMENT.indexOf('\n---\n', 4)));
+check('tài liệu mẫu mới tạo: không phát sinh lỗi',
+  !freshDoc.diagnostics.some((d) => d.severity === 'error'), freshDoc.diagnostics.map((d) => d.code).join(','));
+check('tài liệu mẫu mới tạo: bìa in đúng tên + MSSV',
+  freshDoc.rendered.coverPages.join('').includes('Trần Nhật Tường') && freshDoc.rendered.coverPages.join('').includes('MSSV: 2213880'));
+
+const emptyFill = applyProfileToCover(EMPTY_DOCUMENT, PROFILE);
+const emptyDoc = compile(emptyFill.source);
+check('mẫu trống: điền chỗ giữ chỗ (thành viên rỗng, "Khoa ...")',
+  emptyDoc.doc.meta.cover?.members[0]?.name === 'Trần Nhật Tường' && emptyDoc.doc.meta.cover?.faculty === 'Khoa Khoa học Ứng dụng',
+  JSON.stringify(emptyDoc.doc.meta.cover));
+check('mẫu trống: báo đúng các trường đã điền', ['members', 'faculty', 'major'].every((f) => emptyFill.changed.includes(f as never)), emptyFill.changed.join(','));
+
+check('P1: tài liệu có danh sách thành viên thật thì không bị ghi đè (không phải bản mẫu nguyên vẹn)',
+  applyProfileToCover(SAMPLE_DOCUMENT.replace('faculty: Khoa Khoa học Ứng dụng', 'faculty: Khoa Điện'), { ...PROFILE, full_name: 'Người Khác' }).source.includes('- name: Nguyễn Văn A') &&
+  applyProfileToCover(SAMPLE_DOCUMENT.replace('faculty: Khoa Khoa học Ứng dụng', 'faculty: Khoa Điện'), { ...PROFILE, full_name: 'Người Khác' }).source.includes('faculty: Khoa Điện'));
+
+const blankMssv = SAMPLE_DOCUMENT.replace('- name: Trần Nhật Tường\n      mssv: "2210001"', '- name: Trần Nhật Tường\n      mssv: ""');
+const mssvFill = applyProfileToCover(blankMssv, PROFILE);
+check('chỉ điền MSSV còn trống cho đúng dòng của sinh viên',
+  mssvFill.changed.includes('mssv') && compile(mssvFill.source).doc.meta.cover?.members[0]?.studentId === '2213880' &&
+    compile(mssvFill.source).doc.meta.cover?.members[1]?.studentId === '2210002', mssvFill.changed.join(','));
+
+check('chạy lần hai không đổi gì (idempotent)',
+  applyProfileToCover(emptyFill.source, PROFILE).changed.length === 0 &&
+  applyProfileToCover(fresh.source, PROFILE, { pristine: true }).changed.length === 0);
+
+const evil = { ...PROFILE, full_name: 'A: b\n  role: admin # "x"', faculty: '' };
+const evilDoc = compile(applyProfileToCover(EMPTY_DOCUMENT, evil).source);
+check('giá trị hồ sơ không chèn được YAML (xuống dòng, dấu hai chấm, #, ngoặc kép)',
+  evilDoc.doc.meta.cover?.members[0]?.name === evil.full_name && !evilDoc.diagnostics.some((d) => d.severity === 'error'),
+  JSON.stringify(evilDoc.doc.meta.cover?.members));
+
+check('không có khối cover thì không tự dựng cấu trúc', applyProfileToCover(noCover, PROFILE).source === noCover);
+check('hồ sơ rỗng thì không đổi gì', applyProfileToCover(EMPTY_DOCUMENT, { full_name: '', student_id: '', faculty: '', major: '' }).source === EMPTY_DOCUMENT);
+check('nguồn CRLF vẫn điền đúng',
+  compile(applyProfileToCover(EMPTY_DOCUMENT.replace(/\n/g, '\r\n'), PROFILE).source).doc.meta.cover?.members[0]?.name === 'Trần Nhật Tường');
 
 /* ---------------------------------------------------- tìm kiếm loại khối */
 
