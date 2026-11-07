@@ -63,6 +63,8 @@ function inlineOne(node: InlineNode, t: TemplateDescriptor, suppressReferenceWor
       return `<strong>${inline(node.children, t)}</strong>`;
     case 'emphasis':
       return `<em>${inline(node.children, t)}</em>`;
+    case 'underline':
+      return `<u>${inline(node.children, t)}</u>`;
     case 'superscript':
       return `<sup>${inline(node.children, t)}</sup>`;
     case 'subscript':

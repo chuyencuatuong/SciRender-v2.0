@@ -144,6 +144,25 @@ function scan(ctx: Ctx, from: number, to: number): InlineNode[] {
       }
     }
 
+    // --- underline `++text++` ---------------------------------------------
+    // Both inner edges must be non-space, so prose such as "C++ và C++" stays
+    // text (P1): the opening `++ ` is followed by a space and never matches.
+    if (ch === '+' && src[i + 1] === '+' && src[i + 2] !== '+' && i + 2 < to && !/\s/.test(src[i + 2] as string)) {
+      const close = findClosing(src, i + 2, to, '++');
+      if (close !== -1 && !/\s/.test(src[close - 1] as string) && src[close + 2] !== '+') {
+        flush(i);
+        out.push({
+          type: 'underline',
+          id: id(ctx, 'underline', i),
+          position: ctx.loc.span(i, close + 2),
+          children: scan(ctx, i + 2, close),
+        } as InlineNode);
+        i = close + 2;
+        bufStart = i;
+        continue;
+      }
+    }
+
     // --- superscript / subscript ------------------------------------------
     if (ch === '^' || ch === '~') {
       const close = findClosing(src, i + 1, to, ch);

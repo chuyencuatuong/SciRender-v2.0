@@ -433,32 +433,14 @@ console.log('\nGiao diện');
 const headerButtons = await page.evaluate(
   () => document.querySelectorAll('[data-sr-topbar] button, [data-sr-topbar] label').length,
 );
-check('thanh trên gom còn tối đa 4 nút', headerButtons <= 4, `buttons=${headerButtons}`);
-
+// Đợt 8: menu chẻ "Xuất" đã bỏ, thay bằng một nút "In / Lưu PDF"; thanh trên còn
+// thêm Kiểm tra trước khi nộp, đổi nền, cổng tài khoản (DAY 1).
+check('thanh trên gọn (≤ 8 điều khiển)', headerButtons <= 8, `buttons=${headerButtons}`);
 check(
-  'menu Tệp và Xuất có mặt',
+  'menu Tệp và nút In / Lưu PDF có mặt',
   (await page.getByRole('button', { name: 'Tệp' }).count()) === 1 &&
-    (await page.getByRole('button', { name: 'Xuất', exact: true }).count()) === 1,
+    (await page.locator('[data-sr-topbar] button', { hasText: 'In' }).count()) >= 1,
 );
-
-// Nút chính của "Xuất" tải PDF thật, nên ở đây chỉ mở phần menu bên cạnh.
-await page.getByLabel('Thêm cách xuất').click();
-await page.waitForTimeout(250);
-const exportItems = await page.locator('[role="menu"] [role="menuitem"]').allTextContents();
-check(
-  'menu Xuất liệt kê đủ các cách xuất',
-  exportItems.length === 5,
-  String(exportItems.length),
-);
-check(
-  'In và Tải PDF là hai mục tách bạch',
-  exportItems.some((t) => t.includes('Tải PDF về máy')) &&
-    exportItems.some((t) => t.trim().startsWith('In')) &&
-    exportItems.some((t) => t.includes('nét cao')),
-  JSON.stringify(exportItems.map((t) => t.split('\n')[0]?.trim())),
-);
-await page.keyboard.press('Escape');
-await page.waitForTimeout(200);
 
 const techVisible = async () =>
   page.evaluate(() => /parser \d/.test(document.querySelector('footer')?.textContent ?? ''));
@@ -838,6 +820,8 @@ check(
   await page.evaluate(() => document.body.innerText.includes('chưa dựng lại')),
 );
 
+// Đợt 7: Ctrl+Enter trong ô đang gõ chèn ngắt trang; dựng lại chỉ khi không có ô nào focus.
+await page.evaluate(() => (document.activeElement instanceof HTMLElement) && document.activeElement.blur());
 await page.keyboard.press('Control+Enter');
 await page.waitForTimeout(3000);
 const nowHasIt = await page.evaluate(() =>
@@ -970,37 +954,102 @@ check(
 await page.setViewportSize({ width: 1500, height: 940 });
 await page.waitForTimeout(500);
 
-/* ------------------------------------------------------------ tải PDF thật */
+/* Đợt 8: nút tải PDF (html2canvas) đã bỏ khỏi UI; lối duy nhất là In / Lưu PDF. */
 
-console.log('\nTải PDF về máy');
+/* ------------------------------------------- Đợt 11: định dạng, bấm đúp, sơ đồ */
 
-const uiPages = await page.locator('.sr-page').count();
-const [downloaded] = await Promise.all([
-  page.waitForEvent('download', { timeout: 240_000 }),
-  page.getByRole('button', { name: 'Xuất', exact: true }).click(),
-]);
-const pdfPath = await downloaded.path();
-const { readFileSync } = await import('node:fs');
-const pdfBuf = readFileSync(pdfPath);
-const pdfText = pdfBuf.toString('latin1');
-const mediaBoxes = [...pdfText.matchAll(/\/MediaBox\s*\[([^\]]+)\]/g)].map((m) => m[1].trim());
-check(
-  'nút Xuất tải thẳng ra tệp .pdf, không chỉ mở hộp thoại in',
-  downloaded.suggestedFilename().endsWith('.pdf') && pdfText.startsWith('%PDF-'),
-  downloaded.suggestedFilename(),
-);
-check(
-  'tệp PDF có đúng số trang như bản xem trước',
-  mediaBoxes.length === uiPages,
-  `${mediaBoxes.length} vs ${uiPages}`,
-);
-check(
-  'mỗi trang PDF đúng khổ A4',
-  new Set(mediaBoxes).size === 1 &&
-    /^0 0 595\.\d+ 841\.\d+$/.test(mediaBoxes[0] ?? ''),
-  mediaBoxes[0],
-);
-check('tệp PDF không rỗng', pdfBuf.length > 50_000, `${Math.round(pdfBuf.length / 1024)} KB`);
+console.log('\nĐợt 11');
+await page.goto(URL, { waitUntil: 'networkidle' });
+await page.waitForSelector('.sr-page');
+await page.waitForTimeout(3000);
+
+{
+  const n0 = await page.locator('[data-card-index]').count();
+  await page.getByRole('button', { name: /^Thêm khối$/ }).first().click();
+  await page.getByLabel('Tìm loại khối').fill('cong thuc');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(600);
+  check('Enter trong menu Thêm khối chỉ thêm đúng 1 khối', (await page.locator('[data-card-index]').count()) === n0 + 1);
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(400);
+}
+
+{
+  const h1Clip = await page.evaluate(() => {
+    const h = document.querySelector('.sr-page-body h1');
+    if (!h) return null;
+    const cs = getComputedStyle(h);
+    const body = getComputedStyle(h.closest('.sr-page-body'));
+    return { lh: parseFloat(cs.lineHeight) / parseFloat(cs.fontSize), overflow: body.overflow };
+  });
+  check('H1: giãn dòng ≥ 1.2 và vùng trang dùng overflow:clip (dấu không bị xén)', !!h1Clip && h1Clip.lh >= 1.19 && h1Clip.overflow === 'clip', JSON.stringify(h1Clip));
+}
+
+{
+  const ta = page.locator('[data-card-index] textarea').nth(3);
+  await ta.scrollIntoViewIfNeeded();
+  await ta.click();
+  await page.keyboard.press('Control+Home');
+  for (let i = 0; i < 10; i++) await page.keyboard.press('Shift+ArrowRight');
+  await page.waitForTimeout(250);
+  check('bôi đen chữ hiện thanh B / I / U', (await page.locator('[data-sr-format-toolbar]').count()) === 1);
+  const word = await ta.evaluate((t) => t.value.slice(t.selectionStart, t.selectionEnd));
+  await page.keyboard.press('Control+u');
+  await page.waitForTimeout(200);
+  check('Ctrl+U bọc vùng chọn bằng ++…++', (await ta.inputValue()).startsWith(`++${word.trim()}++`));
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(300);
+}
+
+{
+  const target = await page.evaluate(() => {
+    const ps = [...document.querySelectorAll('.sr-page-body p[data-sr-line]')];
+    for (const el of ps) {
+      const words = el.textContent.match(/[\p{L}]{5,}/gu) ?? [];
+      const w = words[words.length - 2];
+      if (!w || words.filter((x) => x === w).length < 1) continue;
+      el.scrollIntoView({ block: 'center' });
+      return { idx: ps.indexOf(el), word: w };
+    }
+    return null;
+  });
+  await page.waitForTimeout(700);
+  const at = await page.evaluate(({ idx, word }) => {
+    const el = [...document.querySelectorAll('.sr-page-body p[data-sr-line]')][idx];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let last = null;
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const i = n.data.lastIndexOf(word);
+      if (i >= 0) last = [n, i];
+    }
+    const r = document.createRange();
+    r.setStart(last[0], last[1] + 1);
+    r.setEnd(last[0], last[1] + 2);
+    const b = r.getBoundingClientRect();
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  }, target);
+  await page.mouse.dblclick(at.x, at.y);
+  await page.waitForTimeout(900);
+  const sel = await page.evaluate(() => {
+    const a = document.activeElement;
+    return a && 'selectionStart' in a ? a.value.slice(a.selectionStart, a.selectionEnd) : null;
+  });
+  check('bấm đúp chữ ở bản in → ô soạn bôi đen đúng chữ đó', sel === target.word, `${target.word} vs ${sel}`);
+}
+
+{
+  await page.getByRole('button', { name: 'Mở Diagram Studio' }).last().click();
+  await page.waitForTimeout(1200);
+  const src = page.getByLabel('Mã Mermaid');
+  await src.click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('\n  K --> Z[Báo cáo kết quả]');
+  await page.waitForTimeout(500);
+  check('Diagram Studio: gõ dòng mới ở cuối giữ dấu cách và xuống dòng', (await src.inputValue()).endsWith('\n  K --> Z[Báo cáo kết quả]'), JSON.stringify((await src.inputValue()).slice(-40)));
+  check('Diagram Studio có nút “Xong” giữ mã Mermaid', (await page.getByRole('button', { name: 'Xong' }).count()) === 1);
+  await page.getByRole('button', { name: 'Xong' }).click();
+  await page.waitForTimeout(300);
+}
 
 await page.screenshot({ path: 'scripts/screenshot.png', fullPage: false });
 console.log('\nẢnh chụp màn hình: scripts/screenshot.png');

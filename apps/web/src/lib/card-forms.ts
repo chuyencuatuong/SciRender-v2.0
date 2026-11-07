@@ -81,12 +81,18 @@ export function parseEquation(text: string): EquationForm | null {
   );
   if (!m) return null;
   const label = m[2] ? (/\{#([^}]*)\}/.exec(m[2]) as RegExpExecArray)[1] ?? '' : '';
-  return { tex: (m[1] ?? '').trim(), label };
+  // Only the fence-adjacent newline is dropped (by the regex); inner text is kept.
+  return { tex: m[1] ?? '', label };
 }
 
+// Serialisers run on EVERY keystroke (form → Markdown → form). Trimming the
+// author's text here deleted a space or newline the instant it was typed at the
+// end — in Diagram Studio "K --> Z[Báo cáo]" typed on a new last line arrived
+// as "K-->Z[Báocáo]" and broke the diagram. The parsers' `\n?` before the
+// closing fence already absorbs the separator, so the text round-trips as-is.
 export function serializeEquation(form: EquationForm): string {
   const tail = form.label ? ` {#${form.label}}` : '';
-  return `$$\n${form.tex.trim()}\n$$${tail}`;
+  return `$$\n${form.tex}\n$$${tail}`;
 }
 
 /* ------------------------------------------------------------- code block */
@@ -106,7 +112,7 @@ export function parseCode(text: string): CodeForm | null {
 }
 
 export function serializeCode(form: CodeForm): string {
-  return `\`\`\`${form.lang}\n${form.code.replace(/\s+$/, '')}\n\`\`\`${captionLine(
+  return `\`\`\`${form.lang}\n${form.code}\n\`\`\`${captionLine(
     form.caption,
     form.label,
   )}`;
@@ -119,7 +125,7 @@ export interface DiagramForm {
   asset?: string;
   direction: string;
   curve: 'linear' | 'basis' | 'step';
-  theme: 'academic' | 'obsidian' | 'blueprint';
+  theme: 'academic' | 'obsidian' | 'blueprint' | 'print';
   landscape: boolean;
   caption: string;
   label: string;
@@ -162,7 +168,7 @@ export function parseDiagram(text: string): DiagramForm | null {
   const attrSource = `${payload} ${caption}`;
   const dir = /\bdir=(TB|TD|BT|LR|RL)\b/.exec(attrSource);
   const curve = /\bcurve=(linear|basis|step)\b/.exec(attrSource)?.[1] as DiagramForm['curve'] | undefined;
-  const theme = /\btheme=(academic|obsidian|blueprint)\b/.exec(attrSource)?.[1] as DiagramForm['theme'] | undefined;
+  const theme = /\btheme=(academic|obsidian|blueprint|print)\b/.exec(attrSource)?.[1] as DiagramForm['theme'] | undefined;
   const landscape = /\b(?:landscape|orientation=landscape)\b/.test(attrSource);
   const attrs: Record<string, string> = {};
   if (dir) attrs.dir = dir[1] as string;
@@ -172,7 +178,7 @@ export function parseDiagram(text: string): DiagramForm | null {
   const cleanCaption = caption
     .replace(/\s*\bdir=(TB|TD|BT|LR|RL)\b/g, '')
     .replace(/\s*\bcurve=(linear|basis|step)\b/g, '')
-    .replace(/\s*\btheme=(academic|obsidian|blueprint)\b/g, '')
+    .replace(/\s*\btheme=(academic|obsidian|blueprint|print)\b/g, '')
     .replace(/\s*\b(?:landscape|orientation=landscape)\b/g, '')
     .replace(/\{\s*\}/g, ' ')
     .trim();
@@ -213,7 +219,7 @@ export function serializeDiagram(form: DiagramForm): string {
     form.landscape ? 'landscape' : '',
   ].filter(Boolean).join(' ');
   const cap = form.caption || bits ? `\n\n: ${form.caption}${bits ? ` {${bits}}` : ''}` : '';
-  return `\`\`\`mermaid\n${form.source.replace(/\s+$/, '')}\n\`\`\`${cap}`;
+  return `\`\`\`mermaid\n${form.source}\n\`\`\`${cap}`;
 }
 
 /* ----------------------------------------------------------------- figure */

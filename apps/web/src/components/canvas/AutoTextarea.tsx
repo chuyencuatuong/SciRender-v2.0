@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { BibEntry, LabelRecord } from '@scirender/ast';
 import { caretViewportPosition } from '~/lib/caret';
+import { formatFromKey, toggleInlineFormat, type InlineFormat } from '~/lib/inline-format';
 import { foldDiacritics, searchTemplates, type CardTemplate } from '~/lib/cards';
 import { matchesShortcut } from '~/lib/shortcuts';
 import { REF_KIND_ICON, REF_KIND_LABEL } from '~/lib/refs';
@@ -92,6 +93,8 @@ export function AutoTextarea({
   const highlightRef = useRef<HTMLPreElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const pendingCaret = useRef<number | null>(null);
+  const pendingSelection = useRef<[number, number] | null>(null);
+  const [selectionPoint, setSelectionPoint] = useState<{ left: number; top: number } | null>(null);
   const [trigger, setTrigger] = useState<Trigger | null>(null);
   const [active, setActive] = useState(0);
   const recentBlocks = useStore((s) => s.prefs.recentBlocks);
@@ -115,6 +118,15 @@ export function AutoTextarea({
 
   useEffect(() => {
     const el = ref.current;
+    const range = pendingSelection.current;
+    if (!el || !range) return;
+    pendingSelection.current = null;
+    el.setSelectionRange(range[0], range[1]);
+    updateSelectionToolbar(el);
+  }, [value]);
+
+  useEffect(() => {
+    const el = ref.current;
     if (!el) return;
     if (citationInsertRequest?.nonce === citationSeen.current) return;
     citationSeen.current = citationInsertRequest?.nonce ?? citationSeen.current;
@@ -130,6 +142,35 @@ export function AutoTextarea({
   useEffect(() => () => {
     if (lastActiveTextarea === ref.current) lastActiveTextarea = null;
   }, []);
+
+  /* ------------------------------------------------ bold / italic / underline */
+
+  const applyFormat = (format: InlineFormat): void => {
+    const el = ref.current;
+    if (!el) return;
+    const result = toggleInlineFormat(value, el.selectionStart, el.selectionEnd, format);
+    if (result.value === value) return;
+    pendingSelection.current = [result.start, result.end];
+    onChange(result.value);
+    setTrigger(null);
+  };
+
+  /** Floating B / I / U bar above a non-empty selection (prose editors only). */
+  const updateSelectionToolbar = (el: HTMLTextAreaElement): void => {
+    if (mono || document.activeElement !== el || el.selectionStart === el.selectionEnd) {
+      setSelectionPoint(null);
+      return;
+    }
+    const p = caretViewportPosition(el, Math.min(el.selectionStart, el.selectionEnd));
+    setSelectionPoint({ left: p.left, top: p.top });
+  };
+
+  useEffect(() => {
+    if (!selectionPoint) return;
+    const hide = (): void => setSelectionPoint(null);
+    window.addEventListener('scroll', hide, true);
+    return () => window.removeEventListener('scroll', hide, true);
+  }, [selectionPoint]);
 
   const sync = (el: HTMLTextAreaElement): void => {
     if (el.selectionStart !== el.selectionEnd) {
@@ -288,6 +329,13 @@ export function AutoTextarea({
   }, [trigger]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    const format = mono ? null : formatFromKey(e);
+    if (format) {
+      e.preventDefault();
+      e.stopPropagation();
+      applyFormat(format);
+      return;
+    }
     if (matchesShortcut(e, 'hyperlink')) {
       e.preventDefault();
       const el = ref.current;
@@ -397,10 +445,42 @@ export function AutoTextarea({
           data-sr-autocomplete-open={trigger ? 'true' : 'false'}
           onFocus={(e) => { lastActiveTextarea = e.currentTarget; sync(e.currentTarget); }}
           onClick={(e) => { lastActiveTextarea = e.currentTarget; sync(e.currentTarget); }}
-          onBlur={() => setTrigger(null)}
+          onSelect={(e) => updateSelectionToolbar(e.currentTarget)}
+          onBlur={() => { setTrigger(null); setSelectionPoint(null); }}
           className={`${highlightTokens ? 'text-transparent caret-ink-800 selection:bg-sky-500/20 dark:caret-slate-100 dark:selection:bg-sky-500/20' : 'text-ink-800'} relative w-full resize-none border-0 bg-transparent p-0 text-[13px] leading-[1.55] outline-none placeholder:text-ink-400 ${mono ? 'font-mono text-[12px]' : ''}`}
         />
       </div>
+
+      {selectionPoint && !showPopover
+        ? createPortal(
+            <div
+              role="toolbar"
+              aria-label="Định dạng chữ"
+              data-sr-format-toolbar=""
+              className="sr-menu fixed z-[70] flex items-center gap-0.5 p-0.5"
+              style={{ left: selectionPoint.left, top: Math.max(4, selectionPoint.top - 34) }}
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              {([
+                ['bold', 'B', 'In đậm (Ctrl + B)', 'font-bold'],
+                ['italic', 'I', 'In nghiêng (Ctrl + I)', 'italic font-serif'],
+                ['underline', 'U', 'Gạch chân (Ctrl + U)', 'underline'],
+              ] as const).map(([fmt, glyph, title, cls]) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  title={title}
+                  aria-label={title}
+                  onClick={() => applyFormat(fmt)}
+                  className={`grid h-7 w-7 place-items-center rounded-md text-[13px] text-ink-700 transition hover:bg-sky-50 hover:text-deep-700 ${cls}`}
+                >
+                  {glyph}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
 
       {showPopover
         ? createPortal(

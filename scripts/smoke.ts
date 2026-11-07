@@ -62,6 +62,9 @@ import {
 } from '../apps/web/src/lib/card-forms.js';
 import { EMPTY_DOCUMENT, SAMPLE_DOCUMENT } from '../apps/web/src/lib/sample.js';
 import { applyProfileToCover, facultyLabel } from '../apps/web/src/lib/profile-cover.js';
+import { toggleInlineFormat } from '../apps/web/src/lib/inline-format.js';
+import { locateInSource } from '../apps/web/src/lib/source-locate.js';
+import { headingLineHeight } from '../packages/template-engine/src/css.js';
 import {
   formatAPAReference,
   formatAuthorYear,
@@ -1006,6 +1009,63 @@ const inlineHeavy = compile(
 for (const tag of ['<strong>', '<em>', '<code>', '<sub>', '<sup>', '<a href=', 'katex']) {
   check(`inline ${tag} render được`, inlineHeavy.rendered.html.includes(tag));
 }
+
+section('Gạch chân & định dạng nhanh');
+const ul = compile('Đoạn có ++gạch chân++ và **++đậm gạch++** trong câu.\n');
+check('++chữ++ render thành <u>', ul.rendered.html.includes('<u>gạch chân</u>'), ul.rendered.html);
+check('gạch chân lồng trong in đậm', ul.rendered.html.includes('<strong><u>đậm gạch</u></strong>'));
+const cpp = compile('Ngôn ngữ C++ và C++ hiện đại, i++ + j++.\n');
+check('"C++ và C++" không bị hiểu nhầm là gạch chân', !cpp.rendered.html.includes('<u>') && cpp.rendered.html.includes('C++ và C++'), cpp.rendered.html);
+const t1 = toggleInlineFormat('một từ ở đây', 4, 6, 'bold');
+check('Ctrl+B bọc vùng chọn', t1.value === 'một **từ** ở đây' && t1.value.slice(t1.start, t1.end) === 'từ', JSON.stringify(t1));
+const t2 = toggleInlineFormat(t1.value, t1.start, t1.end, 'bold');
+check('Ctrl+B lần hai gỡ đúng dấu', t2.value === 'một từ ở đây', t2.value);
+const t3 = toggleInlineFormat('xin chào bạn', 5, 5, 'italic');
+check('không chọn gì → lấy cả từ dưới con trỏ', t3.value === 'xin *chào* bạn', t3.value);
+const t4 = toggleInlineFormat('a **từ** b', 4, 6, 'italic');
+check('in nghiêng trên chữ đã in đậm thành ***từ***', t4.value === 'a ***từ*** b', t4.value);
+const t5 = toggleInlineFormat(t4.value, t4.start, t4.end, 'italic');
+check('gỡ nghiêng giữ nguyên in đậm', t5.value === 'a **từ** b', t5.value);
+const t6 = toggleInlineFormat('chọn  khoảng trắng ', 4, 19, 'underline');
+check('khoảng trắng ở mép vùng chọn nằm ngoài dấu', t6.value === 'chọn  ++khoảng trắng++ ', t6.value);
+section('Gõ từng phím trong biểu mẫu không mất khoảng trắng');
+{
+  const typed = '\n  K --> Z[Báo cáo kết quả]';
+  let text = '```mermaid\nflowchart TB\n  A --> B\n```\n\n: Sơ đồ {#dia:x}';
+  for (const ch of typed) {
+    const f = parseDiagram(text)!;
+    text = serializeDiagram({ ...f, source: f.source + ch });
+  }
+  check('Diagram Studio: gõ dòng mới ở cuối giữ đủ dấu cách và xuống dòng', parseDiagram(text)!.source === 'flowchart TB\n  A --> B' + typed, JSON.stringify(parseDiagram(text)!.source));
+  let code = '```python\nx = 1\n```';
+  for (const ch of '\ny = 2 ') {
+    const f = parseCode(code)!;
+    code = serializeCode({ ...f, code: f.code + ch });
+  }
+  check('khối mã: Enter ở cuối tạo được dòng mới', parseCode(code)!.code === 'x = 1\ny = 2 ', JSON.stringify(parseCode(code)!.code));
+  let eq = '$$\na = b\n$$ {#eq:x}';
+  for (const ch of ' \\\\\nc = d') {
+    const f = parseEquation(eq)!;
+    eq = serializeEquation({ ...f, tex: f.tex + ch });
+  }
+  check('công thức: xuống dòng ở cuối không bị cắt', parseEquation(eq)!.tex === 'a = b \\\\\nc = d', JSON.stringify(parseEquation(eq)!.tex));
+  const stable = '```mermaid\nflowchart TB\n  A --> B\n```\n\n: Sơ đồ {#dia:x}';
+  check('khứ hồi không sửa gì thì giữ nguyên văn bản', serializeDiagram(parseDiagram(stable)!) === stable);
+}
+
+section('Bấm đúp bản xem trước → đúng ký tự trong ô soạn');
+const srcA = 'Huyết áp là **dấu hiệu** sinh tồn. Đo huyết áp bằng [băng quấn](https://x.org/áp) giúp đánh giá huyết áp.';
+const m1 = locateInSource(srcA, 'huyết', 'sinh tồn. Đo ', ' áp bằng băng quấn giúp');
+check('từ lặp lại: chọn đúng lần xuất hiện theo ngữ cảnh', m1 !== null && m1.start === srcA.indexOf('huyết áp bằng'), JSON.stringify(m1));
+const m2 = locateInSource(srcA, 'huyết', 'băng quấn giúp đánh giá ', ' áp.');
+check('bỏ qua URL và dấu Markdown khi so ngữ cảnh', m2 !== null && m2.start === srcA.lastIndexOf('huyết'), JSON.stringify(m2));
+const m3 = locateInSource(srcA, 'hiệu', 'là dấu ', ' sinh tồn');
+check('từ nằm trong **in đậm** vẫn tìm được', m3 !== null && srcA.slice(m3.start, m3.end) === 'hiệu');
+const m4 = locateInSource('ba a ba', 'a', 'ba ', ' ba');
+check('chỉ khớp nguyên từ ("a" không rơi vào "ba")', m4 !== null && m4.start === 3, JSON.stringify(m4));
+check('không có từ → null', locateInSource('abc', 'xyz') === null);
+check('heading line-height không thấp hơn 1.2', headingLineHeight(1) === 1.2 && headingLineHeight(1.5) === 1.5);
+
 const unclosed = compile('$$\na = b\n');
 check('khối công thức chưa đóng được báo', unclosed.diagnostics.some((d) => d.code === 'SR-P010'));
 const refDot = compile(`# A

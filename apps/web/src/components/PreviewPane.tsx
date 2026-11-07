@@ -111,8 +111,39 @@ export function PreviewPane({ render, onBack = null }: Props): JSX.Element {
       const line = parseInt(target.getAttribute('data-sr-line') ?? '', 10);
       if (Number.isFinite(line)) requestGotoLine(line);
     };
+    // Double-click: the browser has just selected the word under the pointer.
+    // Send it with ~60 rendered characters of context either side so the
+    // canvas can select the same word in the source, not just the block.
+    const onDblClick = (e: MouseEvent): void => {
+      const block = (e.target as HTMLElement | null)?.closest('[data-sr-line]');
+      if (!block) return;
+      const line = parseInt(block.getAttribute('data-sr-line') ?? '', 10);
+      if (!Number.isFinite(line)) return;
+      const sel = window.getSelection();
+      const word = sel?.toString().trim() ?? '';
+      if (!sel || !sel.rangeCount || !word || word.length > 80) {
+        requestGotoLine(line);
+        return;
+      }
+      const range = sel.getRangeAt(0);
+      const pre = document.createRange();
+      pre.selectNodeContents(block);
+      pre.setEnd(range.startContainer, range.startOffset);
+      const post = document.createRange();
+      post.selectNodeContents(block);
+      post.setStart(range.endContainer, range.endOffset);
+      requestGotoLine(line, {
+        word,
+        before: pre.toString().slice(-60),
+        after: post.toString().slice(0, 60),
+      });
+    };
     host.addEventListener('click', onClick);
-    return () => host.removeEventListener('click', onClick);
+    host.addEventListener('dblclick', onDblClick);
+    return () => {
+      host.removeEventListener('click', onClick);
+      host.removeEventListener('dblclick', onDblClick);
+    };
   }, [requestGotoLine]);
 
   const zoomIndex = ZOOM_STEPS.findIndex((z) => Math.abs(z - prefs.zoom) < 0.001);

@@ -100,6 +100,11 @@ export function useCanvasKeyboard(context: CanvasKeyboardContext): RefObject<Can
       if (document.querySelector('[role="dialog"]')) return;
 
       const target = e.target instanceof HTMLElement ? e.target : null;
+      // A key already handled by a component (InsertMenu's search box handles
+      // Enter, popovers handle ↑↓) must not run a second, canvas-level action.
+      // Without this, Enter in "Thêm khối" inserted the chosen block AND the
+      // heading rule below added a paragraph — two cards for one keystroke.
+      if (e.defaultPrevented || target?.closest('[role="menu"], [role="listbox"]')) return;
       const typing = isEditableTarget(target);
       const interactive = Boolean(target?.closest('button, select, option, [contenteditable="true"]'));
       const focusedCardEl = target?.closest<HTMLElement>('[data-card-index]');

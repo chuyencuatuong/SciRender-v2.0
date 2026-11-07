@@ -1,4 +1,4 @@
-import { Bold, Italic, RotateCcw, Type } from 'lucide-react';
+import { AlignCenter, Bold, Italic, RotateCcw, Type } from 'lucide-react';
 import { BUILTIN_TEMPLATES, type HeadingLevelStyle } from '@scirender/template-engine';
 import type { CompileResult } from '~/lib/pipeline';
 import { useStore } from '~/state/store';
@@ -12,6 +12,34 @@ const SIDE_LABEL: Record<'top' | 'right' | 'bottom' | 'left', string> = {
   right: 'phải',
   bottom: 'dưới',
   left: 'trái',
+};
+
+/**
+ * Font stacks that carry Vietnamese. The two bundled faces (Literata, Be
+ * Vietnam Pro) ship with the app and are embedded on export, so they print the
+ * same on every machine; the system stacks fall back to metric-compatible
+ * Liberation/Tinos faces where the Microsoft font is missing.
+ */
+const FONT_PRESETS: Array<{ label: string; stack: string }> = [
+  { label: 'Times New Roman', stack: '"Times New Roman", "Liberation Serif", "Nimbus Roman", "Tinos", Times, serif' },
+  { label: 'Arial', stack: 'Arial, "Liberation Sans", "Arimo", Helvetica, sans-serif' },
+  { label: 'Cambria', stack: 'Cambria, "Caladea", Georgia, serif' },
+  { label: 'Calibri', stack: 'Calibri, "Carlito", "Segoe UI", sans-serif' },
+  { label: 'Literata (có sẵn trong app)', stack: '"Literata", Georgia, serif' },
+  { label: 'Be Vietnam Pro (có sẵn trong app)', stack: '"Be Vietnam Pro", Arial, sans-serif' },
+];
+
+function fontPresetValue(stack: string | undefined): string {
+  if (!stack) return FONT_PRESETS[0]!.stack;
+  const hit = FONT_PRESETS.find((f) => f.stack === stack)
+    ?? FONT_PRESETS.find((f) => stack.replace(/"/g, '').startsWith(f.label.split(' (')[0]!));
+  return hit ? hit.stack : stack;
+}
+
+const PAPER: Record<string, { width: string; height: string }> = {
+  A4: { width: '210mm', height: '297mm' },
+  A5: { width: '148mm', height: '210mm' },
+  Letter: { width: '215.9mm', height: '279.4mm' },
 };
 
 const FRONT_LABEL: Record<string, string> = {
@@ -121,6 +149,41 @@ export function TemplatePanel({ result }: Props): JSX.Element {
             />
           </Field>
         </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Phông nội dung">
+            <FontSelect
+              value={t?.typography.bodyFont}
+              onChange={(stack) => setOverrides({ typography: { bodyFont: stack } })}
+            />
+          </Field>
+          <Field label="Phông đề mục">
+            <FontSelect
+              value={t?.typography.headingFont}
+              onChange={(stack) => setOverrides({ typography: { headingFont: stack } })}
+            />
+          </Field>
+        </div>
+        <Field label="Thụt đầu dòng đoạn văn">
+          <select
+            className="sr-input"
+            value={/^0(?:\.0+)?(?:mm|cm|pt|px|em)?$/.test(t?.typography.paragraphIndent ?? '0') ? '0' : t?.typography.paragraphIndent}
+            onChange={(e) => setOverrides({ typography: { paragraphIndent: e.target.value } })}
+          >
+            {[
+              ['0', 'Không thụt'],
+              ['0.5cm', '0,5 cm'],
+              ['1cm', '1 cm'],
+              ['1.27cm', '1,27 cm (Word mặc định)'],
+            ].map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+            {t && !/^0(?:\.0+)?(?:mm|cm|pt|px|em)?$/.test(t.typography.paragraphIndent) && !['0.5cm', '1cm', '1.27cm'].includes(t.typography.paragraphIndent) ? (
+              <option value={t.typography.paragraphIndent}>{t.typography.paragraphIndent}</option>
+            ) : null}
+          </select>
+        </Field>
         <Field label="Canh đều hai biên">
           <Toggle
             checked={t?.typography.justify ?? true}
@@ -133,7 +196,7 @@ export function TemplatePanel({ result }: Props): JSX.Element {
           {(t?.headings.levels ?? []).slice(0, 4).map((lv, i) => (
             <div
               key={i}
-              className="flex items-center gap-1.5 border-b border-ink-100 px-2 py-1.5 last:border-b-0"
+              className="flex flex-wrap items-center gap-1.5 border-b border-ink-100 px-2 py-1.5 last:border-b-0"
             >
               <span className="w-7 shrink-0 font-mono text-[11px] text-ink-400">H{i + 1}</span>
               <input
@@ -170,15 +233,76 @@ export function TemplatePanel({ result }: Props): JSX.Element {
               >
                 <span className="font-mono text-[10px]">PB</span>
               </IconToggle>
+              <div className="flex basis-full items-center gap-1.5 pl-[34px] text-[10.5px] text-ink-400">
+              <IconToggle
+                active={lv.align === 'center'}
+                onClick={() => patchLevel(i, { align: lv.align === 'center' ? 'left' : 'center' })}
+                title={lv.align === 'center' ? 'Đang căn giữa — bấm để căn trái' : 'Căn giữa'}
+              >
+                <AlignCenter size={13} />
+              </IconToggle>
+              <input
+                className="sr-input !w-12 !px-1 !py-1 text-center text-[11px]"
+                value={lv.spaceBefore}
+                onChange={(e) => patchLevel(i, { spaceBefore: e.target.value })}
+                title="Cách đoạn trước (vd. 6pt)"
+                aria-label={`H${i + 1} cách trước`}
+              />
+              <span>trước</span>
+              <input
+                className="sr-input !w-12 !px-1 !py-1 text-center text-[11px]"
+                value={lv.spaceAfter}
+                onChange={(e) => patchLevel(i, { spaceAfter: e.target.value })}
+                title="Cách đoạn sau (vd. 12pt)"
+                aria-label={`H${i + 1} cách sau`}
+              />
+              <span>sau</span>
+              </div>
             </div>
           ))}
         </div>
         <p className="mt-1 text-[11px] leading-snug text-ink-400">
+          Mỗi cấp: cỡ chữ · đậm · nghiêng · IN HOA · sang trang mới; dòng dưới: căn giữa · cách trước · cách sau.
           Quy cách BTL: H1 14pt in hoa sang trang mới · H2 13pt đậm · H3 13pt đậm nghiêng · H4 13pt
           nghiêng.
         </p>
 
         <Divider label="Trang" />
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Khổ giấy">
+            <select
+              className="sr-input"
+              value={Object.keys(PAPER).find((k) => PAPER[k]!.width === t?.page.width && PAPER[k]!.height === t?.page.height) ?? 'custom'}
+              onChange={(e) => {
+                const paper = PAPER[e.target.value];
+                if (paper) setOverrides({ page: { size: e.target.value, ...paper } });
+              }}
+            >
+              {Object.keys(PAPER).map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+              <option value="custom" disabled>
+                Tùy chỉnh
+              </option>
+            </select>
+          </Field>
+          <Field label="Vị trí số trang">
+            <select
+              className="sr-input"
+              value={t?.layout.showPageNumbers === false ? 'none' : (t?.layout.pageNumberPosition ?? 'footer-center')}
+              onChange={(e) => {
+                const v = e.target.value as 'footer-center' | 'footer-right' | 'none';
+                setOverrides({ layout: { pageNumberPosition: v, showPageNumbers: v !== 'none' } });
+              }}
+            >
+              <option value="footer-center">Giữa chân trang</option>
+              <option value="footer-right">Phải chân trang</option>
+              <option value="none">Không đánh số</option>
+            </select>
+          </Field>
+        </div>
         <div className="grid grid-cols-2 gap-2">
           {(['top', 'right', 'bottom', 'left'] as const).map((side) => (
             <Field key={side} label={`Lề ${SIDE_LABEL[side]}`}>
@@ -571,5 +695,20 @@ function IconToggle({
     >
       {children}
     </button>
+  );
+}
+
+function FontSelect({ value, onChange }: { value: string | undefined; onChange: (stack: string) => void }): JSX.Element {
+  const current = fontPresetValue(value);
+  const known = FONT_PRESETS.some((f) => f.stack === current);
+  return (
+    <select className="sr-input" value={current} onChange={(e) => onChange(e.target.value)}>
+      {FONT_PRESETS.map((f) => (
+        <option key={f.label} value={f.stack}>
+          {f.label}
+        </option>
+      ))}
+      {!known && value ? <option value={value}>{value.split(',')[0]?.replace(/"/g, '')}</option> : null}
+    </select>
   );
 }

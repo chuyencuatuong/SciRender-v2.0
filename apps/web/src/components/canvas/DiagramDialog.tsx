@@ -25,7 +25,7 @@ const DIRECTIONS: Array<{ value: 'TB' | 'BT' | 'LR' | 'RL'; label: string; icon:
 ];
 
 const CURVES: Array<[DiagramStudioCurve, string]> = [['linear', 'Linear'], ['basis', 'Smooth'], ['step', 'Step']];
-const THEMES: Array<[DiagramStudioTheme, string]> = [['academic', 'Academic'], ['obsidian', 'Obsidian'], ['blueprint', 'Blueprint']];
+const THEMES: Array<[DiagramStudioTheme, string]> = [['academic', 'Academic'], ['print', 'Đen trắng (in)'], ['blueprint', 'Blueprint'], ['obsidian', 'Obsidian']];
 
 
 function escapeHtml(value: string): string {
@@ -302,14 +302,14 @@ export function DiagramDialog({ open, form, bibliography, labels, onChange, onSa
           </aside>
 
           <main className="flex min-h-0 flex-col bg-[var(--sr-paper-ground)]">
-            <div className="flex h-11 shrink-0 items-center gap-1 border-b border-white/[.07] px-3">
-              <span className="mr-auto text-[10.5px] font-medium uppercase tracking-[.12em] text-white/35">SVG Preview</span>
+            <div className="flex h-11 shrink-0 items-center gap-1 border-b border-white/[.07] bg-[var(--sr-panel)] px-3">
+              <span className="mr-auto text-[10.5px] font-medium uppercase tracking-[.12em] text-white/55">Xem trước</span>
               <button type="button" onClick={() => changeZoomAt(zoom - .05)} aria-label="Thu nhỏ" className="grid h-7 w-7 place-items-center rounded-md text-white/50 hover:bg-white/5"><Minus size={13}/></button>
               <span className="w-12 text-center font-mono text-[10px] text-white/50">{Math.round(zoom*100)}%</span>
               <button type="button" onClick={() => changeZoomAt(zoom + .05)} aria-label="Phóng to" className="grid h-7 w-7 place-items-center rounded-md text-white/50 hover:bg-white/5"><Plus size={13}/></button>
               <button type="button" onClick={() => changeZoomAt(1)} title="Đặt lại zoom" className="ml-1 grid h-7 w-7 place-items-center rounded-md text-white/50 hover:bg-white/5"><Maximize2 size={13}/></button>
               <button type="button" onClick={fitToViewport} title="Vừa khung" className="grid h-7 px-2 place-items-center rounded-md text-[10px] text-white/50 hover:bg-white/5">Fit</button>
-              <span className="ml-2 hidden text-[9.5px] text-white/25 xl:inline">Ctrl/Cmd+wheel · MMB · Space+drag</span>
+              <span className="ml-2 hidden text-[9.5px] text-white/45 xl:inline">Ctrl/Cmd+cuộn · chuột giữa · Space+kéo</span>
             </div>
             <div
               ref={previewRef}
@@ -325,10 +325,23 @@ export function DiagramDialog({ open, form, bibliography, labels, onChange, onSa
                 {error ? <div className="max-w-[600px] rounded-lg border border-rose-400/20 bg-rose-400/5 p-4 text-xs text-rose-200">{error}</div> : svg ? <div data-sr-diagram-content="1" className="h-full w-full min-h-0 min-w-0 select-none [&>svg]:block [&>svg]:h-full [&>svg]:w-full [&>svg]:max-h-none [&>svg]:max-w-none" dangerouslySetInnerHTML={{ __html: applyDiagramViewport(svg, panX, panY, zoom) }} /> : <div className="text-xs text-white/30">Dán mã Mermaid hoặc chọn mẫu để xem trước.</div>}
               </div>
             </div>
-            <footer className="flex min-h-12 shrink-0 items-center gap-2 border-t border-white/[.07] px-3">
-              {saved ? <span className="mr-auto inline-flex items-center gap-1.5 text-[10.5px] text-emerald-300"><Check size={13}/> Đã lưu Asset SVG</span> : <span className="mr-auto text-[10px] text-white/30">Asset được lưu sạch vào IndexedDB khi lưu.</span>}
-              <button type="button" onClick={onClose} className="rounded-lg px-3 py-1.5 text-[11.5px] text-white/60 hover:bg-white/5 hover:text-white">Hủy</button>
-              <button type="button" disabled={busy || !form.source.trim()} onClick={() => void onSave({ nodeSpacing, rankSpacing, viewX: panX, viewY: panY, viewZoom: zoom })} className="inline-flex items-center gap-1.5 rounded-lg bg-sky-500 px-3.5 py-1.5 text-[11.5px] font-medium text-white shadow-lg shadow-sky-500/20 hover:bg-sky-400 disabled:opacity-40"><Save size={13}/>{busy ? 'Đang lưu…' : 'Lưu sơ đồ'}</button>
+            <footer className="flex min-h-12 shrink-0 items-center gap-2 border-t border-white/[.07] bg-[var(--sr-panel)] px-3">
+              {saved
+                ? <span className="mr-auto inline-flex items-center gap-1.5 text-[10.5px] text-emerald-300"><Check size={13}/> Đã chuyển thành ảnh SVG</span>
+                : <span className="mr-auto text-[10px] text-white/50">Mọi thay đổi đã áp dụng ngay vào tài liệu — bấm “Xong” để quay lại.</span>}
+              {/* Converting replaces the Mermaid source with a frozen picture
+                  (the Markdown keeps only ![…](asset:…)), so it is a deliberate
+                  secondary action — not the "save" people reach for. */}
+              <button
+                type="button"
+                disabled={busy || !form.source.trim()}
+                onClick={() => void onSave({ nodeSpacing, rankSpacing, viewX: panX, viewY: panY, viewZoom: zoom })}
+                title="Chụp đúng khung đang xem thành ảnh SVG. Mã Mermaid sẽ bị thay bằng ảnh và không sửa tiếp được trong Studio."
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11.5px] text-white/70 ring-1 ring-white/15 hover:bg-white/5 hover:text-white disabled:opacity-40"
+              >
+                <Save size={13}/>{busy ? 'Đang chuyển…' : 'Chuyển thành ảnh SVG'}
+              </button>
+              <button type="button" onClick={onClose} className="inline-flex items-center gap-1.5 rounded-lg bg-sky-500 px-3.5 py-1.5 text-[11.5px] font-medium text-white shadow-lg shadow-sky-500/20 hover:bg-sky-400"><Check size={13}/> Xong</button>
             </footer>
           </main>
         </div>
@@ -350,7 +363,7 @@ function MermaidSourceEditor({ value, onChange }: { value: string; onChange: (va
   };
   return (
     <div className="relative min-h-[230px] overflow-hidden rounded-xl border border-white/[.07] bg-[var(--sr-sunk)]">
-      <pre ref={overlayRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-5 text-white/70">{value ? <span dangerouslySetInnerHTML={{ __html: highlightMermaid(value) }} /> : null}</pre>
+      <pre ref={overlayRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-5 text-white/70 [font-variant-ligatures:none]">{value ? <span dangerouslySetInnerHTML={{ __html: highlightMermaid(value) }} /> : null}</pre>
       <textarea
         ref={ref}
         value={value}
@@ -358,7 +371,7 @@ function MermaidSourceEditor({ value, onChange }: { value: string; onChange: (va
         aria-label="Mã Mermaid"
         onScroll={sync}
         onChange={(e) => onChange(e.target.value)}
-        className="relative z-10 min-h-[230px] w-full resize-none overflow-auto bg-transparent p-3 font-mono text-[11px] leading-5 text-transparent caret-sky-300 outline-none selection:bg-sky-400/25"
+        className="relative z-10 min-h-[230px] w-full resize-none overflow-auto bg-transparent p-3 font-mono text-[11px] leading-5 text-transparent caret-sky-300 outline-none selection:bg-sky-400/25 [font-variant-ligatures:none]"
       />
     </div>
   );

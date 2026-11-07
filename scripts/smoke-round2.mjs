@@ -12,7 +12,7 @@ function check(name, value, detail = '') {
 }
 
 console.log('\nSciRender v2.0 Round 2 performance/lifecycle smoke');
-const app = read('apps/web/src/App.tsx');
+const app = read('apps/web/src/components/EditorShell.tsx'); // DAY 1: editor shell moved out of App.tsx
 const canvas = [
   read('apps/web/src/components/canvas/CanvasPane.tsx'),
   read('apps/web/src/components/canvas/CanvasPaneController.tsx'),

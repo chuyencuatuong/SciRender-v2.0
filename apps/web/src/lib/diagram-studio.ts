@@ -1,7 +1,8 @@
-import { lazyModule } from './lazy-module';
+import type { MermaidConfig } from 'mermaid';
+import { mermaidConfigKey, withMermaid } from './mermaid-runtime';
 
 export type DiagramStudioCurve = 'linear' | 'basis' | 'step';
-export type DiagramStudioTheme = 'academic' | 'obsidian' | 'blueprint';
+export type DiagramStudioTheme = 'academic' | 'obsidian' | 'blueprint' | 'print';
 
 export interface DiagramPreset {
   id: string;
@@ -38,9 +39,7 @@ export const DIAGRAM_PRESETS: DiagramPreset[] = [
 ];
 
 let renderSeq = 0;
-/** Same recovery guarantee as `lib/mermaid.ts`: a failed chunk fetch is not memoised. */
-const loadMermaid = lazyModule(() => import('mermaid').then((m) => m.default));
-let configuredKey = '';
+let cacheScope = '';
 const MAX_RENDER_CACHE = 64;
 const renderCache = new Map<string, string>();
 
@@ -69,6 +68,7 @@ const THEME_VARS: Record<DiagramStudioTheme, Record<string, string>> = {
     clusterBorder: '#475569',
     edgeLabelBackground: '#161922',
   },
+  print: { primaryColor: '#ffffff', primaryBorderColor: '#111111', primaryTextColor: '#111111', lineColor: '#111111', textColor: '#111111', mainBkg: '#ffffff', nodeBorder: '#111111', clusterBkg: '#ffffff', clusterBorder: '#111111', edgeLabelBackground: '#ffffff' },
   blueprint: {
     primaryColor: '#dbeafe',
     primaryBorderColor: '#1d4ed8',
@@ -87,44 +87,41 @@ export async function renderDiagramSvg(
   source: string,
   options: { curve?: DiagramStudioCurve; theme?: DiagramStudioTheme; direction?: 'TB' | 'TD' | 'BT' | 'LR' | 'RL'; fontFamily?: string; nodeSpacing?: number; rankSpacing?: number } = {},
 ): Promise<string> {
-  const mermaid = await loadMermaid();
   const curve = options.curve ?? 'basis';
   const theme = options.theme ?? 'academic';
   const direction = options.direction;
   const directedSource = direction ? applyDirection(source, direction) : source;
   const fontFamily = '"Times New Roman", Times, serif';
-  const tv = THEME_VARS[theme];
-  const nodeSpacing = options.nodeSpacing ?? 32;
-  const rankSpacing = options.rankSpacing ?? 36;
-  const configKey = JSON.stringify([curve, theme, nodeSpacing, rankSpacing]);
-  if (configuredKey !== configKey) {
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      theme: 'base',
-      fontFamily,
-      themeVariables: { fontFamily, fontSize: '13px', ...tv },
-      // See lib/mermaid.ts: "step" is supported by mermaid's runtime curve
-      // table but missing from its published type.
-      flowchart: {
-        htmlLabels: true,
-        useMaxWidth: false,
-        curve: curve as 'linear' | 'basis' | 'cardinal',
-        nodeSpacing,
-        rankSpacing,
-        padding: 10,
-      },
-      sequence: { useMaxWidth: true },
-      gantt: { useMaxWidth: true },
-    });
-    configuredKey = configKey;
+  const config: MermaidConfig = {
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: 'base',
+    fontFamily,
+    themeVariables: { fontFamily, fontSize: '13px', ...THEME_VARS[theme] },
+    // See lib/mermaid.ts: "step" is supported by mermaid's runtime curve
+    // table but missing from its published type.
+    flowchart: {
+      htmlLabels: true,
+      useMaxWidth: false,
+      curve: curve as 'linear' | 'basis' | 'cardinal',
+      nodeSpacing: options.nodeSpacing ?? 32,
+      rankSpacing: options.rankSpacing ?? 36,
+      padding: 10,
+    },
+    sequence: { useMaxWidth: true },
+    gantt: { useMaxWidth: true },
+  };
+  const scope = mermaidConfigKey(config);
+  if (scope !== cacheScope) {
     renderCache.clear();
+    cacheScope = scope;
   }
-  const cacheKey = `${configuredKey}:${hash(directedSource)}`;
+  const cacheKey = `${hash(scope)}:${hash(directedSource)}`;
   const hit = renderCache.get(cacheKey);
   if (hit) return hit;
   const id = `sr-studio-${renderSeq++}`;
-  const svg = (await mermaid.render(id, directedSource)).svg;
+  // Configure + render as one step on the shared runtime (see mermaid-runtime.ts).
+  const svg = (await withMermaid(config, (m) => m.render(id, directedSource))).svg;
   const root = /<svg\b[^>]*>/i.exec(svg);
   if (!root) return svg;
   const css = `<style>

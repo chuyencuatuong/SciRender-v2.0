@@ -25,6 +25,13 @@ import { BUILTIN_ASSETS } from '~/lib/builtin-assets';
 import { SAMPLE_DOCUMENT, EMPTY_DOCUMENT } from '~/lib/sample';
 import { applyProfileToCover, type CoverField, type CoverProfile } from '~/lib/profile-cover';
 
+/** The word double-clicked in the preview, with rendered context either side. */
+export interface GotoTextHint {
+  word: string;
+  before: string;
+  after: string;
+}
+
 export type PanelId =
   | 'outline'
   | 'objects'
@@ -72,7 +79,7 @@ export interface AppState {
   savedAt: number | null;
   storageError: string | null;
   /** Line the editor should scroll to; bumped by diagnostics/outline clicks. */
-  gotoLine: { line: number; nonce: number } | null;
+  gotoLine: { line: number; nonce: number; text?: GotoTextHint } | null;
   /** Timestamp of the last automatic cover insertion — the canvas announces it. */
   coverAdded: number | null;
   /** Bumped to ask TopBar's print flow to run — see `requestPrint`. */
@@ -112,7 +119,8 @@ export interface AppState {
   /** Stores an internally generated binary asset (e.g. SVG chart) in IndexedDB. */
   addGeneratedAsset: (content: string | Blob, preferredName: string, mime?: string) => Promise<string>;
   removeAsset: (id: string) => Promise<void>;
-  requestGotoLine: (line: number) => void;
+  /** `text` (preview double-click) asks the canvas to also select that word. */
+  requestGotoLine: (line: number, text?: GotoTextHint) => void;
   /** Remembers which block template was just inserted, for "Hay dùng". */
   noteBlockUsed: (id: string) => void;
   refreshLibrary: () => Promise<void>;
@@ -487,8 +495,8 @@ export const useStore = create<AppState>((set, get) => ({
     set({ assets, assetMap: merged });
   },
 
-  requestGotoLine(line) {
-    set({ gotoLine: { line, nonce: Date.now() } });
+  requestGotoLine(line, text) {
+    set({ gotoLine: { line, nonce: Date.now(), ...(text ? { text } : {}) } });
   },
 
   noteBlockUsed(id) {

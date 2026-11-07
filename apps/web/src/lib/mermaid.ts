@@ -1,6 +1,7 @@
 import type { TemplateDescriptor } from '@scirender/template-engine';
 import { injectSvgAcademicFont } from '@scirender/figure-engine';
-import { lazyModule } from './lazy-module';
+import type { MermaidConfig } from 'mermaid';
+import { mermaidConfigKey, withMermaid } from './mermaid-runtime';
 
 /**
  * Mermaid is the single heaviest chunk in the app (~2.2MB raw). It is fetched
@@ -10,11 +11,10 @@ import { lazyModule } from './lazy-module';
  * dropped request meant "no diagrams until you reload", with nothing on screen
  * saying so.
  */
-const loadMermaid = lazyModule(() => import('mermaid').then((m) => m.default));
 let seq = 0;
 const MAX_MERMAID_CACHE = 96;
 const cache = new Map<string, string>();
-let configuredKey = '';
+let cacheScope = '';
 
 export interface DiagramFitMetrics {
   contentWidthPx: number;
@@ -39,62 +39,53 @@ export interface MermaidResult {
  * from the network at runtime (P5).
  */
 type MermaidCurve = 'linear' | 'basis' | 'step';
-type MermaidTheme = 'academic' | 'obsidian' | 'blueprint';
+type MermaidTheme = 'academic' | 'obsidian' | 'blueprint' | 'print';
 
 const MERMAID_THEME: Record<MermaidTheme, Record<string, string>> = {
   academic: { primaryColor: '#eff6ff', primaryBorderColor: '#1d4ed8', primaryTextColor: '#0f172a', lineColor: '#dc2626', textColor: '#0f172a', mainBkg: '#ffffff', nodeBorder: '#1d4ed8', clusterBkg: '#f8fafc', clusterBorder: '#1e3a8a', edgeLabelBackground: '#ffffff' },
   obsidian: { primaryColor: '#161922', primaryBorderColor: '#38bdf8', primaryTextColor: '#f8fafc', lineColor: '#94a3b8', textColor: '#f8fafc', mainBkg: '#161922', nodeBorder: '#38bdf8', clusterBkg: '#0e1017', clusterBorder: '#475569', edgeLabelBackground: '#161922' },
+  // Black on white — for reports printed in monochrome or asked to avoid colour.
+  print: { primaryColor: '#ffffff', primaryBorderColor: '#111111', primaryTextColor: '#111111', lineColor: '#111111', textColor: '#111111', mainBkg: '#ffffff', nodeBorder: '#111111', clusterBkg: '#ffffff', clusterBorder: '#111111', edgeLabelBackground: '#ffffff' },
   blueprint: { primaryColor: '#dbeafe', primaryBorderColor: '#1d4ed8', primaryTextColor: '#0f172a', lineColor: '#1d4ed8', textColor: '#0f172a', mainBkg: '#eff6ff', nodeBorder: '#1d4ed8', clusterBkg: '#e0f2fe', clusterBorder: '#2563eb', edgeLabelBackground: '#eff6ff' },
 };
 
-async function getMermaid(
+function documentMermaidConfig(
   t: TemplateDescriptor,
   overrides: { curve?: MermaidCurve; theme?: MermaidTheme } = {},
-): Promise<typeof import('mermaid').default> {
-  const mermaid = await loadMermaid();
+): MermaidConfig {
   const d = t.diagrams;
   const fontFamily = '"Times New Roman", Times, serif';
   const curve = overrides.curve ?? d.curve as MermaidCurve;
   const theme = overrides.theme ?? 'academic';
-  const themeVars = MERMAID_THEME[theme];
-  const key = JSON.stringify([
-    fontFamily, d.fontSize, curve, d.nodeSpacing, d.rankSpacing,
-    d.wrappingWidth, t.colors.text, t.colors.rule, theme,
-  ]);
-  if (key !== configuredKey) {
-    // Diagram labels must read as part of the document, not as a foreign
-    // widget: same family and size as body text, same ink colour.
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      theme: 'base',
+  // Diagram labels must read as part of the document, not as a foreign
+  // widget: same family and size as body text, same ink colour.
+  return {
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: 'base',
+    fontFamily,
+    themeVariables: {
       fontFamily,
-      themeVariables: {
-        fontFamily,
-        fontSize: d.fontSize,
-        ...themeVars,
-      },
-      flowchart: {
-        htmlLabels: false,
-        useMaxWidth: true,
-        // Mermaid's published type for `curve` lists only linear/basis/cardinal,
-        // but its runtime curve table (dist/mermaid.js) also registers
-        // `curveStep` — verified in the installed 11.4.0 bundle. The template
-        // exposes "step" as a real choice, so the cast keeps the feature rather
-        // than silently downgrading the author's selection to basis.
-        curve: curve as 'linear' | 'basis' | 'cardinal',
-        nodeSpacing: d.nodeSpacing,
-        rankSpacing: d.rankSpacing,
-        padding: 10,
-        wrappingWidth: d.wrappingWidth,
-      },
-      sequence: { useMaxWidth: true },
-      gantt: { useMaxWidth: true },
-    });
-    configuredKey = key;
-    cache.clear();
-  }
-  return mermaid;
+      fontSize: d.fontSize,
+      ...MERMAID_THEME[theme],
+    },
+    flowchart: {
+      htmlLabels: false,
+      useMaxWidth: true,
+      // Mermaid's published type for `curve` lists only linear/basis/cardinal,
+      // but its runtime curve table (dist/mermaid.js) also registers
+      // `curveStep` — verified in the installed 11.4.0 bundle. The template
+      // exposes "step" as a real choice, so the cast keeps the feature rather
+      // than silently downgrading the author's selection to basis.
+      curve: curve as 'linear' | 'basis' | 'cardinal',
+      nodeSpacing: d.nodeSpacing,
+      rankSpacing: d.rankSpacing,
+      padding: 10,
+      wrappingWidth: d.wrappingWidth,
+    },
+    sequence: { useMaxWidth: true },
+    gantt: { useMaxWidth: true },
+  };
 }
 
 export function hasMermaid(blocks: string[]): boolean {
@@ -185,13 +176,20 @@ export async function resolveMermaidBlocks(
   const maxH = metrics.contentHeightPx * 0.86;
 
   const renderOnce = async (source: string, cfg: { curve?: MermaidCurve; theme?: MermaidTheme } = {}): Promise<string> => {
-    const activeMermaid = await getMermaid(template, cfg);
-    const key = `${configuredKey}:${cfg.curve ?? ''}:${cfg.theme ?? ''}:${hash(source)}`;
+    const config = documentMermaidConfig(template, cfg);
+    const scope = mermaidConfigKey(config);
+    if (scope !== cacheScope) {
+      cache.clear();
+      cacheScope = scope;
+    }
+    const key = `${hash(scope)}:${hash(source)}`;
     const hit = cache.get(key);
     if (hit !== undefined) return hit;
     let svg: string;
     try {
-      svg = injectSvgAcademicFont((await activeMermaid.render(`sr-mmd-${seq++}`, source)).svg);
+      svg = injectSvgAcademicFont(
+        (await withMermaid(config, (m) => m.render(`sr-mmd-${seq++}`, source))).svg,
+      );
     } catch (err) {
       // P6 — a broken diagram is shown as broken, never as blank space.
       svg = `<div class="sr-unknown">Lỗi sơ đồ Mermaid: ${escapeHtml((err as Error).message)}</div>`;

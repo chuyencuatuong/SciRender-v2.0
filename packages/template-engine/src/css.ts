@@ -31,7 +31,7 @@ export function compileCss(t: TemplateDescriptor): string {
   font-size:${h.size};
   font-weight:${h.weight};
   font-style:${h.italic ? 'italic' : 'normal'};
-  line-height:${round(h.lineHeight)};
+  line-height:${round(headingLineHeight(h.lineHeight))};
   margin:${h.spaceBefore} 0 ${h.spaceAfter};
   text-align:${h.align};
   text-indent:${h.indent};
@@ -78,7 +78,12 @@ export function compileCss(t: TemplateDescriptor): string {
 /* Columns are produced by the layout engine, not by CSS column-count: the
    engine fills one column at a time so a break can be measured and controlled.
    The page body only lays the finished columns out side by side. */
-.sr-page-body{height:100%;overflow:hidden;position:relative;}
+/* overflow:clip + clip-margin: ink that legitimately pokes past the line box
+   (stacked Vietnamese marks on capitals — Ổ Ề Ấ — italic overhang) paints
+   into the page margin instead of being shaved off; content that really
+   overflows is still cut. flow-root keeps the BFC overflow:hidden gave, so
+   margins collapse exactly as in the measuring box (P2). */
+.sr-page-body{height:100%;overflow:hidden;overflow:clip;overflow-clip-margin:3mm;display:flow-root;position:relative;}
 .sr-page-landscape{width:${p.height};height:${p.width};page:landscape-page;break-before:page;break-after:page;}
 .sr-page-landscape .sr-page-body{height:100%;}
 .sr-columns{
@@ -87,7 +92,7 @@ export function compileCss(t: TemplateDescriptor): string {
   gap:0 ${p.columnGap};
   height:100%;
 }
-.sr-column{position:relative;overflow:hidden;}
+.sr-column{position:relative;overflow:hidden;overflow:clip;overflow-clip-margin:1.5mm;display:flow-root;}
 .sr-span{width:100%;display:flow-root;}
 .sr-page-body:has(> .sr-span) .sr-columns{height:auto;}
 .sr-page-footer{
@@ -476,4 +481,15 @@ export function compilePrintCss(t: TemplateDescriptor): string {
   .sr-no-print{display:none!important;}
 }
 `;
+}
+
+/**
+ * CSS `line-height:1` is tighter than Word's "single" spacing (Times New Roman
+ * ≈ 1.15 em), so a template copying "giãn dòng đơn" as 1 leaves no room for
+ * the marks above Vietnamese capitals and they get clipped at the top of the
+ * page. Headings never go below 1.2.
+ */
+export const MIN_HEADING_LINE_HEIGHT = 1.2;
+export function headingLineHeight(value: number): number {
+  return Number.isFinite(value) ? Math.max(value, MIN_HEADING_LINE_HEIGHT) : MIN_HEADING_LINE_HEIGHT;
 }

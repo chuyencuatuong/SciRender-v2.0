@@ -47,6 +47,12 @@ export interface EmphasisNode extends NodeBase {
   children: InlineNode[];
 }
 
+/** `++text++` — underline (markdown-it-ins convention). */
+export interface UnderlineNode extends NodeBase {
+  type: 'underline';
+  children: InlineNode[];
+}
+
 export interface SuperscriptNode extends NodeBase {
   type: 'superscript';
   children: InlineNode[];
@@ -112,6 +118,7 @@ export type InlineNode =
   | TextNode
   | StrongNode
   | EmphasisNode
+  | UnderlineNode
   | SuperscriptNode
   | SubscriptNode
   | InlineCodeNode

@@ -9,6 +9,9 @@ export interface ShortcutDefinition {
 export const SHORTCUTS: ShortcutDefinition[] = [
   { id: 'command-palette', label: 'Command Palette', keys: ['Ctrl+Shift+P', 'F1'], description: 'Mở bảng lệnh nhanh', group: 'Điều hướng' },
   { id: 'hyperlink', label: 'Chèn / sửa liên kết', keys: ['Ctrl+K'], description: 'Chèn hoặc chỉnh Markdown link', group: 'Soạn thảo' },
+  { id: 'bold', label: 'In đậm', keys: ['Ctrl+B'], description: 'Bọc vùng chọn bằng **…** (bấm lại để gỡ)', group: 'Soạn thảo' },
+  { id: 'italic', label: 'In nghiêng', keys: ['Ctrl+I'], description: 'Bọc vùng chọn bằng *…*', group: 'Soạn thảo' },
+  { id: 'underline', label: 'Gạch chân', keys: ['Ctrl+U'], description: 'Bọc vùng chọn bằng ++…++', group: 'Soạn thảo' },
   { id: 'heading-1', label: 'Đề mục 1', keys: ['Ctrl+Alt+1'], description: 'Đổi khối hiện tại thành Heading 1', group: 'Soạn thảo' },
   { id: 'heading-2', label: 'Đề mục 2', keys: ['Ctrl+Alt+2'], description: 'Đổi khối hiện tại thành Heading 2', group: 'Soạn thảo' },
   { id: 'heading-3', label: 'Đề mục 3', keys: ['Ctrl+Alt+3'], description: 'Đổi khối hiện tại thành Heading 3', group: 'Soạn thảo' },
@@ -90,6 +93,12 @@ export function matchesShortcut(
       return mod && !e.shiftKey && !e.altKey && keyIs(e, 'd', 'KeyD');
     case 'move-up-down':
       return !mod && !e.shiftKey && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown');
+    case 'bold':
+      return mod && !e.shiftKey && !e.altKey && keyIs(e, 'b', 'KeyB');
+    case 'italic':
+      return mod && !e.shiftKey && !e.altKey && keyIs(e, 'i', 'KeyI');
+    case 'underline':
+      return mod && !e.shiftKey && !e.altKey && keyIs(e, 'u', 'KeyU');
     case 'print':
       return mod && !e.shiftKey && !e.altKey && keyIs(e, 'p', 'KeyP');
     case 'shortcuts':

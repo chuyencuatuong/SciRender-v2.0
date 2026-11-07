@@ -59,6 +59,7 @@ function inlineText(node: InlineNode): string {
       return `$${node.value}$`;
     case 'strong':
     case 'emphasis':
+    case 'underline':
     case 'superscript':
     case 'subscript':
     case 'link':

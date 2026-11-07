@@ -26,7 +26,7 @@ const code = `
   # CHƯƠNG 1: Intro {#sec:intro}
   ### Nhảy cấp
   Nội dung [@used2026] @fig:missing.
-  ![x](asset:x)\n: Hình demo {#fig:demo}\n\n# Chương 2: Kết luận\n\n\`;\n  const parsed = parse(source);\n  const t = resolveTemplate(findTemplate('hcmut-btl'), {});\n  const num = assignNumbers(parsed.document, t.descriptor);\n  const report = runPreSubmissionAudit(parsed.document, [...parsed.diagnostics, ...num.diagnostics], { tocEnabled: true, pageBudget: null }, { pages: 3, bodyPages: 3, warnings: [] });
+  ![x](asset:x)\n: Hình demo {#fig:demo}\n\n# Chương 2: Kết luận\n\n\`.replace(/^  /gm, ''); // fixture is indented with the JS around it\n  const parsed = parse(source);\n  const t = resolveTemplate(findTemplate('hcmut-btl'), {});\n  const num = assignNumbers(parsed.document, t.descriptor);\n  const report = runPreSubmissionAudit(parsed.document, [...parsed.diagnostics, ...num.diagnostics], { tocEnabled: true, pageBudget: null }, { pages: 3, bodyPages: 3, warnings: [] });
   if (report.errors < 1) throw new Error('expected at least one audit error');
   if (!report.checks.some((x) => x.code === 'AUD-A001' && x.severity === 'warning')) throw new Error('orphan check missing');
   if (!report.checks.some((x) => x.code === 'AUD-C002' && x.severity === 'warning')) throw new Error('chapter case check missing');

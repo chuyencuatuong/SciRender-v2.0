@@ -28,7 +28,8 @@ const forms = read('apps/web/src/lib/card-forms.ts');
 const store = read('apps/web/src/state/store.ts');
 
 // Root cause #1: table continuation must conserve rows and must not duplicate DOM identity.
-check('table splitter enforces 2-row minimum', split.includes('Math.max(2, Math.trunc(minRows))'));
+// Đợt 10: caller-controlled minimum (>=1); last-resort relaxation lives in trySplitStructure.
+check('table splitter honours caller minimum rows', split.includes('Math.max(1, Math.trunc(minRows))'));
 check('table splitter measures a real fragment clone', split.includes('parent.insertBefore(head, wrapper)') && split.includes('head.getBoundingClientRect()'));
 check('table splitter validates row conservation', split.includes('headRows + tailRows !== sourceRows'));
 check('table continuation clears duplicate element identity', split.includes('clearFragmentIdentity(tail)') && split.includes("tail.setAttribute('data-sr-continuation', '1')"));

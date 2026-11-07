@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react';
 import { CARD_TEMPLATES, toCards, type CanvasDoc } from '~/lib/cards';
-import { useStore } from '~/state/store';
+import { locateInSource } from '~/lib/source-locate';
+import { useStore, type GotoTextHint } from '~/state/store';
 
 type RequestWithNonce = { nonce: number; [key: string]: unknown };
 
@@ -13,7 +14,7 @@ export interface CanvasStoreSyncOptions {
   setActiveBlockId: (id: string | null) => void;
   insertBlockRequest: RequestWithNonce | null | undefined;
   citationInsertRequest: RequestWithNonce | null | undefined;
-  gotoLine: { line: number; nonce: number } | null | undefined;
+  gotoLine: { line: number; nonce: number; text?: GotoTextHint } | null | undefined;
   noteBlockUsed: (templateId: string) => void;
   doc: CanvasDoc;
   undoStack: MutableRefObject<CanvasDoc[]>;
@@ -82,5 +83,42 @@ export function useCanvasStoreSync(options: CanvasStoreSyncOptions): void {
         ?.querySelector(`[data-card-index="${index}"]`)
         ?.scrollIntoView({ block: 'center' });
     }
+    const hint = gotoLine.text;
+    if (!hint) return;
+
+    // Preview double-click: once the card's editor is mounted, put the
+    // selection on the exact word. Retried for a few frames because selecting
+    // a card swaps its read view for the form editor asynchronously.
+    let cancelled = false;
+    let tries = 0;
+    let frame = 0;
+    const place = (): void => {
+      if (cancelled) return;
+      const cardEl = listRefs
+        .map((ref) => ref.current?.querySelector<HTMLElement>(`[data-card-index="${index}"]`))
+        .find((el): el is HTMLElement => Boolean(el));
+      const fields = cardEl
+        ? Array.from(cardEl.querySelectorAll<HTMLTextAreaElement | HTMLInputElement>(
+            'textarea, input[type="text"], input:not([type])',
+          ))
+        : [];
+      let best: { el: HTMLTextAreaElement | HTMLInputElement; start: number; end: number; score: number } | null = null;
+      for (const el of fields) {
+        const m = locateInSource(el.value, hint.word, hint.before, hint.after);
+        if (m && (!best || m.score > best.score)) best = { el, ...m };
+      }
+      if (!best) {
+        if (++tries < 12) frame = window.requestAnimationFrame(place);
+        return;
+      }
+      best.el.focus({ preventScroll: true });
+      best.el.setSelectionRange(best.start, best.end);
+      best.el.scrollIntoView({ block: 'nearest' });
+    };
+    frame = window.requestAnimationFrame(place);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
   }, [gotoLine?.nonce]);
 }

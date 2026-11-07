@@ -72,7 +72,7 @@ check('direction controls use light-on-dark contrast tokens', read('apps/web/src
 
 // Landscape: reversible source representation + persisted table/diagram attrs + rerender.
 check('column landscape toggle is two-way', canvas.includes('const landscape = /\\b(?:landscape|orientation=landscape)\\b/.test(card.text)') && canvas.includes('makeColumns(pair[0], pair[1], !landscape)'));
-check('landscape toggle requests a render after source commit', canvas.includes('window.requestAnimationFrame(() => requestRender())'));
+check('landscape toggle requests a render after source commit', canvas.includes('window.requestAnimationFrame(() => requestRender())') || canvas.includes('scheduleFrame(() => requestRender())'));
 check('table landscape state persists through source attrs', forms.includes("attrs.orientation === 'landscape'") && forms.includes('serialisedTableAttrs'));
 check('print CSS supports portrait and landscape page boxes', css.includes('@page landscape-page{size:${p.height} ${p.width};') && css.includes('page:landscape-page!important'));
 
