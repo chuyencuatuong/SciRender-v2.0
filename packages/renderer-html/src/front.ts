@@ -39,7 +39,9 @@ export function collectOutline(doc: DocumentNode, t: TemplateDescriptor): Outlin
   const out: OutlineEntry[] = [];
   walk(doc, (n) => {
     if (n.type !== 'heading') return undefined;
-    if (n.depth > Math.min(t.headings.numberDepth, 3)) return undefined;
+    // The outline follows the template's configured heading depth.
+    // HCMUT numbers four levels; a hard-coded depth-3 cap silently hid H4 entries.
+    if (n.depth > Math.min(t.headings.numberDepth, t.headings.levels.length)) return undefined;
     const style = t.headings.levels[n.depth - 1];
     const numberText =
       n.number && style && style.numberFormat ? style.numberFormat.replace('{n}', n.number) : '';
