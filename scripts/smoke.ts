@@ -152,6 +152,17 @@ check(
 check('H3 13pt đậm + nghiêng', h3!.size === '13pt' && h3!.weight === 700 && h3!.italic);
 check('H4 13pt nghiêng, không đậm', h4!.size === '13pt' && h4!.weight === 400 && h4!.italic);
 check('đánh số tiểu mục tối đa 4 chữ số', t.headings.numberDepth === 4);
+
+const fourLevelOutline = compile(
+  '# Chương cấp 1\n\n## Mục cấp 2\n\n### Mục cấp 3\n\n#### Tiểu mục cấp 4\n',
+);
+check(
+  'mục lục thu thập đủ heading đến cấp 4 theo cấu hình HCMUT',
+  fourLevelOutline.rendered.outline.length === 4 &&
+    fourLevelOutline.rendered.outline[3]?.depth === 4 &&
+    fourLevelOutline.rendered.outline[3]?.text.includes('1.1.1.1'),
+  fourLevelOutline.rendered.outline.map((h) => `${h.depth}:${h.text}`).join(' | '),
+);
 check('chú thích canh giữa, cùng cỡ chữ nội dung', t.captions.align === 'center' && t.captions.fontSize === '1em');
 check('phần đầu đánh số i, ii, iii', t.layout.frontPageNumbers === 'roman-lower');
 check('nội dung đánh số 1, 2, 3', t.layout.bodyPageNumbers === 'arabic');
