@@ -154,7 +154,7 @@ check('H4 13pt nghiêng, không đậm', h4!.size === '13pt' && h4!.weight === 4
 check('đánh số tiểu mục tối đa 4 chữ số', t.headings.numberDepth === 4);
 
 const fourLevelOutline = compile(
-  '# Chương cấp 1\\n\\n## Mục cấp 2\\n\\n### Mục cấp 3\\n\\n#### Tiểu mục cấp 4\\n',
+  '# Chương cấp 1\n\n## Mục cấp 2\n\n### Mục cấp 3\n\n#### Tiểu mục cấp 4\n',
 );
 check(
   'mục lục thu thập đủ heading đến cấp 4 theo cấu hình HCMUT',
