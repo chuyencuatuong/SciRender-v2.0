@@ -117,7 +117,35 @@ try {
         </tbody></table>
       </div>`;
 
+    // D: a long list (the table of contents) behind a page-break title. The
+    // fit test used to ignore the last item's bottom margin, so for some row
+    // pitches the head still overflowed once placed, the split was rejected and
+    // the list was committed whole — its last rows clipped by `overflow:hidden`.
+    // Sweep the item margin so every sub-pixel alignment of the page edge is hit.
+    const probe = document.createElement('style');
+    document.head.appendChild(probe);
+    const listSweep = [];
+    for (let mg = 0; mg <= 14; mg += 0.5) {
+      probe.textContent = '.sr-doc .sr-list li{margin:0 0 ' + mg + 'pt !important;}';
+      const title =
+        '<div class="sr-front-title" data-sr-id="front-toc" data-sr-type="frontTitle" data-sr-break="page">MỤC LỤC</div>';
+      const rows = Array.from({ length: 110 }, (_, i) =>
+        '<li class="sr-toc-1"><span class="sr-list-row"><span class="sr-list-text">MUC-' + (i + 1) +
+        '</span><span class="sr-list-fill"></span><span class="sr-list-page">' + (i + 1) + '</span></span></li>',
+      ).join('');
+      const r = SR.paginate([title, '<ul class="sr-list">' + rows + '</ul>'], opts, host);
+      const joined = r.pages.join('');
+      listSweep.push({
+        mg,
+        overflow: r.warnings.some((w) => w.code === 'SR-L001' || w.code === 'SR-L002'),
+        titleOrphaned: !/<li/.test(r.pages[0] ?? ''),
+        rows: (joined.match(/<li/g) ?? []).length,
+      });
+    }
+    probe.remove();
+
     return {
+      D: listSweep,
       A: inspect(tallRow, ['CT-CAO', 'HANG-2', 'HANG-3']),
       B: inspect(rowspanGroups, Array.from({ length: 24 }, (_, i) => `TV${i + 1}`)),
       C: inspect(impossible, ['QUA-CAO', 'BINH-THUONG']),
@@ -127,7 +155,7 @@ try {
   await browser.close();
 
   console.log('\nCứu hộ chia trang (bảng cao hơn chỗ còn lại)');
-  const { A, B, C } = results;
+  const { A, B, C, D } = results;
   check('A · bảng có dòng cao được chia sang 2 trang', A.pages === 2, JSON.stringify(A));
   check('A · không còn cảnh báo tràn SR-L001', !A.warnings.includes('SR-L001'), A.warnings.join());
   check('A · nửa sau được đánh dấu là phần tiếp theo', A.continuation === true);
@@ -139,6 +167,13 @@ try {
 
   check('C · một dòng cao hơn cả trang vẫn báo SR-L001', C.warnings.includes('SR-L001'), C.warnings.join());
   check('C · không dựng ra trang thừa', C.pages === 1, `pages=${C.pages}`);
+
+  const badOverflow = D.filter((x) => x.overflow).map((x) => x.mg);
+  const badOrphan = D.filter((x) => x.titleOrphaned).map((x) => x.mg);
+  const badRows = D.filter((x) => x.rows !== 110).map((x) => x.mg);
+  check('D · danh sách dài (mục lục) không tràn ở mọi khoảng cách dòng', badOverflow.length === 0, 'margin(pt): ' + badOverflow.join());
+  check('D · tiêu đề mục lục không bị bỏ lại một mình', badOrphan.length === 0, 'margin(pt): ' + badOrphan.join());
+  check('D · đủ 110 dòng qua các trang', badRows.length === 0, 'margin(pt): ' + badRows.join());
 
   console.log(failures ? `\n${failures} kiểm tra THẤT BẠI.` : '\nToàn bộ kiểm tra đạt.');
 } finally {

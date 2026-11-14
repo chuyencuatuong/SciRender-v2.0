@@ -413,9 +413,18 @@ export function splitList(
   const items = Array.from(list.children).filter((c) => c.tagName === 'LI');
   if (items.length < minItems * 2) return null;
 
+  // getBoundingClientRect() stops at the border box, so it leaves out the item's
+  // bottom margin. The column box is `overflow:hidden` (a new block formatting
+  // context), which traps the last item's margin inside the column's
+  // scrollHeight instead of letting it collapse away. Measuring only the border
+  // box therefore accepted a head that overflowed by up to one margin once it
+  // was actually placed; the caller then rejected the split, and a list sitting
+  // alone on a page was committed whole and clipped — table-of-contents rows
+  // (the last chapters, the references entry) vanished from the page.
   let fit = 0;
   for (const item of items) {
-    if (item.getBoundingClientRect().bottom <= availableBottom + 0.5) fit++;
+    const marginBottom = parseFloat(getComputedStyle(item).marginBottom) || 0;
+    if (item.getBoundingClientRect().bottom + marginBottom <= availableBottom + 0.5) fit++;
     else break;
   }
   if (fit < minItems || items.length - fit < minItems) return null;
